@@ -355,8 +355,6 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
     el?.scrollIntoView({ block: "nearest" });
   }, [selectedIndex]);
 
-  if (!open) return null;
-
   // Group results by category
   const grouped = useMemo(() => {
     if (!query.trim()) return null;
@@ -366,6 +364,8 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
     }
     return groups;
   }, [query, results]);
+
+  if (!open) return null;
 
   let itemIndex = 0;
 
