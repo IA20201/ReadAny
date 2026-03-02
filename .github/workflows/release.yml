@@ -86,6 +86,26 @@ jobs:
           VERSION=${GITHUB_REF_NAME#v}
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
+      - name: Wait for release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Wait for release to be created
+          for i in {1..30}; do
+            if gh release view ${{ github.ref_name }} --json tagName --jq '.tagName' 2>/dev/null; then
+              echo "Release found"
+              break
+            fi
+            sleep 5
+          done
+          
+          # Check if release is a draft
+          IS_DRAFT=$(gh release view ${{ github.ref_name }} --json isDraft --jq '.')
+          if [ "$IS_DRAFT" = "true" ]; then
+            echo "Release is a draft, skipping latest.json upload"
+            exit 0
+          fi
+
       - name: Generate latest.json
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -96,24 +116,24 @@ jobs:
           cat > latest.json << EOF
           {
             "version": "${VERSION}",
-            "notes": "See https://github.com/${REPO}/releases/tag/v${VERSION} for details",
+            "notes": "See https://github.com/${REPO}/releases/tag/${{ github.ref_name }} for details",
             "pub_date": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
             "platforms": {
               "darwin-aarch64": {
                 "signature": "",
-                "url": "https://github.com/${REPO}/releases/download/v${VERSION}/ReadAny_aarch64.app.tar.gz"
+                "url": "https://github.com/${REPO}/releases/download/${{ github.ref_name }}/ReadAny_aarch64.app.tar.gz"
               },
               "darwin-x86_64": {
                 "signature": "",
-                "url": "https://github.com/${REPO}/releases/download/v${VERSION}/ReadAny_x64.app.tar.gz"
+                "url": "https://github.com/${REPO}/releases/download/${{ github.ref_name }}/ReadAny_x64.app.tar.gz"
               },
               "windows-x86_64": {
                 "signature": "",
-                "url": "https://github.com/${REPO}/releases/download/v${VERSION}/ReadAny_${VERSION}_x64-setup.exe"
+                "url": "https://github.com/${REPO}/releases/download/${{ github.ref_name }}/ReadAny_${VERSION}_x64-setup.exe"
               },
               "linux-x86_64": {
                 "signature": "",
-                "url": "https://github.com/${REPO}/releases/download/v${VERSION}/readany_${VERSION}_amd64.deb"
+                "url": "https://github.com/${REPO}/releases/download/${{ github.ref_name }}/readany_${VERSION}_amd64.deb"
               }
             }
           }
