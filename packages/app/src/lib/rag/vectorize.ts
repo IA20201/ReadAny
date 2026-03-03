@@ -3,9 +3,9 @@ import { deleteChunks, insertChunks } from "@/lib/db/database";
  * Vectorize pipeline — orchestrates chunking + embedding + indexing for a book
  */
 import type { Chunk, VectorConfig, VectorizeProgress } from "@readany/core/types";
-import { chunkContent } from "./chunker";
-import type { TextSegment } from "./book-extractor";
-import { EmbeddingService } from "./embedding-service";
+import { chunkContent } from "@readany/core/rag/chunker";
+import type { TextSegment } from "@readany/core/rag/rag-types";
+import { EmbeddingService } from "@readany/core/rag/embedding-service";
 
 export type VectorizeCallback = (progress: VectorizeProgress) => void;
 

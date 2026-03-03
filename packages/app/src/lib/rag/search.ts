@@ -7,8 +7,8 @@ import { getChunks } from "@/lib/db/database";
  * SQLite BLOB deserialization on every search query.
  */
 import type { Chunk, SearchQuery, SearchResult } from "@readany/core/types";
-import { cosineSimilarity } from "./embedding";
-import type { EmbeddingService } from "./embedding-service";
+import { cosineSimilarity } from "@readany/core/rag/embedding";
+import type { EmbeddingService } from "@readany/core/rag/embedding-service";
 
 let embeddingService: EmbeddingService | null = null;
 

@@ -27,7 +27,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { MarkdownEditor } from "@/components/ui/markdown-editor";
 import { ExportDropdown } from "./ExportDropdown";
-import { annotationExporter, type ExportFormat } from "@/lib/export/annotation-exporter";
+import { annotationExporter, type ExportFormat } from "@readany/core/export";
 import type { HighlightWithBook } from "@/lib/db/database";
 import type { Highlight, Note } from "@readany/core/types";
 import { HIGHLIGHT_COLOR_HEX } from "@readany/core/types";

@@ -7,7 +7,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
-import type { ExportFormat } from "@/lib/export/annotation-exporter";
+import type { ExportFormat } from "@readany/core/export";
 
 interface ExportDropdownProps {
   onExport: (format: ExportFormat) => void;

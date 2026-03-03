@@ -8,13 +8,13 @@
  * 4. Real streaming via streamEvents API
  * 5. System prompt from system-prompt.ts
  */
-import type { AIConfig, Book, SemanticContext, Skill } from "@readany/core/types";
+import type { AIConfig, Book, SemanticContext, Skill } from "../../types";
 import { AIMessage, HumanMessage } from "@langchain/core/messages";
 import type { BaseMessage } from "@langchain/core/messages";
 import { z } from "zod";
 import { createChatModel } from "../llm-provider";
 import { buildSystemPrompt } from "../system-prompt";
-import type { ToolDefinition, ToolParameter } from "../tools";
+import type { ToolDefinition, ToolParameter } from "../tool-types";
 
 // --- Stream Event Types ---
 
@@ -47,6 +47,12 @@ export interface ReadingAgentOptions {
   enabledSkills: Skill[];
   isVectorized: boolean;
   deepThinking?: boolean;
+  /** Injected tool provider — returns available tools for the agent */
+  getAvailableTools: (options: {
+    bookId: string | null;
+    isVectorized: boolean;
+    enabledSkills: Skill[];
+  }) => ToolDefinition[];
 }
 
 // --- Build Zod schema from ToolDefinition.parameters ---
@@ -100,7 +106,7 @@ export async function* streamReadingAgent(
   userInput: string,
   history: Array<{ role: "user" | "assistant"; content: string; reasoning?: string }> = [],
 ): AsyncGenerator<AgentStreamEvent> {
-  const { aiConfig, book, semanticContext, enabledSkills, isVectorized, deepThinking } = options;
+  const { aiConfig, book, semanticContext, enabledSkills, isVectorized, deepThinking, getAvailableTools } = options;
 
   try {
     // Create chat model
@@ -111,8 +117,7 @@ export async function* streamReadingAgent(
       deepThinking,
     });
 
-    // Register ALL tools via getAvailableTools
-    const { getAvailableTools } = await import("../tools");
+    // Register ALL tools via injected getAvailableTools
     const tools = getAvailableTools({
       bookId: book?.id || null,
       isVectorized,

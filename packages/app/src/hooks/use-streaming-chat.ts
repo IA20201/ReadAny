@@ -1,8 +1,9 @@
-import { StreamingChat, createMessageId } from "@/lib/ai/streaming";
+import { StreamingChat, createMessageId } from "@readany/core/ai/streaming";
 import { useChatStore } from "@/stores/chat-store";
 import { useSettingsStore } from "@/stores/settings-store";
 import { getSkills as getDbSkills } from "@/lib/db/database";
-import { getBuiltinSkills } from "@/lib/ai/skills/builtin-skills";
+import { getBuiltinSkills } from "@readany/core/ai/skills/builtin-skills";
+import { getAvailableTools } from "@/lib/ai/tools";
 import type { Book, SemanticContext, Skill, Thread, Part, TextPart, ToolCallPart, MessageV2, ReasoningPart, CitationPart } from "@readany/core/types";
 import { useCallback, useRef, useState } from "react";
 import {
@@ -183,6 +184,7 @@ export function useStreamingChat(options?: StreamingChatOptions) {
           isVectorized: options?.book?.isVectorized || false,
           aiConfig,
           deepThinking,
+          getAvailableTools,
           onToken: (token) => {
             if (!currentTextPart) {
               currentTextPart = createTextPart("");

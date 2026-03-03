@@ -7,8 +7,8 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
-import { BUILTIN_EMBEDDING_MODELS } from "@/lib/ai/builtin-embedding-models";
-import { loadEmbeddingPipeline } from "@/lib/ai/local-embedding-service";
+import { BUILTIN_EMBEDDING_MODELS } from "@readany/core/ai/builtin-embedding-models";
+import { loadEmbeddingPipeline } from "@readany/core/ai/local-embedding-service";
 import { useVectorModelStore } from "@/stores/vector-model-store";
 import type { VectorModelConfig } from "@readany/core/types";
 import { Check, Download, Edit2, Loader2, Plus, Trash2, X } from "lucide-react";

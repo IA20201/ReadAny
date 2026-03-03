@@ -1,5 +1,5 @@
 import { getChunks, getHighlights, getNotes, getBooks, getAllHighlights, getAllNotes, getReadingSessionsByDateRange, getSkills as getDbSkills } from "@/lib/db/database";
-import { getBuiltinSkills } from "./skills/builtin-skills";
+import { getBuiltinSkills } from "@readany/core/ai/skills/builtin-skills";
 import { search } from "@/lib/rag/search";
 import { getContextTools } from "./context-tools";
 /**

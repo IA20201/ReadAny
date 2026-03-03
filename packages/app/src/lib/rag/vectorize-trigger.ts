@@ -8,11 +8,11 @@ import { eventBus } from "@readany/core/utils/event-bus";
 import { useLibraryStore } from "@/stores/library-store";
 import { useVectorModelStore } from "@/stores/vector-model-store";
 import type { VectorizeProgress } from "@readany/core/types";
-import { BUILTIN_EMBEDDING_MODELS } from "../ai/builtin-embedding-models";
-import { generateLocalEmbeddings, loadEmbeddingPipeline } from "../ai/local-embedding-service";
+import { BUILTIN_EMBEDDING_MODELS } from "@readany/core/ai/builtin-embedding-models";
+import { generateLocalEmbeddings, loadEmbeddingPipeline } from "@readany/core/ai/local-embedding-service";
 import { insertChunks, deleteChunks } from "../db/database";
 import { extractBookChapters } from "./book-extractor";
-import { chunkContent } from "./chunker";
+import { chunkContent } from "@readany/core/rag/chunker";
 import { invalidateChunkCache } from "./search";
 
 export type VectorizeStatusCallback = (progress: VectorizeProgress) => void;

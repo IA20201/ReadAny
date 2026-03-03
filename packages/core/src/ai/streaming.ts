@@ -3,7 +3,8 @@
  * Uses LangGraph reading agent for unified model support with tool calling.
  * Supports OpenAI-compatible, Anthropic Claude, and Google Gemini providers.
  */
-import type { AIConfig, Book, SemanticContext, Skill, Thread } from "@readany/core/types";
+import type { AIConfig, Book, SemanticContext, Skill, Thread } from "../types";
+import type { ToolDefinition } from "./tool-types";
 import { streamReadingAgent } from "./agents/reading-agent";
 import { processMessages } from "./message-pipeline";
 
@@ -15,6 +16,12 @@ export interface StreamingOptions {
   isVectorized: boolean;
   aiConfig: AIConfig;
   deepThinking?: boolean;
+  /** Injected tool provider */
+  getAvailableTools: (options: {
+    bookId: string | null;
+    isVectorized: boolean;
+    enabledSkills: Skill[];
+  }) => ToolDefinition[];
   onToken: (token: string) => void;
   onComplete: (
     fullText: string,
@@ -72,6 +79,7 @@ export class StreamingChat {
           enabledSkills: options.enabledSkills,
           isVectorized: options.isVectorized,
           deepThinking: options.deepThinking,
+          getAvailableTools: options.getAvailableTools,
         },
         userInput,
         history,

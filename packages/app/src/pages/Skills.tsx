@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { getSkills, updateSkill, insertSkill, deleteSkill } from "@/lib/db/database";
-import { builtinSkills } from "@/lib/ai/skills/builtin-skills";
+import { builtinSkills } from "@readany/core/ai/skills/builtin-skills";
 import type { Skill } from "@readany/core/types";
 import { Badge } from "@/components/ui/badge";
 import { Pencil, Plus, Trash2 } from "lucide-react";

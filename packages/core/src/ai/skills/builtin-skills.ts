@@ -9,7 +9,7 @@
  * - Constraints and guidelines
  * - Examples
  */
-import type { Skill } from "@readany/core/types";
+import type { Skill } from "../../types";
 
 export const builtinSkills: Skill[] = [
   {
