@@ -29,6 +29,7 @@ import { MobileTOCPanel } from "./MobileTOCPanel";
 import { MobileReadSettings } from "./MobileReadSettings";
 import { MobileSelectionPopover, type BookSelection } from "./MobileSelectionPopover";
 import { MobileSearchBar } from "./MobileSearchBar";
+import { MobileChatPanel } from "@/components/chat/MobileChatPanel";
 
 // --- File loading ---
 /**
@@ -128,6 +129,7 @@ export function MobileReaderView() {
   const [showToc, setShowToc] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
+  const [showChat, setShowChat] = useState(false);
   const [totalPages, setTotalPages] = useState(0);
   const [currentPage, setCurrentPage] = useState(0);
   const [progress, setProgress] = useState(0);
@@ -351,10 +353,20 @@ export function MobileReaderView() {
 
   const handleAskAI = useCallback(() => {
     if (!selection) return;
-    // TODO: navigate to chat with selected text context
-    console.log("[MobileReaderView] Ask AI:", selection.text.slice(0, 50));
+    // Store selected text for the chat panel to pick up
+    if (bookId) {
+      sessionStorage.setItem(
+        `pending-ai-quote-${bookId}`,
+        JSON.stringify({
+          selectedText: selection.text,
+          bookId,
+          chapterTitle: chapterTitle,
+        }),
+      );
+    }
     setSelection(null);
-  }, [selection]);
+    setShowChat(true);
+  }, [selection, bookId, chapterTitle]);
 
   const handleSpeak = useCallback(() => {
     if (!selection) return;
@@ -590,6 +602,19 @@ export function MobileReaderView() {
           onClose={() => setShowSettings(false)}
         />
       )}
+
+      {/* AI Chat Panel */}
+      <MobileChatPanel
+        book={book || null}
+        open={showChat}
+        onClose={() => setShowChat(false)}
+        onNavigateToCitation={(citation) => {
+          setShowChat(false);
+          if (citation.cfi) {
+            viewerRef.current?.goToCfi(citation.cfi);
+          }
+        }}
+      />
     </div>
   );
 }
