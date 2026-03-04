@@ -92,6 +92,9 @@ export function chunkContent(
     ));
   }
 
+  console.log(`[chunker] Chapter ${chapterIndex} created ${chunks.length} chunks, first 3 CFIs:`,
+    chunks.slice(0, 3).map(c => ({ content: c.content.slice(0, 30), startCfi: c.startCfi, endCfi: c.endCfi })));
+
   return chunks;
 }
 

@@ -19,7 +19,7 @@ function createRagSearchTool(bookId: string): ToolDefinition {
   return {
     name: "ragSearch",
     description:
-      "Search book content using semantic or keyword search. Use this when the user asks about specific content, themes, or topics in the book. IMPORTANT: Call addCitation for any content you reference from the search results.",
+      "Search book content using semantic or keyword search. Returns results with 'cfi' field for precise location. CRITICAL: When you cite content from search results, you MUST extract and pass the 'cfi' field to addCitation - this enables users to jump to the exact location in the book.",
     parameters: {
       query: {
         type: "string",
@@ -43,6 +43,9 @@ function createRagSearchTool(bookId: string): ToolDefinition {
       };
 
       const results = await search(query);
+
+      console.log(`[ragSearch] Found ${results.length} results, first 3 CFIs:`,
+        results.slice(0, 3).map(r => ({ chapter: r.chunk.chapterTitle, startCfi: r.chunk.startCfi })));
 
       return {
         results: results.map((r) => ({
@@ -170,10 +173,17 @@ function createSummarizeTool(bookId: string): ToolDefinition {
         return {
           scope: "chapter",
           chapterTitle: chapterChunks[0]?.chapterTitle,
+          chapterIndex: chapterIndex,
           content: truncatedContent,
+          chunks: chapterChunks.map(c => ({
+            content: c.content,
+            cfi: c.startCfi || "",
+            chapterTitle: c.chapterTitle,
+            chapterIndex: c.chapterIndex
+          })),
           instruction: style === "brief"
-            ? "Generate a concise summary (2-3 sentences) of this chapter content."
-            : "Generate a detailed summary covering main points, key arguments, and important details.",
+            ? "Generate a concise summary (2-3 sentences) of this chapter content. Use the 'chunks' array to extract CFI for citations."
+            : "Generate a detailed summary covering main points, key arguments, and important details. Use the 'chunks' array to extract CFI for citations.",
         };
       }
 
@@ -188,12 +198,18 @@ function createSummarizeTool(bookId: string): ToolDefinition {
 
         const sampledContent: string[] = [];
         const chapterList = Array.from(chapters.entries()).sort((a, b) => a[0] - b[0]);
+        const chapterCfiMap: Array<{ chapterIndex: number; chapterTitle: string; firstChunkCfi: string }> = [];
 
         for (const [idx, title] of chapterList) {
           const chapterChunks = chunks.filter((c) => c.chapterIndex === idx);
           const firstChunk = chapterChunks[0];
           if (firstChunk) {
             sampledContent.push(`\n## Chapter: ${title}\n${firstChunk.content.slice(0, 500)}`);
+            chapterCfiMap.push({
+              chapterIndex: idx,
+              chapterTitle: title,
+              firstChunkCfi: firstChunk.startCfi || ""
+            });
           }
         }
 
@@ -201,9 +217,10 @@ function createSummarizeTool(bookId: string): ToolDefinition {
           scope: "book",
           totalChapters: chapters.size,
           content: sampledContent.join("\n").slice(0, style === "brief" ? 4000 : 10000),
+          chapters: chapterCfiMap,
           instruction: style === "brief"
-            ? "Generate a concise book summary (1-2 paragraphs) covering the main theme and key points."
-            : "Generate a comprehensive book summary covering: main theme, chapter-by-chapter overview, key arguments, and conclusions.",
+            ? "Generate a concise book summary (1-2 paragraphs) covering the main theme and key points. Use the 'chapters' array to extract CFI for citations."
+            : "Generate a comprehensive book summary covering: main theme, chapter-by-chapter overview, key arguments, and conclusions. Use the 'chapters' array to extract CFI for citations.",
         };
       }
 
@@ -267,7 +284,13 @@ function createExtractEntitiesTool(bookId: string): ToolDefinition {
         chapterIndex,
         chapterTitle: targetChunks[0]?.chapterTitle,
         content,
-        instruction: `The above is raw book content. Read through it carefully and identify all ${entityType === "all" ? "named entities (characters, places, organizations, key concepts)" : entityType}. List each entity with a brief description based ONLY on what appears in this text. This is all the data you need — do NOT call any more tools.`,
+        chunks: sampledChunks.map(c => ({
+          content: c.content,
+          cfi: c.startCfi || "",
+          chapterTitle: c.chapterTitle,
+          chapterIndex: c.chapterIndex
+        })),
+        instruction: `The above is raw book content. Read through it carefully and identify all ${entityType === "all" ? "named entities (characters, places, organizations, key concepts)" : entityType}. List each entity with a brief description based ONLY on what appears in this text. Use the 'chunks' array to extract CFI for citations. This is all the data you need — do NOT call any more tools.`,
       };
     },
   };
@@ -319,7 +342,13 @@ function createAnalyzeArgumentsTool(bookId: string): ToolDefinition {
         chapterIndex,
         chapterTitle: targetChunks[0]?.chapterTitle,
         content,
-        instruction: focusInstructions[focusType] || focusInstructions.all,
+        chunks: targetChunks.map(c => ({
+          content: c.content,
+          cfi: c.startCfi || "",
+          chapterTitle: c.chapterTitle,
+          chapterIndex: c.chapterIndex
+        })),
+        instruction: (focusInstructions[focusType] || focusInstructions.all) + " Use the 'chunks' array to extract CFI for citations.",
       };
     },
   };
@@ -377,7 +406,13 @@ function createFindQuotesTool(bookId: string): ToolDefinition {
         maxQuotes,
         chapterIndex,
         content,
-        instruction: `${quoteInstructions[quoteType] || quoteInstructions.all} Return at most ${maxQuotes} quotes with their locations.`,
+        chunks: targetChunks.slice(0, 30).map(c => ({
+          content: c.content,
+          cfi: c.startCfi || "",
+          chapterTitle: c.chapterTitle,
+          chapterIndex: c.chapterIndex
+        })),
+        instruction: `${quoteInstructions[quoteType] || quoteInstructions.all} Return at most ${maxQuotes} quotes with their locations. Use the 'chunks' array to extract CFI for citations.`,
       };
     },
   };
@@ -446,8 +481,8 @@ function createAddCitationTool(bookId: string): ToolDefinition {
       },
       cfi: {
         type: "string",
-        description: "The CFI (Canonical Fragment Identifier) location in the book for precise navigation (get this from ragSearch results). If not available, use empty string.",
-        required: false,
+        description: "REQUIRED: The exact CFI (Canonical Fragment Identifier) from ragSearch or other tool results. Extract the 'cfi' field from the search result or chunk that contains your quoted text. This CFI enables users to jump to the precise location in the book. NEVER pass empty string - if the tool result has a CFI, you MUST use it.",
+        required: true,
       },
       quotedText: {
         type: "string",
@@ -465,6 +500,19 @@ function createAddCitationTool(bookId: string): ToolDefinition {
       const chapterIndex = args.chapterIndex as number;
       const cfi = (args.cfi as string) || "";
       const quotedText = (args.quotedText as string).slice(0, 200);
+
+      // 警告：CFI 为空
+      if (!cfi || cfi.trim() === "") {
+        console.warn(`[addCitation] WARNING: Empty CFI provided! This citation will not support precise navigation.`,
+          { chapterTitle, chapterIndex, quotedText: quotedText.slice(0, 50) });
+      }
+
+      console.log(`[addCitation] Called with:`, {
+        chapterTitle,
+        chapterIndex,
+        cfi: cfi || "(EMPTY - NO NAVIGATION)",
+        quotedText: quotedText.slice(0, 50)
+      });
 
       // Return citation metadata
       // The message pipeline will assign citation numbers and create CitationPart objects
@@ -533,14 +581,26 @@ function createCompareSectionsTool(bookId: string): ToolDefinition {
           index: chapterIndex1,
           title: chapter1Chunks[0]?.chapterTitle,
           content: content1,
+          chunks: chapter1Chunks.map(c => ({
+            content: c.content,
+            cfi: c.startCfi || "",
+            chapterTitle: c.chapterTitle,
+            chapterIndex: c.chapterIndex
+          }))
         },
         chapter2: {
           index: chapterIndex2,
           title: chapter2Chunks[0]?.chapterTitle,
           content: content2,
+          chunks: chapter2Chunks.map(c => ({
+            content: c.content,
+            cfi: c.startCfi || "",
+            chapterTitle: c.chapterTitle,
+            chapterIndex: c.chapterIndex
+          }))
         },
         compareType,
-        instruction: compareInstructions[compareType] || compareInstructions.all,
+        instruction: (compareInstructions[compareType] || compareInstructions.all) + " Use the 'chunks' arrays in chapter1 and chapter2 to extract CFI for citations.",
       };
     },
   };
@@ -694,33 +754,59 @@ function createSearchAllNotesTool(): ToolDefinition {
       const limit = (args.limit as number) || 20;
       const days = args.days as number | undefined;
       const bookTitleSearch = (args.bookTitle as string)?.toLowerCase();
-      let notes = await getAllNotes(limit * 2);
+
+      const notes = await getAllNotes(limit * 2);
+      const highlightsWithNotes = await getAllHighlights(limit * 2);
+      const highlightNotes = highlightsWithNotes.filter(h => h.note);
+
       const books = await getBooks();
       const bookMap = new Map(books.map((b) => [b.id, b.meta.title]));
 
-      // Filter by time range
+      let allNotes = [
+        ...notes.map((n) => ({
+          type: "note" as const,
+          title: n.title,
+          content: n.content,
+          bookId: n.bookId,
+          chapterTitle: n.chapterTitle,
+          tags: n.tags,
+          createdAt: n.createdAt,
+        })),
+        ...highlightNotes.map((h) => ({
+          type: "highlight_note" as const,
+          title: h.text.slice(0, 50) + (h.text.length > 50 ? "..." : ""),
+          content: h.note || "",
+          bookId: h.bookId,
+          chapterTitle: h.chapterTitle,
+          highlightedText: h.text,
+          createdAt: h.createdAt,
+        })),
+      ];
+
       if (days) {
         const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
-        notes = notes.filter((n) => n.createdAt >= cutoff);
+        allNotes = allNotes.filter((n) => n.createdAt >= cutoff);
       }
 
-      // Filter by book title
       if (bookTitleSearch) {
-        notes = notes.filter((n) => {
+        allNotes = allNotes.filter((n) => {
           const title = bookMap.get(n.bookId)?.toLowerCase() || "";
           return title.includes(bookTitleSearch);
         });
       }
 
-      notes = notes.slice(0, limit);
+      allNotes.sort((a, b) => b.createdAt - a.createdAt);
+      allNotes = allNotes.slice(0, limit);
 
       return {
-        total: notes.length,
-        notes: notes.map((n) => ({
+        total: allNotes.length,
+        notes: allNotes.map((n) => ({
+          type: n.type,
           title: n.title,
           content: n.content,
           bookTitle: bookMap.get(n.bookId) || "Unknown",
           chapterTitle: n.chapterTitle,
+          highlightedText: n.type === "highlight_note" ? (n as any).highlightedText : undefined,
           tags: n.tags,
           createdAt: n.createdAt,
         })),

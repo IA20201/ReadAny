@@ -49,9 +49,12 @@ export async function extractBookChapters(filePath: string): Promise<ChapterData
       if (!body) continue;
 
       const title = tocMap.get(i) ?? tocMap.get(section.href ?? "") ?? `Section ${i + 1}`;
-      const baseCfi = section.cfi ?? CFI.fake.fromIndex(i);
+      const baseCfi = section.cfi || CFI.fake.fromIndex(i);
+      console.log(`[book-extractor] Section ${i} ("${title}"): section.cfi="${section.cfi}", baseCfi="${baseCfi}"`);
 
       const segments = extractSegmentsWithCfi(doc, baseCfi);
+      console.log(`[book-extractor] Section ${i} extracted ${segments.length} segments, first 3 CFIs:`, 
+        segments.slice(0, 3).map(s => ({ text: s.text.slice(0, 30), cfi: s.cfi })));
 
       if (segments.length === 0) continue;
 

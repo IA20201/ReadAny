@@ -1003,6 +1003,8 @@ export async function getChunks(bookId: string): Promise<Chunk[]> {
 }
 
 export async function insertChunks(chunks: Chunk[]): Promise<void> {
+  console.log(`[insertChunks] Inserting ${chunks.length} chunks, first 3 CFIs:`,
+    chunks.slice(0, 3).map(c => ({ id: c.id, startCfi: c.startCfi, endCfi: c.endCfi })));
   const database = await getDB();
   for (const chunk of chunks) {
     await database.execute(

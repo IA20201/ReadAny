@@ -44,11 +44,9 @@ export function ChatInput({
   const handleSend = useCallback(
     (useDeepThinking: boolean = deepThinking) => {
       const trimmed = value.trim();
-      // Allow sending if there's text OR if there are quotes attached
       if (trimmed || quotes.length > 0) {
         onSend(trimmed, useDeepThinking, quotes.length > 0 ? quotes : undefined);
         setValue("");
-        setDeepThinking(false);
         if (textareaRef.current) textareaRef.current.style.height = "auto";
       }
     },

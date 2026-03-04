@@ -42,6 +42,9 @@ export async function vectorizeBook(
   progress.status = "embedding";
   onProgress?.(progress);
 
+  console.log(`[vectorize] Total ${allChunks.length} chunks to embed, first 3 CFIs:`,
+    allChunks.slice(0, 3).map(c => ({ id: c.id, startCfi: c.startCfi, endCfi: c.endCfi })));
+
   // Phase 2: Generate embeddings using the EmbeddingService
   const embeddingService = new EmbeddingService({
     model: config.model,

@@ -123,7 +123,7 @@ function buildToolsSection(skills: Skill[], isVectorized: boolean): string {
     "- **compareSections**: Compare two chapters (params: chapterIndex1, chapterIndex2, compareType)",
   );
   tools.push(
-    "- **addCitation**: CRITICAL - Register a citation for specific book content. You MUST call this before referencing any factual information from the book (params: chapterTitle, chapterIndex, cfi, quotedText, reasoning)",
+    "- **addCitation**: CRITICAL - Register a citation with CFI for precise navigation. You MUST extract the 'cfi' field from ragSearch/tool results and pass it here. Never use empty CFI (params: chapterTitle, chapterIndex, cfi [REQUIRED from tool results], quotedText, reasoning)",
   );
 
   // Custom skills
@@ -184,10 +184,13 @@ function buildWorkflowSection(isVectorized: boolean): string {
   steps.push("   - ❌ General knowledge not from this book");
   steps.push("   - ❌ Your own analysis (but cite the content you're analyzing)");
   steps.push("");
-  steps.push("4. **Citation workflow:**");
-  steps.push("   - Step 1: Use ragSearch or other tools to retrieve content");
-  steps.push("   - Step 2: Call addCitation for each source you'll reference");
-  steps.push("   - Step 3: Write your response using [1], [2] to reference citations");
+  steps.push("4. **Citation workflow with CFI:**");
+  steps.push("   - Step 1: Use ragSearch or other tools to retrieve content (results include 'cfi' field)");
+  steps.push("   - Step 2: Extract chapterTitle, chapterIndex, and **CFI** from tool results");
+  steps.push("   - Step 3: Call addCitation with the extracted CFI (NEVER use empty string)");
+  steps.push("   - Step 4: Write your response using [1], [2] to reference citations");
+  steps.push("   - **Example**: ragSearch returns {cfi: 'epubcfi(/6/52!/4...)', ...} → pass this exact CFI to addCitation");
+  steps.push("   - **Example**: summarize returns {chunks: [{cfi: '...', content: '...'}]} → extract CFI from the chunk containing your quoted text");
   steps.push("");
   steps.push("**This is MANDATORY for academic integrity and user trust. Never skip citations for book content.**");
   steps.push("");
