@@ -89,13 +89,22 @@ Read your favorite e-books in any format:
 
 > 📸 Screenshots coming soon! The app features a modern library view, immersive reader, AI chat panel, and comprehensive notes management.
 
-| Library View | Reader View | AI Chat |
-|:------------:|:-----------:|:-------:|
-| *Coming Soon* | *Coming Soon* | *Coming Soon* |
+---
 
-| Notes Panel | Mindmap | Settings |
-|:-----------:|:-------:|:--------:|
-| *Coming Soon* | *Coming Soon* | *Coming Soon* |
+## Community & Support
+
+<p align="center">
+  <a href="https://github.com/codedogQBY/ReadAny/discussions">
+    <img src="https://img.shields.io/badge/GitHub-Discussions-blue?logo=github" alt="GitHub Discussions">
+  </a>
+  <a href="https://github.com/codedogQBY/ReadAny/issues">
+    <img src="https://img.shields.io/badge/GitHub-Issues-green?logo=github" alt="GitHub Issues">
+  </a>
+</p>
+
+- **💬 Discussions** - Join the conversation, ask questions, share ideas in [GitHub Discussions](https://github.com/codedogQBY/ReadAny/discussions)
+- **🐛 Bug Reports** - Found a bug? Open an [Issue](https://github.com/codedogQBY/ReadAny/issues)
+- **💡 Feature Requests** - Have an idea? We'd love to hear it in [Discussions](https://github.com/codedogQBY/ReadAny/discussions/categories/ideas)
 
 ---
 

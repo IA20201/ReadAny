@@ -86,13 +86,22 @@
 
 > 📸 截图即将上线！应用包含现代书库视图、沉浸式阅读器、AI 对话面板和全面的笔记管理功能。
 
-| 书库视图 | 阅读视图 | AI 对话 |
-|:--------:|:--------:|:-------:|
-| *即将上线* | *即将上线* | *即将上线* |
+---
 
-| 笔记面板 | 思维导图 | 设置 |
-|:--------:|:--------:|:----:|
-| *即将上线* | *即将上线* | *即将上线* |
+## 社区与支持
+
+<p align="center">
+  <a href="https://github.com/codedogQBY/ReadAny/discussions">
+    <img src="https://img.shields.io/badge/GitHub-讨论区-blue?logo=github" alt="GitHub Discussions">
+  </a>
+  <a href="https://github.com/codedogQBY/ReadAny/issues">
+    <img src="https://img.shields.io/badge/GitHub-问题反馈-green?logo=github" alt="GitHub Issues">
+  </a>
+</p>
+
+- **💬 讨论区** - 参与讨论、提问、分享想法，请访问 [GitHub Discussions](https://github.com/codedogQBY/ReadAny/discussions)
+- **🐛 问题反馈** - 发现 Bug？请提交 [Issue](https://github.com/codedogQBY/ReadAny/issues)
+- **💡 功能建议** - 有好点子？欢迎在 [讨论区](https://github.com/codedogQBY/ReadAny/discussions/categories/ideas) 分享
 
 ---
 
