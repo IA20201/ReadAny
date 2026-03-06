@@ -459,6 +459,7 @@ export class Paginator extends HTMLElement {
   #anchor = 0; // anchor view to a fraction (0-1), Range, or Element
   #justAnchored = false;
   #locked = false; // while true, prevent any further navigation
+  #navigationLocked = false; // public flag: when true, disables touch/swipe page turns
   #styles;
   #styleMap = new WeakMap();
   #mediaQuery = matchMedia("(prefers-color-scheme: dark)");
@@ -585,6 +586,7 @@ export class Paginator extends HTMLElement {
       }
     });
     const checkPointerSelection = debounce((range, sel) => {
+      if (this.#navigationLocked) return;
       if (!sel.rangeCount) return;
       const selRange = sel.getRangeAt(0);
       const backward = selectionIsBackward(sel);
@@ -763,6 +765,13 @@ export class Paginator extends HTMLElement {
   get scrolled() {
     return this.getAttribute("flow") === "scrolled";
   }
+  /** Public flag to disable touch/swipe navigation (e.g. during text selection) */
+  get navigationLocked() {
+    return this.#navigationLocked;
+  }
+  set navigationLocked(v) {
+    this.#navigationLocked = !!v;
+  }
   get scrollProp() {
     const { scrolled } = this;
     return this.#vertical ? (scrolled ? "scrollLeft" : "scrollTop") : scrolled ? "scrollTop" : "scrollLeft";
@@ -835,7 +844,7 @@ export class Paginator extends HTMLElement {
   }
   #onTouchMove(e) {
     const state = this.#touchState;
-    if (state.pinched) return;
+    if (this.#navigationLocked || state.pinched) return;
     state.pinched = globalThis.visualViewport.scale > 1;
     if (this.scrolled || state.pinched) return;
     if (e.touches.length > 1) {
@@ -866,7 +875,7 @@ export class Paginator extends HTMLElement {
   }
   #onTouchEnd() {
     this.#touchScrolled = false;
-    if (this.scrolled) return;
+    if (this.scrolled || this.#navigationLocked) return;
 
     // XXX: Firefox seems to report scale as 1... sometimes...?
     // at this point I'm basically throwing `requestAnimationFrame` at

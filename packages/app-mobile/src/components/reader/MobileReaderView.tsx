@@ -506,6 +506,11 @@ export function MobileReaderView() {
     setSelection(null);
   }, []);
 
+  // Lock paginator navigation while a selection is active
+  useEffect(() => {
+    foliateRef.current?.setNavigationLocked(!!selection);
+  }, [selection]);
+
   // --- Annotation click handler (tap on existing highlight) ---
   const handleShowAnnotation = useCallback(
     (event: Event) => {
@@ -519,19 +524,29 @@ export function MobileReaderView() {
       if (!highlight) return;
 
       // Get position from range for popover
-      const rect = range.getBoundingClientRect();
+      const boundingRect = range.getBoundingClientRect();
+      const rects = Array.from(range.getClientRects()).filter((r: DOMRect) => r.width > 0 && r.height > 0);
       const iframe = (range.startContainer?.ownerDocument as Document)?.defaultView?.frameElement as HTMLIFrameElement | null;
       const iframeRect = iframe?.getBoundingClientRect();
       const offsetX = iframeRect?.left ?? 0;
       const offsetY = iframeRect?.top ?? 0;
+
+      let minTop = boundingRect.top;
+      let maxBottom = boundingRect.bottom;
+      for (const r of rects) {
+        if (r.top < minTop) minTop = r.top;
+        if (r.bottom > maxBottom) maxBottom = r.bottom;
+      }
 
       setSelection({
         text: highlight.text,
         cfi: value,
         range,
         position: {
-          x: offsetX + rect.left + rect.width / 2,
-          y: offsetY + rect.top - 8,
+          x: offsetX + boundingRect.left + boundingRect.width / 2,
+          y: offsetY + minTop - 8,
+          selectionTop: offsetY + minTop,
+          selectionBottom: offsetY + maxBottom,
         },
         annotated: true,
         annotationId: highlight.id,
@@ -738,7 +753,7 @@ export function MobileReaderView() {
 
       {/* Selection Popover */}
       {selection && (
-        <MobileSelectionPopover
+          <MobileSelectionPopover
           selection={selection}
           isPdf={bookFormat === "PDF"}
           onHighlight={handleHighlight}

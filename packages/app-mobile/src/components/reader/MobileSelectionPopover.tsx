@@ -22,7 +22,7 @@ export interface BookSelection {
   annotated?: boolean;
   annotationId?: string;
   color?: string;
-  position: { x: number; y: number };
+  position: { x: number; y: number; selectionTop: number; selectionBottom: number };
 }
 
 interface MobileSelectionPopoverProps {
@@ -71,19 +71,53 @@ export function MobileSelectionPopover({
     }
   }, [isPdf, showColors]);
 
-  // Position: clamp within viewport — narrower popover now
+  // Position: smart above/below placement like desktop
   const popoverWidth = 220;
+  const popoverH = 44; // single row height
+  const colorRowH = 40; // color picker row height
+  const gap = 8;
+  const padding = 8;
+  const totalH = showColors ? popoverH + colorRowH + 6 : popoverH; // 6 for mb-1.5
+
+  const { selectionTop, selectionBottom } = selection.position;
+
+  // X: centered on selection, clamped to viewport
+  const x = Math.max(padding, Math.min(
+    selection.position.x - popoverWidth / 2,
+    window.innerWidth - popoverWidth - padding,
+  ));
+
+  // Y: prefer above selection, fallback below
+  const yAbove = selectionTop - totalH - gap;
+  const yBelow = selectionBottom + gap;
+  const aboveValid = yAbove >= padding;
+  const belowValid = yBelow + totalH + padding <= window.innerHeight;
+
+  let y: number;
+  if (aboveValid) {
+    y = yAbove;
+  } else if (belowValid) {
+    y = yBelow;
+  } else {
+    // Neither fits perfectly — pick whichever has more space
+    const spaceAbove = selectionTop;
+    const spaceBelow = window.innerHeight - selectionBottom;
+    y = spaceAbove > spaceBelow ? Math.max(padding, yAbove) : yBelow;
+  }
+
   const style: React.CSSProperties = {
     position: "fixed",
-    left: Math.max(8, Math.min(selection.position.x - popoverWidth / 2, window.innerWidth - popoverWidth - 8)),
-    top: Math.max(8, selection.position.y),
+    left: x,
+    top: y,
     zIndex: 50,
   };
 
   return (
     <>
-      {/* Backdrop */}
-      <div className="fixed inset-0 z-40" onClick={onDismiss} />
+      {/* No backdrop — a full-screen overlay would intercept touch events
+          on the iframe and prevent the user from dragging selection handles
+          to expand the selection. Dismissal is handled by the iframe's
+          own click/tap handler which clears the selection. */}
 
       <div style={style} className="z-50 animate-in fade-in zoom-in-95 duration-150">
         {/* Color picker row */}
