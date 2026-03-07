@@ -6,7 +6,8 @@ import react from '@astrojs/react';
 
 // https://astro.build/config
 export default defineConfig({
-  site: 'https://readany.app',
+  site: 'https://codedogqby.github.io',
+  base: '/ReadAny',
   
   vite: {
     plugins: [tailwindcss()]
