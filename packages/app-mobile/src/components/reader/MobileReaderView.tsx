@@ -128,6 +128,7 @@ export function MobileReaderView() {
   const updateReadSettings = useSettingsStore((s) => s.updateReadSettings);
 
   const foliateRef = useRef<MobileFoliateViewerHandle>(null);
+  const readerContainerRef = useRef<HTMLDivElement>(null);
 
   // Book state
   const [bookDoc, setBookDoc] = useState<BookDoc | null>(null);
@@ -671,6 +672,7 @@ export function MobileReaderView() {
 
   return (
     <div
+      ref={readerContainerRef}
       className="relative flex h-full flex-col bg-background"
       style={{
         paddingTop: "env(safe-area-inset-top, 0px)",
@@ -762,6 +764,7 @@ export function MobileReaderView() {
       {selection && (
           <MobileSelectionPopover
           selection={selection}
+          containerRef={readerContainerRef}
           isPdf={bookFormat === "PDF"}
           onHighlight={handleHighlight}
           onNote={handleNote}

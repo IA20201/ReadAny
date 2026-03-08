@@ -1,8 +1,12 @@
 /**
  * MobileSelectionPopover — floating menu when text is selected in the reader.
  * Supports: highlight (6 colors + underline), note, copy, translate, ask AI, TTS, edit/delete.
+ *
+ * Uses position: absolute within the reader container (like Readest) so the
+ * popover shares the same stacking context as the iframe content and reliably
+ * renders above the selection highlight.
  */
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useState, type RefObject } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Copy,
@@ -27,6 +31,7 @@ export interface BookSelection {
 
 interface MobileSelectionPopoverProps {
   selection: BookSelection;
+  containerRef: RefObject<HTMLDivElement | null>;
   isPdf?: boolean;
   onHighlight: (color: string) => void;
   onNote: () => void;
@@ -49,6 +54,7 @@ const HIGHLIGHT_COLORS = [
 
 export function MobileSelectionPopover({
   selection,
+  containerRef,
   isPdf,
   onHighlight,
   onNote,
@@ -71,7 +77,7 @@ export function MobileSelectionPopover({
     }
   }, [isPdf, showColors]);
 
-  // Position: smart above/below placement like desktop
+  // Popover dimensions
   const popoverWidth = 220;
   const popoverH = 44; // single row height
   const colorRowH = 40; // color picker row height
@@ -79,36 +85,30 @@ export function MobileSelectionPopover({
   const padding = 8;
   const totalH = showColors ? popoverH + colorRowH + 6 : popoverH; // 6 for mb-1.5
 
-  // Read safe-area-inset-top for top boundary clamping
-  const safeAreaTop = useMemo(() => {
-    const el = document.documentElement;
-    const val = getComputedStyle(el).getPropertyValue("--safe-area-top")?.trim();
-    if (val) return parseInt(val, 10) || 0;
-    // Fallback: read env(safe-area-inset-top) via a temp element
-    const tmp = document.createElement("div");
-    tmp.style.position = "fixed";
-    tmp.style.top = "env(safe-area-inset-top, 0px)";
-    tmp.style.visibility = "hidden";
-    document.body.appendChild(tmp);
-    const top = tmp.getBoundingClientRect().top;
-    document.body.removeChild(tmp);
-    return top;
-  }, []);
+  // Get container rect for coordinate conversion (viewport → container-relative)
+  const containerRect = containerRef.current?.getBoundingClientRect();
+  const containerTop = containerRect?.top ?? 0;
+  const containerLeft = containerRect?.left ?? 0;
+  const containerW = containerRect?.width ?? window.innerWidth;
+  const containerH = containerRect?.height ?? window.innerHeight;
 
-  const topPadding = padding + safeAreaTop;
-  const { selectionTop, selectionBottom, direction } = selection.position;
+  // Convert viewport coordinates to container-relative coordinates
+  const { selectionTop: vpSelTop, selectionBottom: vpSelBot, direction } = selection.position;
+  const selTop = vpSelTop - containerTop;
+  const selBot = vpSelBot - containerTop;
+  const selCenterX = selection.position.x - containerLeft;
 
-  // X: centered on selection, clamped to viewport
+  // X: centered on selection, clamped within container
   const x = Math.max(padding, Math.min(
-    selection.position.x - popoverWidth / 2,
-    window.innerWidth - popoverWidth - padding,
+    selCenterX - popoverWidth / 2,
+    containerW - popoverWidth - padding,
   ));
 
-  // Y positioning: direction-aware with viewport clamp
-  const yAbove = selectionTop - totalH - gap;
-  const yBelow = selectionBottom + gap;
-  const aboveValid = yAbove >= topPadding;
-  const belowValid = yBelow + totalH + padding <= window.innerHeight;
+  // Y positioning: direction-aware, coordinates relative to container
+  const yAbove = selTop - totalH - gap;
+  const yBelow = selBot + gap;
+  const aboveValid = yAbove >= padding;
+  const belowValid = yBelow + totalH + padding <= containerH;
 
   let y: number;
   if (direction === "backward") {
@@ -116,27 +116,27 @@ export function MobileSelectionPopover({
     if (aboveValid) {
       y = yAbove;
     } else {
-      // Can't fit above — place at the top of the visible area
-      y = topPadding;
+      // Can't fit above — place at the top of the container
+      y = padding;
     }
   } else {
-    // User selected downward (or unknown) — prefer placing below the selection bottom
+    // User selected downward (or default) — prefer placing below the selection bottom
     if (belowValid) {
       y = yBelow;
     } else {
-      // Can't fit below — place at the bottom of the visible area
-      y = window.innerHeight - totalH - padding;
+      // Can't fit below — place at the bottom of the container
+      y = containerH - totalH - padding;
     }
   }
 
-  // Final clamp: always keep fully visible within the safe viewport
-  y = Math.max(topPadding, Math.min(y, window.innerHeight - totalH - padding));
+  // Final clamp: always keep fully visible within the container
+  y = Math.max(padding, Math.min(y, containerH - totalH - padding));
 
   const style: React.CSSProperties = {
-    position: "fixed",
+    position: "absolute",
     left: x,
     top: y,
-    zIndex: 9999,
+    zIndex: 50,
   };
 
   return (
