@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import { useNavigate } from "react-router";
 import { useTranslation } from "react-i18next";
 import { useSettingsStore } from "@readany/core/stores";
@@ -7,12 +8,15 @@ import {
   type TranslationTargetLang,
 } from "@readany/core/types/translation";
 import { ArrowLeft, Check } from "lucide-react";
+import { useKeyboardAwareScroll } from "@/lib/use-keyboard-aware-scroll";
 
 export function TranslationSettingsPage() {
   const navigate = useNavigate();
   const { t } = useTranslation();
   const { translationConfig, updateTranslationConfig, aiConfig } =
     useSettingsStore();
+  const scrollRef = useRef<HTMLDivElement>(null);
+  useKeyboardAwareScroll(scrollRef);
 
   return (
     <div className="flex h-full flex-col bg-background">
@@ -26,7 +30,7 @@ export function TranslationSettingsPage() {
         <h1 className="text-lg font-semibold">{t("translation.settingsTitle")}</h1>
       </header>
 
-      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-6">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-6">
         {/* Provider */}
         <section>
           <h2 className="mb-3 text-sm font-medium text-muted-foreground uppercase tracking-wider">
@@ -95,11 +99,10 @@ export function TranslationSettingsPage() {
               <button
                 key={code}
                 type="button"
-                className={`flex w-full items-center justify-between px-4 py-3 active:bg-accent transition-colors ${
-                  translationConfig.targetLang === code
+                className={`flex w-full items-center justify-between px-4 py-3 active:bg-accent transition-colors ${translationConfig.targetLang === code
                     ? "text-primary font-medium"
                     : ""
-                }`}
+                  }`}
                 onClick={() => updateTranslationConfig({ targetLang: code as TranslationTargetLang })}
               >
                 <span className="text-sm">{name}</span>

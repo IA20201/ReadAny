@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { useTranslation } from "react-i18next";
 import { useSettingsStore } from "@readany/core/stores";
@@ -14,6 +14,7 @@ import {
   X,
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
+import { useKeyboardAwareScroll } from "@/lib/use-keyboard-aware-scroll";
 
 const PROVIDERS: { id: AIProviderType; label: string }[] = [
   { id: "openai", label: "OpenAI" },
@@ -38,6 +39,8 @@ export function AISettingsPage() {
 
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [newModelInput, setNewModelInput] = useState("");
+  const scrollRef = useRef<HTMLDivElement>(null);
+  useKeyboardAwareScroll(scrollRef);
 
   const handleAddEndpoint = useCallback(() => {
     addEndpoint({
@@ -93,7 +96,7 @@ export function AISettingsPage() {
         </button>
       </header>
 
-      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
         {/* Endpoints */}
         {aiConfig.endpoints.map((ep) => {
           const isActive = ep.id === aiConfig.activeEndpointId;
@@ -102,9 +105,8 @@ export function AISettingsPage() {
           return (
             <div
               key={ep.id}
-              className={`rounded-xl border overflow-hidden transition-colors ${
-                isActive ? "border-primary/50 bg-primary/5" : "border-border bg-card"
-              }`}
+              className={`rounded-xl border overflow-hidden transition-colors ${isActive ? "border-primary/50 bg-primary/5" : "border-border bg-card"
+                }`}
             >
               {/* Header */}
               <button
@@ -160,11 +162,10 @@ export function AISettingsPage() {
                         <button
                           key={p.id}
                           type="button"
-                          className={`rounded-lg border px-3 py-2 text-sm transition-colors ${
-                            ep.provider === p.id
+                          className={`rounded-lg border px-3 py-2 text-sm transition-colors ${ep.provider === p.id
                               ? "border-primary bg-primary/10 text-primary font-medium"
                               : "border-border bg-background active:bg-accent"
-                          }`}
+                            }`}
                           onClick={() => updateEndpoint(ep.id, { provider: p.id })}
                         >
                           {p.label}
@@ -219,11 +220,10 @@ export function AISettingsPage() {
                       {ep.models.map((m) => (
                         <span
                           key={m}
-                          className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs ${
-                            aiConfig.activeModel === m && isActive
+                          className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs ${aiConfig.activeModel === m && isActive
                               ? "border-primary bg-primary/10 text-primary"
                               : "border-border bg-muted"
-                          }`}
+                            }`}
                         >
                           <button
                             type="button"

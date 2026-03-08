@@ -8,6 +8,7 @@ import {
   ArrowUpAZ,
   BookOpen,
   Clock,
+  Database,
   Loader2,
   Plus,
   Search,
@@ -18,7 +19,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { useTranslation } from "react-i18next";
 import { useLibraryStore } from "@/stores/library-store";
-import { triggerVectorizeBook, type VectorizeStatusCallback } from "@/lib/rag/vectorize-trigger";
+import { triggerVectorizeBook } from "@/lib/rag/vectorize-trigger";
 import { useVectorModelStore } from "@readany/core/stores/vector-model-store";
 import { ConfigGuideDialog, type ConfigGuideType } from "@/components/shared/ConfigGuideDialog";
 import { MobileBookCard } from "./MobileBookCard";
@@ -56,6 +57,7 @@ export function LibraryPage() {
   const [tagSheetOpen, setTagSheetOpen] = useState(false);
   const [tagSheetBook, setTagSheetBook] = useState<Book | null>(null);
   const [vectorizingBookId, setVectorizingBookId] = useState<string | null>(null);
+  const [vectorizingBookTitle, setVectorizingBookTitle] = useState("");
   const [vectorProgress, setVectorProgress] = useState<{
     status: string;
     processedChunks: number;
@@ -165,7 +167,13 @@ export function LibraryPage() {
     }
 
     setVectorizingBookId(book.id);
+    setVectorizingBookTitle(book.meta.title);
     setVectorProgress(null);
+
+    // Wait for React to flush the state update and render the progress overlay
+    // before starting the heavy extraction work
+    await new Promise<void>((r) => setTimeout(r, 50));
+
     try {
       await triggerVectorizeBook(book.id, book.filePath, (progress) => {
         setVectorProgress({ ...progress });
@@ -271,11 +279,10 @@ export function LibraryPage() {
             {/* All */}
             <button
               type="button"
-              className={`shrink-0 rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-                !activeTag
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-muted text-muted-foreground active:bg-muted/80"
-              }`}
+              className={`shrink-0 rounded-full px-3 py-1 text-xs font-medium transition-colors ${!activeTag
+                ? "bg-primary text-primary-foreground"
+                : "bg-muted text-muted-foreground active:bg-muted/80"
+                }`}
               onClick={() => setActiveTag("")}
             >
               {t("library.all")}
@@ -285,11 +292,10 @@ export function LibraryPage() {
               <button
                 key={tag}
                 type="button"
-                className={`shrink-0 rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-                  activeTag === tag
-                    ? "bg-primary text-primary-foreground"
-                    : "bg-muted text-muted-foreground active:bg-muted/80"
-                }`}
+                className={`shrink-0 rounded-full px-3 py-1 text-xs font-medium transition-colors ${activeTag === tag
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-muted text-muted-foreground active:bg-muted/80"
+                  }`}
                 onClick={() => setActiveTag(activeTag === tag ? "" : tag)}
               >
                 {tag}
@@ -299,11 +305,10 @@ export function LibraryPage() {
             {/* Uncategorized */}
             <button
               type="button"
-              className={`shrink-0 rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-                activeTag === "__uncategorized__"
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-muted text-muted-foreground active:bg-muted/80"
-              }`}
+              className={`shrink-0 rounded-full px-3 py-1 text-xs font-medium transition-colors ${activeTag === "__uncategorized__"
+                ? "bg-primary text-primary-foreground"
+                : "bg-muted text-muted-foreground active:bg-muted/80"
+                }`}
               onClick={() =>
                 setActiveTag(activeTag === "__uncategorized__" ? "" : "__uncategorized__")
               }
@@ -323,9 +328,8 @@ export function LibraryPage() {
               <button
                 key={field}
                 type="button"
-                className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-xs transition-colors ${
-                  filter.sortField === field ? "bg-muted font-medium" : "active:bg-muted"
-                }`}
+                className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-xs transition-colors ${filter.sortField === field ? "bg-muted font-medium" : "active:bg-muted"
+                  }`}
                 onClick={() => handleSortChange(field)}
               >
                 {field === "lastOpenedAt" ? (
@@ -356,6 +360,41 @@ export function LibraryPage() {
           <div className="mb-3 flex items-center gap-2 rounded-lg bg-primary/5 px-3 py-2">
             <Loader2 className="h-4 w-4 animate-spin text-primary" />
             <span className="text-xs text-primary">{t("library.importing")}</span>
+          </div>
+        )}
+
+        {/* Vectorization progress banner */}
+        {vectorizingBookId && (
+          <div className="mb-3 rounded-lg bg-primary/5 px-3 py-2.5">
+            <div className="flex items-center gap-2">
+              <Database className="h-4 w-4 shrink-0 text-primary" />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1.5">
+                  <Loader2 className="h-3 w-3 animate-spin text-primary" />
+                  <span className="text-xs font-medium text-primary truncate">
+                    {vectorProgress?.status === "chunking"
+                      ? t("home.vec_chunking")
+                      : vectorProgress?.status === "embedding"
+                        ? t("home.vec_processing") + ` ${vectorProgress.totalChunks > 0 ? Math.round((vectorProgress.processedChunks / vectorProgress.totalChunks) * 100) : 0}%`
+                        : vectorProgress?.status === "indexing"
+                          ? t("home.vec_indexing")
+                          : vectorProgress?.status === "completed"
+                            ? t("home.vec_indexed")
+                            : t("home.vec_processing")}
+                  </span>
+                </div>
+                <p className="mt-0.5 text-[10px] text-muted-foreground truncate">{vectorizingBookTitle}</p>
+              </div>
+            </div>
+            {/* Progress bar during embedding phase */}
+            {vectorProgress?.status === "embedding" && vectorProgress.totalChunks > 0 && (
+              <div className="mt-2 h-1 w-full rounded-full bg-primary/10 overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-primary transition-all duration-300"
+                  style={{ width: `${Math.round((vectorProgress.processedChunks / vectorProgress.totalChunks) * 100)}%` }}
+                />
+              </div>
+            )}
           </div>
         )}
 

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { useTranslation } from "react-i18next";
 import { useTTSStore } from "@readany/core/stores";
@@ -8,6 +8,7 @@ import {
   type TTSEngine,
 } from "@readany/core/tts";
 import { ArrowLeft, Volume2, Zap, Globe, Mic, Play } from "lucide-react";
+import { useKeyboardAwareScroll } from "@/lib/use-keyboard-aware-scroll";
 
 const ENGINES: { id: TTSEngine; labelKey: string; icon: typeof Volume2 }[] = [
   { id: "edge", labelKey: "tts.edgeEngine", icon: Globe },
@@ -20,6 +21,8 @@ export function TTSSettingsPage() {
   const { t } = useTranslation();
   const { config, updateConfig, play, stop } = useTTSStore();
   const [browserVoices, setBrowserVoices] = useState<SpeechSynthesisVoice[]>([]);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  useKeyboardAwareScroll(scrollRef);
 
   useEffect(() => {
     const loadVoices = () => {
@@ -75,7 +78,7 @@ export function TTSSettingsPage() {
         </button>
       </header>
 
-      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-6">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-6">
         {/* Engine Selection */}
         <section>
           <h2 className="mb-3 text-sm font-medium text-muted-foreground uppercase tracking-wider">
@@ -89,11 +92,10 @@ export function TTSSettingsPage() {
                 <button
                   key={eng.id}
                   type="button"
-                  className={`flex flex-col items-center gap-1.5 rounded-xl border p-3 transition-colors ${
-                    active
+                  className={`flex flex-col items-center gap-1.5 rounded-xl border p-3 transition-colors ${active
                       ? "border-primary bg-primary/5"
                       : "border-border bg-card active:bg-accent"
-                  }`}
+                    }`}
                   onClick={() => updateConfig({ engine: eng.id })}
                 >
                   <Icon className={`h-5 w-5 ${active ? "text-primary" : "text-muted-foreground"}`} />
@@ -123,9 +125,8 @@ export function TTSSettingsPage() {
                     <button
                       key={v.id}
                       type="button"
-                      className={`flex w-full items-center justify-between px-4 py-2.5 text-sm active:bg-accent transition-colors ${
-                        config.edgeVoice === v.id ? "text-primary font-medium" : ""
-                      }`}
+                      className={`flex w-full items-center justify-between px-4 py-2.5 text-sm active:bg-accent transition-colors ${config.edgeVoice === v.id ? "text-primary font-medium" : ""
+                        }`}
                       onClick={() => updateConfig({ edgeVoice: v.id })}
                     >
                       <span>{v.name}</span>
@@ -150,9 +151,8 @@ export function TTSSettingsPage() {
                   <button
                     key={v.voiceURI}
                     type="button"
-                    className={`flex w-full items-center justify-between px-4 py-2.5 text-sm active:bg-accent transition-colors ${
-                      config.voiceName === v.name ? "text-primary font-medium" : ""
-                    }`}
+                    className={`flex w-full items-center justify-between px-4 py-2.5 text-sm active:bg-accent transition-colors ${config.voiceName === v.name ? "text-primary font-medium" : ""
+                      }`}
                     onClick={() => updateConfig({ voiceName: v.name })}
                   >
                     <span>
@@ -174,9 +174,8 @@ export function TTSSettingsPage() {
                   <button
                     key={v.id}
                     type="button"
-                    className={`flex w-full items-center justify-between px-4 py-2.5 text-sm active:bg-accent transition-colors ${
-                      config.dashscopeVoice === v.id ? "text-primary font-medium" : ""
-                    }`}
+                    className={`flex w-full items-center justify-between px-4 py-2.5 text-sm active:bg-accent transition-colors ${config.dashscopeVoice === v.id ? "text-primary font-medium" : ""
+                      }`}
                     onClick={() => updateConfig({ dashscopeVoice: v.id })}
                   >
                     <span>

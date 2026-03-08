@@ -20,6 +20,7 @@ import {
   Languages,
   Cpu,
   BarChart3,
+  Cloud,
 } from "lucide-react";
 
 /* ── Settings menu ── */
@@ -31,6 +32,7 @@ function useMenuSections() {
       title: t("settings.general"),
       items: [
         { icon: Palette, label: t("settings.appearance"), path: "/settings/appearance" },
+        { icon: Cloud, label: t("settings.sync"), path: "/settings/sync" },
       ],
     },
     {

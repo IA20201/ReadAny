@@ -43,6 +43,14 @@ export async function triggerVectorizeBook(
     onBookUpdate: useLibraryStore.getState().updateBook,
   };
 
+  // Report "extracting" phase so the UI can show progress immediately
+  onProgress?.({
+    bookId,
+    totalChunks: 0,
+    processedChunks: 0,
+    status: "chunking", // Reuse "chunking" status for extraction phase
+  });
+
   const chapters = await extractBookChapters(filePath);
 
   await coreTriggerVectorizeBook(

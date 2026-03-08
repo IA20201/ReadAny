@@ -13,11 +13,16 @@ import { TTSSettingsPage } from "@/components/settings/TTSSettingsPage";
 import { TranslationSettingsPage } from "@/components/settings/TranslationSettingsPage";
 import { AboutPage } from "@/components/settings/AboutPage";
 import { VectorModelSettingsPage } from "@/components/settings/VectorModelSettingsPage";
+import { SyncSettingsPage } from "@/components/settings/SyncSettingsPage";
 import { MobileStatsPage } from "@/components/stats/MobileStatsPage";
+import { useSyncEvents, useAutoSync } from "@/hooks/use-sync";
 
-export default function App() {
+function AppContent() {
+  useSyncEvents();
+  useAutoSync();
+
   return (
-    <BrowserRouter>
+    <>
       <Routes>
         {/* Tab layout */}
         <Route element={<MobileLayout />}>
@@ -35,6 +40,7 @@ export default function App() {
         <Route path="/settings/ai" element={<AISettingsPage />} />
         <Route path="/settings/tts" element={<TTSSettingsPage />} />
         <Route path="/settings/translation" element={<TranslationSettingsPage />} />
+        <Route path="/settings/sync" element={<SyncSettingsPage />} />
         <Route path="/settings/about" element={<AboutPage />} />
         <Route path="/settings/vector-model" element={<VectorModelSettingsPage />} />
         <Route path="/skills" element={<SkillsPage />} />
@@ -45,6 +51,14 @@ export default function App() {
       </Routes>
 
       <Toaster position="top-center" richColors duration={2000} />
+    </>
+  );
+}
+
+export default function App() {
+  return (
+    <BrowserRouter>
+      <AppContent />
     </BrowserRouter>
   );
 }

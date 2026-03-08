@@ -160,6 +160,10 @@ export function MobileReaderView() {
   // Notebook store
   const { startNewNote } = useNotebookStore();
 
+  // Highlight rendering tracking
+  const renderedHighlightsRef = useRef<Map<string, { cfi: string; hasNote: boolean }>>(new Map());
+  const [foliateReady, setFoliateReady] = useState(false);
+
   // Selection state
   const [selection, setSelection] = useState<BookSelection | null>(null);
 
@@ -248,8 +252,52 @@ export function MobileReaderView() {
   useEffect(() => {
     if (bookId) {
       loadAnnotations(bookId);
+      renderedHighlightsRef.current.clear();
+      setFoliateReady(false);
     }
   }, [bookId, loadAnnotations]);
+
+  // Sync highlights to FoliateViewer when they change or when foliate becomes ready
+  useEffect(() => {
+    if (!foliateReady) return;
+    const timer = setTimeout(() => {
+      const view = foliateRef.current?.getView();
+      if (!view) return;
+
+      const bookHighlights = highlights.filter((h) => h.bookId === bookId);
+      const currentIds = new Set(bookHighlights.map((h) => h.id));
+
+      // Remove highlights no longer in the store
+      for (const [id, data] of renderedHighlightsRef.current) {
+        if (!currentIds.has(id)) {
+          view.addAnnotation({ value: data.cfi }, true).catch(() => {});
+          renderedHighlightsRef.current.delete(id);
+        }
+      }
+
+      // Add new highlights or update if note status changed
+      for (const h of bookHighlights) {
+        if (!h.cfi) continue;
+        const existing = renderedHighlightsRef.current.get(h.id);
+        const hasNote = !!h.note;
+        const needsRender = !existing || existing.hasNote !== hasNote;
+
+        if (needsRender) {
+          if (existing) {
+            view.addAnnotation({ value: existing.cfi }, true).catch(() => {});
+          }
+          view.addAnnotation({
+            value: h.cfi,
+            type: "highlight",
+            color: h.color || "yellow",
+            note: h.note,
+          }).catch(() => {});
+          renderedHighlightsRef.current.set(h.id, { cfi: h.cfi, hasNote });
+        }
+      }
+    }, 200);
+    return () => clearTimeout(timer);
+  }, [highlights, foliateReady, bookId]);
 
   // Throttled progress save
   const throttledSaveProgress = useRef(
@@ -324,8 +372,34 @@ export function MobileReaderView() {
   );
 
   const handleTocReady = useCallback((toc: MobileTOCItem[]) => setTocItems(toc), []);
-  const handleLoaded = useCallback(() => setIsLoading(false), []);
-  const handleSectionLoad = useCallback((_index: number) => {}, []);
+  const handleLoaded = useCallback(() => {
+    setIsLoading(false);
+    setFoliateReady(true);
+  }, []);
+  const handleSectionLoad = useCallback(
+    (_index: number) => {
+      // When foliate-js loads a new section (chapter), it replaces the iframe
+      // and all previously rendered annotations are lost. Re-add all highlights.
+      setTimeout(() => {
+        const view = foliateRef.current?.getView();
+        if (!view) return;
+        const bookHighlights = highlights.filter((h) => h.bookId === bookId);
+        renderedHighlightsRef.current.clear();
+        for (const h of bookHighlights) {
+          if (h.cfi) {
+            view.addAnnotation({
+              value: h.cfi,
+              type: "highlight",
+              color: h.color || "yellow",
+              note: h.note,
+            }).catch(() => {});
+            renderedHighlightsRef.current.set(h.id, { cfi: h.cfi, hasNote: !!h.note });
+          }
+        }
+      }, 200);
+    },
+    [highlights, bookId],
+  );
   const handleError = useCallback((err: Error) => {
     setError(err.message);
     setIsLoading(false);
@@ -404,6 +478,17 @@ export function MobileReaderView() {
         createdAt: Date.now(),
         updatedAt: Date.now(),
       });
+
+      // Immediately render in the foliate view
+      const view = foliateRef.current?.getView();
+      if (view && selection.cfi) {
+        view.addAnnotation({
+          value: selection.cfi,
+          type: "highlight",
+          color: color,
+        }).catch(() => {});
+      }
+      renderedHighlightsRef.current.set(highlightId, { cfi: selection.cfi, hasNote: false });
 
       setSelection(null);
     },
@@ -499,6 +584,13 @@ export function MobileReaderView() {
   const handleRemoveHighlight = useCallback(() => {
     if (!selection?.annotationId) return;
 
+    // Remove from foliate view
+    if (selection.cfi) {
+      const view = foliateRef.current?.getView();
+      view?.addAnnotation({ value: selection.cfi }, true).catch(() => {});
+      renderedHighlightsRef.current.delete(selection.annotationId);
+    }
+
     removeHighlight(selection.annotationId);
     setSelection(null);
   }, [selection, removeHighlight]);
@@ -526,7 +618,7 @@ export function MobileReaderView() {
 
       // Get position from range for popover
       const boundingRect = range.getBoundingClientRect();
-      const rects = Array.from(range.getClientRects()).filter((r: DOMRect) => r.width > 0 && r.height > 0);
+      const rects = Array.from(range.getClientRects() as DOMRectList).filter((r) => r.width > 0 && r.height > 0);
       const iframe = (range.startContainer?.ownerDocument as Document)?.defaultView?.frameElement as HTMLIFrameElement | null;
       const iframeRect = iframe?.getBoundingClientRect();
       const offsetX = iframeRect?.left ?? 0;
@@ -764,7 +856,6 @@ export function MobileReaderView() {
       {selection && (
           <MobileSelectionPopover
           selection={selection}
-          containerRef={readerContainerRef}
           isPdf={bookFormat === "PDF"}
           onHighlight={handleHighlight}
           onNote={handleNote}

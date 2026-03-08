@@ -87,6 +87,8 @@ export interface MobileFoliateViewerHandle {
   search: (query: string) => AsyncGenerator<{ cfi: string; excerpt: string }, void, unknown> | null;
   clearSearch: () => void;
   setNavigationLocked: (locked: boolean) => void;
+  addAnnotation: (annotation: unknown, remove?: boolean) => void;
+  deleteAnnotation: (annotation: unknown) => void;
 }
 
 interface MobileFoliateViewerProps {
@@ -158,6 +160,12 @@ export const MobileFoliateViewer = forwardRef<MobileFoliateViewerHandle, MobileF
             // biome-ignore lint: runtime property on paginator
             (renderer as any).navigationLocked = locked;
           }
+        },
+        addAnnotation: (annotation: unknown, remove?: boolean) => {
+          viewRef.current?.addAnnotation(annotation, remove);
+        },
+        deleteAnnotation: (annotation: unknown) => {
+          viewRef.current?.deleteAnnotation(annotation);
         },
         getVisibleText: () => {
           try {
@@ -288,9 +296,9 @@ export const MobileFoliateViewer = forwardRef<MobileFoliateViewerHandle, MobileF
     const docLoadHandler = useCallback((event: Event) => docLoadHandlerRef.current(event), []);
     const relocateHandler = useCallback((event: Event) => relocateHandlerRef.current(event), []);
 
-    // Draw annotation handler (simple highlights)
+    // Draw annotation handler (highlights + note squiggly underlines)
     const drawAnnotationHandler = useCallback((event: Event) => {
-      const { draw, annotation } = (event as CustomEvent).detail;
+      const { draw, annotation, doc, range } = (event as CustomEvent).detail;
       if (!draw || !annotation) return;
       const color = annotation.color || "yellow";
       const colorMap: Record<string, string> = {
@@ -298,9 +306,39 @@ export const MobileFoliateViewer = forwardRef<MobileFoliateViewerHandle, MobileF
         yellow: "rgba(250, 204, 21, 0.4)",
         green: "rgba(74, 222, 128, 0.4)",
         blue: "rgba(96, 165, 250, 0.4)",
+        pink: "rgba(236, 72, 153, 0.4)",
         violet: "rgba(167, 139, 250, 0.4)",
       };
-      draw(Overlayer.highlight, { color: colorMap[color] || colorMap.yellow });
+
+      // Detect writing mode for vertical text support
+      let writingMode = "horizontal-tb";
+      let vertical = false;
+      if (doc && range) {
+        try {
+          const node = range.startContainer;
+          const el = node.nodeType === 1 ? node : node.parentElement;
+          if (el && doc.defaultView) {
+            const style = doc.defaultView.getComputedStyle(el);
+            writingMode = style.writingMode || "horizontal-tb";
+            vertical = writingMode?.includes("vertical") || false;
+          }
+        } catch { /* ignore */ }
+      }
+
+      if (annotation.note) {
+        // Has note → draw wavy underline instead of highlight background
+        draw(Overlayer.squiggly, { color: "#000000", width: 1.5, writingMode });
+      } else {
+        // Regular highlight
+        draw(Overlayer.highlight, { color: colorMap[color] || colorMap.yellow, vertical });
+      }
+    }, []);
+
+    // Delete annotation handler (cleanup when annotation is removed)
+    const deleteAnnotationHandler = useCallback((_event: Event) => {
+      // No-op on mobile — no tooltip registry to clean up.
+      // The event listener is registered so foliate-js can properly
+      // clean up its internal overlay state.
     }, []);
 
     // Tap listener for center-tap → toggle controls
@@ -525,6 +563,7 @@ export const MobileFoliateViewer = forwardRef<MobileFoliateViewerHandle, MobileF
           view.addEventListener("load", docLoadHandler);
           view.addEventListener("relocate", relocateHandler);
           view.addEventListener("draw-annotation", drawAnnotationHandler);
+          view.addEventListener("delete-annotation", deleteAnnotationHandler);
           setViewReady(true);
 
           // Navigate to last location

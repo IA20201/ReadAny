@@ -7,6 +7,9 @@ import { DocumentLoader } from "@/lib/reader/document-loader";
 import type { TOCItem } from "@/lib/reader/document-loader";
 import * as CFI from "foliate-js/epubcfi.js";
 
+/** Yield to the event loop so the UI can repaint */
+const yieldToUI = () => new Promise<void>((r) => setTimeout(r, 0));
+
 export interface TextSegment {
   text: string;
   cfi: string;
@@ -42,6 +45,9 @@ export async function extractBookChapters(filePath: string): Promise<ChapterData
   for (let i = 0; i < sections.length; i++) {
     const section = sections[i];
     if (!section.createDocument) continue;
+
+    // Yield to the event loop so the UI can render progress overlay
+    await yieldToUI();
 
     try {
       const doc = await section.createDocument();

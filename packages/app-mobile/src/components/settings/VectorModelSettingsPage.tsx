@@ -7,10 +7,11 @@ import { loadEmbeddingPipeline } from "@readany/core/ai/local-embedding-service"
 import { useVectorModelStore } from "@readany/core/stores/vector-model-store";
 import type { VectorModelConfig } from "@readany/core/types";
 import { ArrowLeft, Check, Download, Edit2, Loader2, Plus, Trash2, X } from "lucide-react";
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { useTranslation } from "react-i18next";
 import { Switch } from "@/components/ui/switch";
+import { useKeyboardAwareScroll } from "@/lib/use-keyboard-aware-scroll";
 
 function normalizeEmbeddingsUrl(url: string): string {
   return url.replace(/\/$/, "");
@@ -74,9 +75,8 @@ function BuiltinModelsSection() {
           return (
             <div
               key={model.id}
-              className={`rounded-xl border p-3.5 transition-colors ${
-                isSelected ? "border-primary/50 bg-primary/5" : "border-border bg-card"
-              }`}
+              className={`rounded-xl border p-3.5 transition-colors ${isSelected ? "border-primary/50 bg-primary/5" : "border-border bg-card"
+                }`}
             >
               <div className="flex items-center justify-between">
                 <div className="min-w-0 flex-1">
@@ -276,11 +276,10 @@ function RemoteModelsSection() {
         {vectorModels.map((model) => (
           <div
             key={model.id}
-            className={`rounded-xl border p-3.5 transition-colors ${
-              selectedVectorModelId === model.id
+            className={`rounded-xl border p-3.5 transition-colors ${selectedVectorModelId === model.id
                 ? "border-primary/50 bg-primary/5"
                 : "border-border bg-card"
-            }`}
+              }`}
           >
             <div className="flex items-center justify-between">
               <div className="min-w-0 flex-1">
@@ -326,11 +325,10 @@ function RemoteModelsSection() {
             </div>
 
             {testResults[model.id] && (
-              <p className={`mt-1 text-xs ${
-                testResults[model.id].includes("✓") ? "text-green-600"
+              <p className={`mt-1 text-xs ${testResults[model.id].includes("✓") ? "text-green-600"
                   : testResults[model.id].includes("✗") ? "text-destructive"
                     : "text-muted-foreground"
-              }`}>{testResults[model.id]}</p>
+                }`}>{testResults[model.id]}</p>
             )}
           </div>
         ))}
@@ -431,6 +429,8 @@ export function VectorModelSettingsPage() {
     setVectorModelEnabled,
     setVectorModelMode,
   } = useVectorModelStore();
+  const scrollRef = useRef<HTMLDivElement>(null);
+  useKeyboardAwareScroll(scrollRef);
 
   return (
     <div className="flex h-full flex-col">
@@ -446,7 +446,7 @@ export function VectorModelSettingsPage() {
         </div>
       </header>
 
-      <div className="flex-1 overflow-y-auto pb-6">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto pb-6">
         {/* Enable switch */}
         <div className="px-4 pt-4">
           <div className="flex items-center justify-between rounded-xl border border-border bg-card p-4">
@@ -466,11 +466,10 @@ export function VectorModelSettingsPage() {
               <div className="flex gap-2">
                 <button
                   type="button"
-                  className={`flex-1 rounded-xl border px-3 py-3 text-left transition-colors ${
-                    vectorModelMode === "builtin"
+                  className={`flex-1 rounded-xl border px-3 py-3 text-left transition-colors ${vectorModelMode === "builtin"
                       ? "border-primary/50 bg-primary/5"
                       : "border-border bg-card active:bg-muted/50"
-                  }`}
+                    }`}
                   onClick={() => setVectorModelMode("builtin")}
                 >
                   <div className="text-sm font-medium">{t("settings.vm_modeBuiltin")}</div>
@@ -478,11 +477,10 @@ export function VectorModelSettingsPage() {
                 </button>
                 <button
                   type="button"
-                  className={`flex-1 rounded-xl border px-3 py-3 text-left transition-colors ${
-                    vectorModelMode === "remote"
+                  className={`flex-1 rounded-xl border px-3 py-3 text-left transition-colors ${vectorModelMode === "remote"
                       ? "border-primary/50 bg-primary/5"
                       : "border-border bg-card active:bg-muted/50"
-                  }`}
+                    }`}
                   onClick={() => setVectorModelMode("remote")}
                 >
                   <div className="text-sm font-medium">{t("settings.vm_modeRemote")}</div>
