@@ -28,7 +28,7 @@ import { useLibraryStore } from "@/stores/library-store";
 import { useAnnotationStore, useReadingSessionStore } from "@readany/core/stores";
 import { getPlatformService } from "@readany/core/services";
 import type { TOCItem } from "@readany/core/types";
-import { colors, radius, fontSize, fontWeight } from "@/styles/theme";
+import { type ThemeColors, radius, fontSize, fontWeight, useColors } from "@/styles/theme";
 import {
   ChevronLeftIcon,
   ChevronRightIcon,
@@ -90,6 +90,8 @@ function TOCTreeItem({
   currentChapter: string;
   onSelect: (href: string) => void;
 }) {
+  const colors = useColors();
+  const tocS = makeTocStyles(colors);
   const hasChildren = item.subitems && item.subitems.length > 0;
   const isCurrent = item.title === currentChapter;
 
@@ -108,16 +110,16 @@ function TOCTreeItem({
     <View>
       <TouchableOpacity
         style={[
-          tocStyles.item,
+          tocS.item,
           { paddingLeft: 12 + level * 16 },
-          isCurrent && tocStyles.itemActive,
+          isCurrent && tocS.itemActive,
         ]}
         onPress={() => item.href && onSelect(item.href)}
         activeOpacity={0.7}
       >
         {hasChildren ? (
           <TouchableOpacity
-            style={tocStyles.expandBtn}
+            style={tocS.expandBtn}
             onPress={() => setExpanded(!expanded)}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
@@ -128,10 +130,10 @@ function TOCTreeItem({
             )}
           </TouchableOpacity>
         ) : (
-          <View style={tocStyles.expandPlaceholder} />
+          <View style={tocS.expandPlaceholder} />
         )}
         <Text
-          style={[tocStyles.itemText, isCurrent && tocStyles.itemTextActive]}
+          style={[tocS.itemText, isCurrent && tocS.itemTextActive]}
           numberOfLines={1}
         >
           {item.title}
@@ -154,7 +156,7 @@ function TOCTreeItem({
   );
 }
 
-const tocStyles = StyleSheet.create({
+const makeTocStyles = (colors: ThemeColors) => StyleSheet.create({
   item: {
     flexDirection: "row",
     alignItems: "center",
@@ -173,6 +175,8 @@ const tocStyles = StyleSheet.create({
 // ──────────────────────────── ReaderScreen ────────────────────────────
 
 export function ReaderScreen({ route, navigation }: Props) {
+  const colors = useColors();
+  const s = makeStyles(colors);
   const { bookId } = route.params;
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
@@ -393,7 +397,7 @@ export function ReaderScreen({ route, navigation }: Props) {
 
   if (loading) {
     return (
-      <SafeAreaView style={s.container}>
+      <SafeAreaView style={[s.container, { backgroundColor: colors.background }]}>
         <View style={s.loadingWrap}>
           <ActivityIndicator size="large" color={colors.indigo} />
           <Text style={s.loadingText}>{t("reader.loading", "正在加载...")}</Text>
@@ -404,7 +408,7 @@ export function ReaderScreen({ route, navigation }: Props) {
 
   if (error) {
     return (
-      <SafeAreaView style={s.container}>
+      <SafeAreaView style={[s.container, { backgroundColor: colors.background }]}>
         <View style={s.loadingWrap}>
           <Text style={s.errorText}>{error}</Text>
           <TouchableOpacity style={s.backButton} onPress={() => navigation.goBack()}>
@@ -852,7 +856,7 @@ export function ReaderScreen({ route, navigation }: Props) {
   );
 }
 
-const s = StyleSheet.create({
+const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   webview: { flex: 1 },
   loadingWrap: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12 },

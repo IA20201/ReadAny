@@ -19,7 +19,7 @@ import { useNavigation } from "@react-navigation/native";
 import { readingStatsService } from "@readany/core/stats";
 import type { OverallStats, DailyStats, PeriodBookStats, TrendPoint } from "@readany/core/stats";
 import { useReadingSessionStore } from "@readany/core/stores/reading-session-store";
-import { colors, radius, fontSize, fontWeight } from "@/styles/theme";
+import { type ThemeColors, radius, fontSize, fontWeight, useColors } from "@/styles/theme";
 import {
   BookOpenIcon,
   ClockIcon,
@@ -72,6 +72,8 @@ function StatCard({
   value: string;
   unit?: string;
 }) {
+  const colors = useColors();
+  const s = makeStyles(colors);
   return (
     <View style={s.statCard}>
       <View style={s.statCardHeader}>
@@ -89,11 +91,13 @@ function StatCard({
 // ────────────────── Heatmap (26 weeks matching Tauri) ──────────────────
 
 function FullHeatmap({ dailyStats }: { dailyStats: DailyStats[] }) {
+  const colors = useColors();
   const CELL = 10;
   const GAP = 2;
+  const UNIT = CELL + GAP;
   const WEEKS = 26;
 
-  const { cells, monthLabels } = useMemo(() => {
+  const { weeks, monthLabels } = useMemo(() => {
     const statsMap = new Map<string, number>();
     for (const d of dailyStats) statsMap.set(d.date, d.totalTime);
 
@@ -102,89 +106,86 @@ function FullHeatmap({ dailyStats }: { dailyStats: DailyStats[] }) {
     const startDate = new Date(today);
     startDate.setDate(startDate.getDate() - (WEEKS * 7 + todayDay - 1));
 
-    const result: { x: number; y: number; intensity: number; date: string }[] = [];
-    const mLabels: { label: string; x: number }[] = [];
-    const maxTime = Math.max(1, ...dailyStats.map((d) => d.totalTime));
-
-    let weekIdx = 0;
+    const weeksArr: Array<Array<{ date: string; time: number; dayOfWeek: number }>> = [];
+    const mLabels: Array<{ label: string; col: number }> = [];
+    let currentWeek: Array<{ date: string; time: number; dayOfWeek: number }> = [];
     let lastMonth = -1;
+    let weekIdx = 0;
     const cursor = new Date(startDate);
-    let currentWeekDays: { date: string; time: number; dow: number }[] = [];
 
     while (cursor <= today) {
-      const dateStr = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, "0")}-${String(cursor.getDate()).padStart(2, "0")}`;
+      const dateStr = cursor.toISOString().split("T")[0];
       const dow = cursor.getDay();
       const month = cursor.getMonth();
 
-      if (dow === 0 && currentWeekDays.length > 0) {
+      if (dow === 0 && currentWeek.length > 0) {
+        weeksArr.push(currentWeek);
+        currentWeek = [];
         weekIdx++;
       }
 
       if (month !== lastMonth) {
-        mLabels.push({ label: `${month + 1}月`, x: weekIdx * (CELL + GAP) });
+        mLabels.push({ label: `${month + 1}月`, col: weekIdx });
         lastMonth = month;
       }
 
-      const time = statsMap.get(dateStr) || 0;
-      result.push({
-        x: weekIdx * (CELL + GAP),
-        y: dow * (CELL + GAP),
-        intensity: time > 0 ? Math.min(1, time / maxTime) : 0,
-        date: dateStr,
-      });
-
+      currentWeek.push({ date: dateStr, time: statsMap.get(dateStr) || 0, dayOfWeek: dow });
       cursor.setDate(cursor.getDate() + 1);
     }
+    if (currentWeek.length > 0) weeksArr.push(currentWeek);
 
-    return { cells: result, monthLabels: mLabels };
+    return { weeks: weeksArr, monthLabels: mLabels };
   }, [dailyStats]);
 
-  const getColor = (intensity: number) => {
-    if (intensity === 0) return colors.muted;
-    if (intensity < 0.25) return "rgba(16,185,129,0.2)";
-    if (intensity < 0.5) return "rgba(16,185,129,0.4)";
-    if (intensity < 0.75) return "rgba(16,185,129,0.6)";
-    return "rgba(16,185,129,0.85)";
+  // Fixed threshold color mapping matching Tauri's getHeatColor
+  const getColor = (minutes: number) => {
+    if (minutes <= 0) return colors.muted;
+    if (minutes < 15) return "rgba(16,185,129,0.3)";
+    if (minutes < 30) return "rgba(16,185,129,0.5)";
+    if (minutes < 60) return "rgba(16,185,129,0.7)";
+    return "rgba(16,185,129,0.9)";
   };
-
-  const totalWidth = (WEEKS + 1) * (CELL + GAP);
 
   return (
     <View>
       {/* Month labels */}
       <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-        <View style={{ width: totalWidth, height: 14 }}>
-          {monthLabels.map((m, i) => (
-            <Text
-              key={`${m.label}-${i}`}
-              style={{
-                position: "absolute",
-                left: m.x,
-                top: 0,
-                fontSize: 9,
-                color: colors.mutedForeground,
-              }}
-            >
-              {m.label}
-            </Text>
-          ))}
+        <View style={{ flexDirection: "row", height: 14, marginBottom: 2 }}>
+          {monthLabels.map((m, i) => {
+            const nextCol = i + 1 < monthLabels.length ? monthLabels[i + 1].col : weeks.length;
+            const span = nextCol - m.col;
+            return (
+              <View key={`${m.label}-${m.col}`} style={{ width: span * UNIT, minWidth: span * UNIT }}>
+                {span >= 2 && (
+                  <Text style={{ fontSize: 9, color: colors.mutedForeground }}>{m.label}</Text>
+                )}
+              </View>
+            );
+          })}
         </View>
       </ScrollView>
+      {/* Week columns */}
       <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-        <View style={{ height: 7 * (CELL + GAP), width: totalWidth }}>
-          {cells.map((cell, i) => (
-            <View
-              key={i}
-              style={{
-                position: "absolute",
-                left: cell.x,
-                top: cell.y,
-                width: CELL,
-                height: CELL,
-                borderRadius: 2,
-                backgroundColor: getColor(cell.intensity),
-              }}
-            />
+        <View style={{ flexDirection: "row", gap: GAP }}>
+          {weeks.map((week, wi) => (
+            <View key={wi} style={{ flexDirection: "column", gap: GAP }}>
+              {/* Pad first week for alignment */}
+              {wi === 0 && week[0] && week[0].dayOfWeek > 0 &&
+                Array.from({ length: week[0].dayOfWeek }).map((_, i) => (
+                  <View key={`pad-${i}`} style={{ width: CELL, height: CELL }} />
+                ))}
+              {week.map((day) => (
+                <View
+                  key={day.date}
+                  style={{
+                    width: CELL,
+                    height: CELL,
+                    borderRadius: 2,
+                    backgroundColor: getColor(day.time),
+                  }}
+                />
+              ))}
+            </View>
           ))}
         </View>
       </ScrollView>
@@ -201,6 +202,8 @@ function BarChart({
   data: { label: string; value: number }[];
   labels?: string[];
 }) {
+  const colors = useColors();
+  const s = makeStyles(colors);
   const maxVal = Math.max(1, ...data.map((d) => d.value));
   const BAR_HEIGHT = 140;
 
@@ -244,6 +247,8 @@ function BarChart({
 
 function TrendChart({ data }: { data: TrendPoint[] }) {
   const { t } = useTranslation();
+  const colors = useColors();
+  const s = makeStyles(colors);
   const maxVal = Math.max(1, ...data.map((d) => d.dailyTime));
   const BAR_HEIGHT = 100;
 
@@ -293,6 +298,8 @@ function TrendChart({ data }: { data: TrendPoint[] }) {
 
 function PeriodBookList({ books }: { books: PeriodBookStats[] }) {
   const { t } = useTranslation();
+  const colors = useColors();
+  const s = makeStyles(colors);
 
   if (books.length === 0) {
     return (
@@ -347,6 +354,8 @@ type ChartMode = "week" | "month";
 // ────────────────── StatsScreen ──────────────────
 
 export default function StatsScreen() {
+  const colors = useColors();
+  const s = makeStyles(colors);
   const { t } = useTranslation();
   const nav = useNavigation();
   const saveCurrentSession = useReadingSessionStore((s) => s.saveCurrentSession);
@@ -372,7 +381,7 @@ export default function StatsScreen() {
       startDate.setDate(startDate.getDate() - 365);
 
       const [daily, overall, trend] = await Promise.all([
-        readingStatsService.getDailyStats(startDate.toISOString().split("T")[0], endDate.toISOString().split("T")[0]),
+        readingStatsService.getDailyStats(startDate, endDate),
         readingStatsService.getOverallStats(),
         readingStatsService.getRecentTrend(30),
       ]);
@@ -397,27 +406,21 @@ export default function StatsScreen() {
       try {
         let periodStart: Date;
         let periodEnd: Date;
+        let data: DailyStats[];
 
         if (chartMode === "week") {
           periodStart = chartDate;
           periodEnd = getWeekEnd(chartDate);
+          data = await readingStatsService.getWeeklyStats(chartDate);
         } else {
           const year = chartDate.getFullYear();
           const month = chartDate.getMonth();
           periodStart = new Date(year, month, 1);
           periodEnd = new Date(year, month + 1, 0, 23, 59, 59, 999);
+          data = await readingStatsService.getMonthlyStats(year, month);
         }
 
-        const [data, books] = await Promise.all([
-          readingStatsService.getDailyStats(
-            periodStart.toISOString().split("T")[0],
-            periodEnd.toISOString().split("T")[0],
-          ),
-          readingStatsService.getBookStatsForPeriod(
-            periodStart.toISOString().split("T")[0],
-            periodEnd.toISOString().split("T")[0],
-          ),
-        ]);
+        const books = await readingStatsService.getBookStatsForPeriod(periodStart, periodEnd);
         setChartData(data);
         setPeriodBooks(books);
       } catch {
@@ -482,7 +485,7 @@ export default function StatsScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView style={s.container} edges={["top"]}>
+      <SafeAreaView style={[s.container, { backgroundColor: colors.background }]} edges={["top"]}>
         <View style={s.loadingWrap}>
           <ActivityIndicator size="large" color={colors.mutedForeground} />
         </View>
@@ -491,7 +494,7 @@ export default function StatsScreen() {
   }
 
   return (
-    <SafeAreaView style={s.container} edges={["top"]}>
+    <SafeAreaView style={[s.container, { backgroundColor: colors.background }]} edges={["top"]}>
       {/* Header */}
       <View style={s.header}>
         <TouchableOpacity style={s.backBtn} onPress={() => nav.goBack()}>
@@ -594,16 +597,10 @@ export default function StatsScreen() {
                 <FullHeatmap dailyStats={heatmapData} />
                 <View style={s.heatmapLegend}>
                   <Text style={s.legendText}>{t("common.less", "少")}</Text>
-                  {[0, 0.25, 0.5, 0.75, 1].map((v) => (
+                  {[colors.muted, "rgba(16,185,129,0.3)", "rgba(16,185,129,0.5)", "rgba(16,185,129,0.7)", "rgba(16,185,129,0.9)"].map((c, i) => (
                     <View
-                      key={v}
-                      style={[
-                        s.legendCell,
-                        {
-                          backgroundColor:
-                            v === 0 ? colors.muted : `rgba(16,185,129,${v * 0.85 + 0.15})`,
-                        },
-                      ]}
+                      key={i}
+                      style={[s.legendCell, { backgroundColor: c }]}
                     />
                   ))}
                   <Text style={s.legendText}>{t("common.more", "多")}</Text>
@@ -661,7 +658,7 @@ export default function StatsScreen() {
   );
 }
 
-const s = StyleSheet.create({
+const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   loadingWrap: { flex: 1, alignItems: "center", justifyContent: "center" },
   header: {

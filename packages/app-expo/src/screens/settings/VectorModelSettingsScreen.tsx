@@ -19,10 +19,11 @@ import { useTranslation } from "react-i18next";
 import { BUILTIN_EMBEDDING_MODELS } from "@readany/core/ai/builtin-embedding-models";
 import { useVectorModelStore } from "@readany/core/stores/vector-model-store";
 import type { VectorModelConfig } from "@readany/core/types";
-import { colors, radius, fontSize, fontWeight } from "@/styles/theme";
+import { colors, radius, fontSize, fontWeight, useColors } from "@/styles/theme";
 import { ChevronLeftIcon, PlusIcon, EditIcon, Trash2Icon, CheckIcon, XIcon } from "@/components/ui/Icon";
 
 export default function VectorModelSettingsScreen() {
+  const colors = useColors();
   const nav = useNavigation();
   const { t } = useTranslation();
   const {
@@ -43,7 +44,7 @@ export default function VectorModelSettingsScreen() {
   } = useVectorModelStore();
 
   return (
-    <SafeAreaView style={s.container} edges={["top"]}>
+    <SafeAreaView style={[s.container, { backgroundColor: colors.background }]} edges={["top"]}>
       {/* Header */}
       <View style={s.header}>
         <TouchableOpacity style={s.backBtn} onPress={() => nav.goBack()}>

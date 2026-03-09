@@ -26,7 +26,7 @@ import type { RootStackParamList } from "@/navigation/RootNavigator";
 import type { Book, SortField } from "@readany/core/types";
 import { getPlatformService } from "@readany/core/services";
 import { useLibraryStore } from "@/stores/library-store";
-import { colors, radius, fontSize, fontWeight } from "@/styles/theme";
+import { type ThemeColors, radius, fontSize, fontWeight, useColors } from "@/styles/theme";
 import {
   PlusIcon,
   SearchIcon,
@@ -59,6 +59,8 @@ const SORT_OPTIONS: { field: SortField; labelKey: string }[] = [
 ];
 
 export function LibraryScreen() {
+  const colors = useColors();
+  const s = makeStyles(colors);
   const { t } = useTranslation();
   const nav = useNavigation<Nav>();
   const [showSearch, setShowSearch] = useState(false);
@@ -182,11 +184,11 @@ export function LibraryScreen() {
     setVectorProgress(null);
 
     try {
-      // Dynamic import to avoid bundling issues if rag module not available
-      const { triggerVectorizeBook } = await import("@readany/core/rag");
-      await triggerVectorizeBook(book.id, book.filePath, (progress: any) => {
-        setVectorProgress({ ...progress });
-      });
+      // TODO: Implement full vectorization pipeline with chapter extraction
+      // triggerVectorizeBook requires: (bookId, chapters, config, callbacks, onProgress?)
+      // For now, log a warning — full implementation needs book content extraction
+      console.warn("[LibraryScreen] Vectorization not yet implemented for Expo. Requires chapter extraction pipeline.");
+      setVectorProgress({ status: "error", processedChunks: 0, totalChunks: 0 });
     } catch (err) {
       console.error("[LibraryScreen] Vectorization failed:", err);
     } finally {
@@ -239,7 +241,7 @@ export function LibraryScreen() {
   );
 
   return (
-    <SafeAreaView style={s.container} edges={["top"]}>
+    <SafeAreaView style={[s.container, { backgroundColor: colors.background }]} edges={["top"]}>
       {/* Header */}
       <View style={s.header}>
         <View style={s.headerRow}>
@@ -538,7 +540,7 @@ export function LibraryScreen() {
   );
 }
 
-const s = StyleSheet.create({
+const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   header: { paddingHorizontal: SCREEN_PADDING, paddingTop: 12, paddingBottom: 8 },
   headerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 8 },
@@ -565,16 +567,16 @@ const s = StyleSheet.create({
   // Content
   content: { flex: 1, paddingHorizontal: SCREEN_PADDING },
   loadingWrap: { flex: 1, alignItems: "center", justifyContent: "center" },
-  importBanner: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: "rgba(224,224,230,0.05)", borderRadius: radius.lg, paddingHorizontal: 12, paddingVertical: 8, marginBottom: 12 },
+  importBanner: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: colors.muted + "0D", borderRadius: radius.lg, paddingHorizontal: 12, paddingVertical: 8, marginBottom: 12 },
   importBannerText: { fontSize: fontSize.xs, color: colors.primary },
   // Vectorization banner
-  vecBanner: { backgroundColor: "rgba(224,224,230,0.05)", borderRadius: radius.lg, paddingHorizontal: 12, paddingVertical: 10, marginBottom: 12 },
+  vecBanner: { backgroundColor: colors.muted + "0D", borderRadius: radius.lg, paddingHorizontal: 12, paddingVertical: 10, marginBottom: 12 },
   vecBannerRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   vecBannerInfo: { flex: 1, minWidth: 0 },
   vecBannerStatusRow: { flexDirection: "row", alignItems: "center", gap: 6 },
   vecBannerStatus: { fontSize: fontSize.xs, fontWeight: fontWeight.medium, color: colors.primary },
   vecBannerTitle: { fontSize: 10, color: colors.mutedForeground, marginTop: 2 },
-  vecProgressBg: { height: 4, backgroundColor: "rgba(224,224,230,0.1)", borderRadius: radius.full, marginTop: 8, overflow: "hidden" },
+  vecProgressBg: { height: 4, backgroundColor: colors.muted + "1A", borderRadius: radius.full, marginTop: 8, overflow: "hidden" },
   vecProgressFill: { height: 4, backgroundColor: colors.primary, borderRadius: radius.full },
   // Empty
   emptyWrap: { flex: 1, alignItems: "center", justifyContent: "center" },

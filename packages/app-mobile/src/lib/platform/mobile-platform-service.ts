@@ -60,6 +60,11 @@ export class MobilePlatformService implements IPlatformService {
     return exists(path);
   }
 
+  async deleteFile(path: string): Promise<void> {
+    const { remove } = await import("@tauri-apps/plugin-fs");
+    await remove(path);
+  }
+
   async getAppDataDir(): Promise<string> {
     const { appDataDir } = await import("@tauri-apps/api/path");
     return appDataDir();

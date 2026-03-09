@@ -15,15 +15,16 @@ import {
   type TranslationTargetLang,
 } from "@readany/core/types/translation";
 import { SettingsHeader } from "./SettingsHeader";
-import { colors, fontSize, fontWeight, spacing, radius } from "../../styles/theme";
+import { colors, fontSize, fontWeight, spacing, radius, useColors } from "../../styles/theme";
 
 export default function TranslationSettingsScreen() {
+  const colors = useColors();
   const { t } = useTranslation();
   const { translationConfig, updateTranslationConfig, aiConfig } =
     useSettingsStore();
 
   return (
-    <SafeAreaView style={styles.container} edges={["top"]}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={["top"]}>
       <SettingsHeader
         title={t("translation.settingsTitle", "翻译设置")}
       />

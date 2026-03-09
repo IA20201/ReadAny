@@ -1,7 +1,7 @@
 import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { ChevronLeftIcon } from "../../components/ui/Icon";
-import { colors, fontSize, fontWeight, spacing } from "../../styles/theme";
+import { fontSize, fontWeight, spacing, useColors } from "../../styles/theme";
 
 interface Props {
   title: string;
@@ -10,9 +10,10 @@ interface Props {
 
 export function SettingsHeader({ title, right }: Props) {
   const nav = useNavigation();
+  const colors = useColors();
 
   return (
-    <View style={styles.header}>
+    <View style={[styles.header, { borderBottomColor: colors.border, backgroundColor: colors.background }]}>
       <TouchableOpacity
         onPress={() => nav.goBack()}
         style={styles.backBtn}
@@ -20,7 +21,7 @@ export function SettingsHeader({ title, right }: Props) {
       >
         <ChevronLeftIcon size={20} color={colors.foreground} />
       </TouchableOpacity>
-      <Text style={styles.title} numberOfLines={1}>
+      <Text style={[styles.title, { color: colors.foreground }]} numberOfLines={1}>
         {title}
       </Text>
       <View style={styles.rightSlot}>{right}</View>
@@ -37,8 +38,6 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
     paddingTop: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-    backgroundColor: colors.background,
   },
   backBtn: {
     padding: 4,
@@ -48,7 +47,6 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: fontSize.lg,
     fontWeight: fontWeight.semibold,
-    color: colors.foreground,
   },
   rightSlot: {
     flexDirection: "row",

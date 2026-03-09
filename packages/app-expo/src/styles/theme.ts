@@ -1,53 +1,22 @@
 /**
- * Theme constants — matching the Tauri mobile app's dark theme (globals.css)
- *
- * oklch dark values converted to hex:
- *   background: oklch(0.15 0 285.86) → #1c1c1e
- *   foreground: oklch(0.93 0 285.86) → #e8e8ed
- *   card:       oklch(0.20 0 285.86) → #2c2c2e
- *   muted:      oklch(0.22 0 285.86) → #333336
- *   muted-fg:   oklch(0.55 0.02 285.93) → #7c7c82
- *   border:     oklch(0.28 0 285.86) → #3d3d40
- *   primary:    oklch(0.90 0.01 285.93) → #e0e0e6
- *   primary-fg: oklch(0.15 0 285.86) → #1c1c1e
- *   destructive: oklch(0.58 0.24 28.48) → #e53935
- *   accent:     oklch(0.24 0 285.86) → #363638
+ * Theme constants — re-exports dark colors as default for backward compat.
+ * Use `useTheme()` from ThemeContext for reactive theme colors.
  */
-export const colors = {
-  background: "#1c1c1e",
-  foreground: "#e8e8ed",
-  card: "#2c2c2e",
-  cardForeground: "#e8e8ed",
-  muted: "#333336",
-  mutedForeground: "#7c7c82",
-  border: "#3d3d40",
-  primary: "#e0e0e6",
-  primaryForeground: "#1c1c1e",
-  destructive: "#e53935",
-  destructiveForeground: "#ffffff",
-  accent: "#363638",
-  accentForeground: "#e0e0e6",
+import { darkColors, useTheme } from "./ThemeContext";
+export type { ThemeColors } from "./ThemeContext";
+export { useTheme } from "./ThemeContext";
 
-  // Functional
-  indigo: "#6366f1",
-  emerald: "#10b981",
-  amber: "#f59e0b",
-  blue: "#3b82f6",
+/** @deprecated Use useColors() instead for theme-aware components */
+export const colors = darkColors;
 
-  // Highlight colors
-  highlightYellow: "#854d0e",
-  highlightGreen: "#166534",
-  highlightBlue: "#1e40af",
-  highlightPink: "#9d174d",
-  highlightPurple: "#6b21a8",
-
-  // Fallback cover gradients
-  stone100: "#f5f5f4",
-  stone200: "#e7e5e4",
-  stone300: "#d6d3d1",
-  stone400: "#a8a29e",
-  stone500: "#78716c",
-} as const;
+/**
+ * Hook to get current theme colors. Use this in component function bodies
+ * so the local `colors` variable shadows the static import, making
+ * StyleSheet.create fallback to dark while inline styles use the real theme.
+ */
+export function useColors() {
+  return useTheme().colors;
+}
 
 export const spacing = {
   xs: 4,

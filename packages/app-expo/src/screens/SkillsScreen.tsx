@@ -20,9 +20,9 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import { useTranslation } from "react-i18next";
 import { builtinSkills } from "@readany/core/ai/skills/builtin-skills";
-import { getSkills, updateSkill, deleteSkill, createSkill } from "@readany/core/db";
+import { getSkills, updateSkill, deleteSkill, insertSkill } from "@readany/core/db";
 import type { Skill } from "@readany/core/types";
-import { colors, radius, fontSize, fontWeight } from "@/styles/theme";
+import { type ThemeColors, radius, fontSize, fontWeight, useColors } from "@/styles/theme";
 import { ChevronLeftIcon, PlusIcon, EditIcon, Trash2Icon, PuzzleIcon } from "@/components/ui/Icon";
 
 const SKILL_ICONS: Record<string, string> = {
@@ -37,6 +37,8 @@ const SKILL_ICONS: Record<string, string> = {
 };
 
 export default function SkillsScreen() {
+  const colors = useColors();
+  const s = makeStyles(colors);
   const nav = useNavigation();
   const { t } = useTranslation();
   const [skills, setSkills] = useState<Skill[]>([]);
@@ -137,8 +139,11 @@ export default function SkillsScreen() {
           prompt: formPrompt.trim(),
           enabled: true,
           builtIn: false,
+          parameters: [],
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
         };
-        await createSkill(newSkill);
+        await insertSkill(newSkill);
         setSkills((prev) => [...prev, newSkill]);
       }
       setEditorOpen(false);
@@ -152,7 +157,7 @@ export default function SkillsScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView style={s.container} edges={["top"]}>
+      <SafeAreaView style={[s.container, { backgroundColor: colors.background }]} edges={["top"]}>
         <View style={s.loadingWrap}>
           <ActivityIndicator size="large" color={colors.mutedForeground} />
         </View>
@@ -161,7 +166,7 @@ export default function SkillsScreen() {
   }
 
   return (
-    <SafeAreaView style={s.container} edges={["top"]}>
+    <SafeAreaView style={[s.container, { backgroundColor: colors.background }]} edges={["top"]}>
       {/* Header */}
       <View style={s.header}>
         <View style={s.headerLeft}>
@@ -306,7 +311,7 @@ export default function SkillsScreen() {
   );
 }
 
-const s = StyleSheet.create({
+const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   loadingWrap: { flex: 1, alignItems: "center", justifyContent: "center" },
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 0.5, borderBottomColor: colors.border },

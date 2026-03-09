@@ -9,7 +9,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useTranslation } from "react-i18next";
 import { SettingsHeader } from "./SettingsHeader";
-import { colors, fontSize, fontWeight, spacing, radius } from "../../styles/theme";
+import { type ThemeColors, fontSize, fontWeight, spacing, radius, useColors } from "../../styles/theme";
 
 const TECH_STACK = [
   { label: "Expo SDK 55", descKey: "about.nativeContainer" },
@@ -26,11 +26,13 @@ const LINKS = [
 ];
 
 export default function AboutScreen() {
+  const colors = useColors();
+  const styles = makeStyles(colors);
   const { t } = useTranslation();
   const version = "1.0.0";
 
   return (
-    <SafeAreaView style={styles.container} edges={["top"]}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={["top"]}>
       <SettingsHeader title={t("about.title", "关于")} />
 
       <ScrollView
@@ -114,7 +116,7 @@ export default function AboutScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   scroll: { flex: 1 },
   scrollContent: { paddingBottom: 32 },

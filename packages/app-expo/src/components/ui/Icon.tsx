@@ -362,3 +362,21 @@ export const SwitchIcon = icon(() => (
     <Path d="M21 13v2a4 4 0 0 1-4 4H3" />
   </>
 ));
+
+export const SunIcon = icon(() => (
+  <>
+    <Circle cx="12" cy="12" r="4" />
+    <Path d="M12 2v2" />
+    <Path d="M12 20v2" />
+    <Path d="m4.93 4.93 1.41 1.41" />
+    <Path d="m17.66 17.66 1.41 1.41" />
+    <Path d="M2 12h2" />
+    <Path d="M20 12h2" />
+    <Path d="m6.34 17.66-1.41 1.41" />
+    <Path d="m19.07 4.93-1.41 1.41" />
+  </>
+));
+
+export const MoonIcon = icon(() => (
+  <Path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" />
+));

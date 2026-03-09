@@ -50,6 +50,7 @@ export interface IPlatformService {
   readTextFile(path: string): Promise<string>;
   mkdir(path: string): Promise<void>;
   exists(path: string): Promise<boolean>;
+  deleteFile(path: string): Promise<void>;
   getAppDataDir(): Promise<string>;
   joinPath(...parts: string[]): Promise<string>;
   convertFileSrc(path: string): string;

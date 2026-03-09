@@ -64,6 +64,13 @@ export class ExpoPlatformService implements IPlatformService {
     return info.exists;
   }
 
+  async deleteFile(path: string): Promise<void> {
+    const file = new File(path);
+    if (file.exists) {
+      file.delete();
+    }
+  }
+
   async getAppDataDir(): Promise<string> {
     return Paths.document.uri;
   }

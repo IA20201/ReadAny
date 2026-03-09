@@ -9,13 +9,20 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useTranslation } from "react-i18next";
 import { SettingsHeader } from "./SettingsHeader";
-import { colors, fontSize, fontWeight, spacing, radius } from "../../styles/theme";
+import { useTheme } from "@/styles/ThemeContext";
+import type { ThemeMode } from "@/styles/ThemeContext";
+import { fontSize, fontWeight, spacing, radius } from "@/styles/theme";
+import {
+  SunIcon,
+  MoonIcon,
+  BookOpenIcon,
+} from "@/components/ui/Icon";
 
-const THEMES = [
-  { id: "light", labelKey: "settings.light" },
-  { id: "dark", labelKey: "settings.dark" },
-  { id: "sepia", labelKey: "settings.sepia" },
-] as const;
+const THEMES: { id: ThemeMode; labelKey: string; Icon: typeof SunIcon }[] = [
+  { id: "light", labelKey: "settings.light", Icon: SunIcon },
+  { id: "dark", labelKey: "settings.dark", Icon: MoonIcon },
+  { id: "sepia", labelKey: "settings.sepia", Icon: BookOpenIcon },
+];
 
 const LANGUAGES = [
   { code: "zh", label: "简体中文" },
@@ -24,7 +31,7 @@ const LANGUAGES = [
 
 export default function AppearanceSettingsScreen() {
   const { t, i18n } = useTranslation();
-  const [theme, setTheme] = useState("dark");
+  const { mode, setMode, colors } = useTheme();
   const [lang, setLang] = useState(() =>
     i18n.language?.startsWith("zh") ? "zh" : "en",
   );
@@ -44,43 +51,51 @@ export default function AppearanceSettingsScreen() {
     [],
   );
 
+  const s = makeStyles(colors);
+
   return (
-    <SafeAreaView style={styles.container} edges={["top"]}>
+    <SafeAreaView style={[s.container, { backgroundColor: colors.background }]} edges={["top"]}>
       <SettingsHeader title={t("settings.appearance", "外观设置")} />
 
       <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.scrollContent}
+        style={s.scroll}
+        contentContainerStyle={s.scrollContent}
       >
         {/* Theme */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>
+        <View style={s.section}>
+          <Text style={[s.sectionTitle, { color: colors.mutedForeground }]}>
             {t("settings.theme", "主题")}
           </Text>
-          <View style={styles.themeGrid}>
+          <View style={s.themeGrid}>
             {THEMES.map((item) => {
-              const active = theme === item.id;
+              const active = mode === item.id;
               return (
                 <TouchableOpacity
                   key={item.id}
                   style={[
-                    styles.themeCard,
-                    active && styles.themeCardActive,
+                    s.themeCard,
+                    { borderColor: colors.border, backgroundColor: colors.card },
+                    active && { borderColor: colors.primary, backgroundColor: colors.primary + "0D" },
                   ]}
-                  onPress={() => setTheme(item.id)}
+                  onPress={() => setMode(item.id)}
                   activeOpacity={0.7}
                 >
+                  <item.Icon
+                    size={24}
+                    color={active ? colors.primary : colors.mutedForeground}
+                  />
                   <Text
                     style={[
-                      styles.themeLabel,
-                      active && styles.themeLabelActive,
+                      s.themeLabel,
+                      { color: colors.foreground },
+                      active && { fontWeight: fontWeight.medium, color: colors.primary },
                     ]}
                   >
                     {t(item.labelKey, item.id)}
                   </Text>
                   {active && (
-                    <View style={styles.checkBadge}>
-                      <Text style={styles.checkMark}>✓</Text>
+                    <View style={s.checkBadge}>
+                      <Text style={[s.checkMark, { color: colors.primary }]}>✓</Text>
                     </View>
                   )}
                 </TouchableOpacity>
@@ -90,24 +105,27 @@ export default function AppearanceSettingsScreen() {
         </View>
 
         {/* Language */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>
+        <View style={s.section}>
+          <Text style={[s.sectionTitle, { color: colors.mutedForeground }]}>
             {t("settings.language", "语言")}
           </Text>
-          <View style={styles.listCard}>
+          <View style={[s.listCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
             {LANGUAGES.map((l, idx) => (
               <TouchableOpacity
                 key={l.code}
                 style={[
-                  styles.listItem,
-                  idx < LANGUAGES.length - 1 && styles.listItemBorder,
+                  s.listItem,
+                  idx < LANGUAGES.length - 1 && {
+                    borderBottomWidth: StyleSheet.hairlineWidth,
+                    borderBottomColor: colors.border,
+                  },
                 ]}
                 onPress={() => handleLangChange(l.code)}
                 activeOpacity={0.7}
               >
-                <Text style={styles.listItemText}>{l.label}</Text>
+                <Text style={[s.listItemText, { color: colors.foreground }]}>{l.label}</Text>
                 {lang === l.code && (
-                  <Text style={styles.checkPrimary}>✓</Text>
+                  <Text style={[s.checkPrimary, { color: colors.primary }]}>✓</Text>
                 )}
               </TouchableOpacity>
             ))}
@@ -118,78 +136,44 @@ export default function AppearanceSettingsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  scroll: { flex: 1 },
-  scrollContent: { padding: spacing.lg, gap: 24 },
-  section: { gap: 12 },
-  sectionTitle: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.medium,
-    color: colors.mutedForeground,
-    textTransform: "uppercase",
-    letterSpacing: 1,
-  },
-  themeGrid: {
-    flexDirection: "row",
-    gap: 12,
-  },
-  themeCard: {
-    flex: 1,
-    alignItems: "center",
-    gap: 8,
-    borderRadius: radius.xl,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.card,
-    padding: 16,
-    position: "relative",
-  },
-  themeCardActive: {
-    borderColor: colors.primary,
-    backgroundColor: "rgba(224,224,230,0.05)",
-  },
-  themeLabel: {
-    fontSize: fontSize.sm,
-    color: colors.foreground,
-  },
-  themeLabelActive: {
-    fontWeight: fontWeight.medium,
-    color: colors.primary,
-  },
-  checkBadge: {
-    position: "absolute",
-    top: 8,
-    right: 8,
-  },
-  checkMark: {
-    fontSize: 14,
-    color: colors.primary,
-  },
-  listCard: {
-    borderRadius: radius.xl,
-    backgroundColor: colors.card,
-    borderWidth: 1,
-    borderColor: colors.border,
-    overflow: "hidden",
-  },
-  listItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: spacing.lg,
-    paddingVertical: 14,
-  },
-  listItemBorder: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-  },
-  listItemText: {
-    fontSize: fontSize.md,
-    color: colors.foreground,
-  },
-  checkPrimary: {
-    fontSize: 14,
-    color: colors.primary,
-  },
-});
+function makeStyles(_colors: ReturnType<typeof useTheme>["colors"]) {
+  return StyleSheet.create({
+    container: { flex: 1 },
+    scroll: { flex: 1 },
+    scrollContent: { padding: spacing.lg, gap: 24 },
+    section: { gap: 12 },
+    sectionTitle: {
+      fontSize: fontSize.sm,
+      fontWeight: fontWeight.medium,
+      textTransform: "uppercase",
+      letterSpacing: 1,
+    },
+    themeGrid: { flexDirection: "row", gap: 12 },
+    themeCard: {
+      flex: 1,
+      alignItems: "center",
+      gap: 8,
+      borderRadius: radius.xl,
+      borderWidth: 1,
+      padding: 16,
+      position: "relative",
+    },
+    themeLabel: { fontSize: fontSize.sm },
+    checkBadge: { position: "absolute", top: 8, right: 8 },
+    checkMark: { fontSize: 14 },
+    listCard: {
+      borderRadius: radius.xl,
+      borderWidth: 1,
+      overflow: "hidden",
+    },
+    listItem: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      paddingHorizontal: spacing.lg,
+      paddingVertical: 14,
+    },
+    listItemText: { fontSize: fontSize.md },
+    checkPrimary: { fontSize: 14 },
+  });
+}

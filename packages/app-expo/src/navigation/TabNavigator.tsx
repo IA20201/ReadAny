@@ -9,7 +9,7 @@ import { NotesScreen } from "@/screens/NotesScreen";
 import { ProfileScreen } from "@/screens/ProfileScreen";
 import { useTranslation } from "react-i18next";
 import { BookOpenIcon, MessageSquareIcon, NotebookPenIcon, UserIcon } from "@/components/ui/Icon";
-import { colors } from "@/styles/theme";
+import { useTheme } from "@/styles/ThemeContext";
 
 export type TabParamList = {
   Library: undefined;
@@ -22,6 +22,7 @@ const Tab = createBottomTabNavigator<TabParamList>();
 
 export function TabNavigator() {
   const { t } = useTranslation();
+  const { colors } = useTheme();
 
   return (
     <Tab.Navigator

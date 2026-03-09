@@ -27,7 +27,7 @@ import { useStreamingChat } from "@readany/core/hooks";
 import { convertToMessageV2, mergeMessagesWithStreaming } from "@readany/core/utils/chat-utils";
 import type { MessageV2, Part, TextPart, ReasoningPart, ToolCallPart, CitationPart, QuotePart } from "@readany/core/types/message";
 import { useLibraryStore } from "@/stores/library-store";
-import { colors, radius, fontSize, fontWeight } from "@/styles/theme";
+import { colors, radius, fontSize, fontWeight, useColors } from "@/styles/theme";
 import {
   BrainIcon,
   ScrollTextIcon,
@@ -823,6 +823,7 @@ function ThreadsSidebar({
 // ──────────────────────────────── ChatScreen ────────────────────────────────
 
 export function ChatScreen() {
+  const c = useColors();
   const { t } = useTranslation();
   const [inputText, setInputText] = useState("");
   const [showSidebar, setShowSidebar] = useState(false);
@@ -942,17 +943,17 @@ export function ChatScreen() {
   );
 
   return (
-    <SafeAreaView style={s.container} edges={["top"]}>
+    <SafeAreaView style={[s.container, { backgroundColor: c.background }]} edges={["top"]}>
       {/* Header */}
-      <View style={s.header}>
+      <View style={[s.header, { borderBottomColor: c.border }]}>
         <View style={s.headerLeft}>
           <TouchableOpacity style={s.headerIconBtn} onPress={() => toggleSidebar(true)}>
-            <HistoryIcon size={16} color={colors.mutedForeground} />
+            <HistoryIcon size={16} color={c.mutedForeground} />
           </TouchableOpacity>
           {bookTitle ? (
-            <Text style={s.headerContextText} numberOfLines={1}>
+            <Text style={[s.headerContextText, { color: c.mutedForeground }]} numberOfLines={1}>
               {t("chat.context", "上下文")}:{" "}
-              <Text style={s.headerContextBook}>{bookTitle}</Text>
+              <Text style={{ fontWeight: fontWeight.medium, color: c.foreground }}>{bookTitle}</Text>
             </Text>
           ) : (
             <ContextPopover />
@@ -961,7 +962,7 @@ export function ChatScreen() {
         <View style={s.headerRight}>
           <ModelSelector />
           <TouchableOpacity style={s.headerIconBtn} onPress={handleNewThread}>
-            <MessageCirclePlusIcon size={16} color={colors.mutedForeground} />
+            <MessageCirclePlusIcon size={16} color={c.mutedForeground} />
           </TouchableOpacity>
         </View>
       </View>
@@ -975,26 +976,30 @@ export function ChatScreen() {
         {isEmpty && !isStreaming && (
           <ScrollView contentContainerStyle={s.emptyContainer} showsVerticalScrollIndicator={false}>
             <View style={s.emptyTop}>
-              <View style={s.brainIconWrap}>
-                <BrainIcon size={40} color={colors.indigo} />
+              <View style={[s.brainIconWrap, { backgroundColor: c.indigo + "1A" }]}>
+                <BrainIcon size={40} color={c.indigo} />
               </View>
-              <Text style={s.emptyTitle}>{t("chat.howCanIHelp", "有什么可以帮你的？")}</Text>
-              <Text style={s.emptySubtitle}>
-                {t("chat.askAboutBooks", "问我任何关于你的书籍的问题")}
+              <Text style={[s.emptyTitle, { color: c.foreground }]}>
+                {t("chat.howCanIHelp", "有什么可以帮你的？")}
+              </Text>
+              <Text style={[s.emptySubtitle, { color: c.mutedForeground }]}>
+                {t("chat.askAboutBooks", "向 AI 提问关于你的书籍，获取摘要等")}
               </Text>
             </View>
             <View style={s.suggestSection}>
-              <Text style={s.suggestLabel}>{t("chat.getStarted", "快速开始")}</Text>
+              <Text style={[s.suggestLabel, { color: c.mutedForeground }]}>
+                {t("chat.getStarted", "快速开始")}
+              </Text>
               <View style={s.suggestGrid}>
                 {SUGGESTIONS.map(({ key, Icon }) => (
                   <TouchableOpacity
                     key={key}
-                    style={s.suggestCard}
+                    style={[s.suggestCard, { backgroundColor: c.muted }]}
                     activeOpacity={0.7}
                     onPress={() => handleSend(t(key))}
                   >
-                    <Icon size={20} color={colors.mutedForeground} />
-                    <Text style={s.suggestText}>{t(key)}</Text>
+                    <Icon size={20} color={c.mutedForeground} />
+                    <Text style={[s.suggestText, { color: c.foreground }]}>{t(key)}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
@@ -1027,11 +1032,11 @@ export function ChatScreen() {
 
         {/* Input area */}
         <View style={s.inputWrap}>
-          <View style={s.inputBox}>
+          <View style={[s.inputBox, { borderColor: c.border, backgroundColor: c.card }]}>
             <TextInput
-              style={s.textInput}
-              placeholder={t("chat.askPlaceholder", "输入消息...")}
-              placeholderTextColor={colors.mutedForeground}
+              style={[s.textInput, { color: c.foreground }]}
+              placeholder={t("chat.askPlaceholder", "输入你的问题...")}
+              placeholderTextColor={c.mutedForeground}
               value={inputText}
               onChangeText={setInputText}
               multiline
@@ -1042,32 +1047,32 @@ export function ChatScreen() {
             <View style={s.inputBottomRow}>
               <View style={s.inputToolbar}>
                 <TouchableOpacity
-                  style={[s.deepThinkBtn, deepThinking && s.deepThinkBtnActive]}
+                  style={[s.deepThinkBtn, { borderColor: c.border }, deepThinking && s.deepThinkBtnActive]}
                   onPress={() => setDeepThinking(!deepThinking)}
                 >
-                  <BrainIcon size={12} color={deepThinking ? "#a855f7" : colors.mutedForeground} />
-                  <Text style={[s.deepThinkLabel, deepThinking && s.deepThinkLabelActive]}>
+                  <BrainIcon size={12} color={deepThinking ? "#a855f7" : c.mutedForeground} />
+                  <Text style={[s.deepThinkLabel, { color: c.mutedForeground }, deepThinking && s.deepThinkLabelActive]}>
                     {t("chat.deepThinking", "深度思考")}
                   </Text>
                 </TouchableOpacity>
               </View>
               {isStreaming ? (
                 <TouchableOpacity style={s.stopBtn} onPress={stopStream}>
-                  <StopCircleIcon size={14} color={colors.destructive} />
+                  <StopCircleIcon size={14} color={c.destructive} />
                 </TouchableOpacity>
               ) : (
                 <TouchableOpacity
-                  style={[s.sendBtn, !inputText.trim() && s.sendBtnDisabled]}
+                  style={[s.sendBtn, { backgroundColor: c.primary }, !inputText.trim() && s.sendBtnDisabled]}
                   onPress={() => handleSend()}
                   disabled={!inputText.trim()}
                 >
-                  <Text style={s.sendBtnText}>↑</Text>
+                  <Text style={[s.sendBtnText, { color: c.primaryForeground }]}>↑</Text>
                 </TouchableOpacity>
               )}
             </View>
           </View>
           {deepThinking && (
-            <Text style={s.deepThinkHint}>
+            <Text style={[s.deepThinkHint, { color: c.mutedForeground }]}>
               {t("chat.deepThinkingHint", "深度思考模式：AI 将更加仔细地分析和推理")}
             </Text>
           )}

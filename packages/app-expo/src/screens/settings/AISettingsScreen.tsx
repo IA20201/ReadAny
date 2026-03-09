@@ -13,7 +13,7 @@ import { useSettingsStore } from "@readany/core/stores";
 import type { AIEndpoint, AIProviderType } from "@readany/core/types";
 import { SettingsHeader } from "./SettingsHeader";
 import { PlusIcon, Trash2Icon, XIcon, LoaderIcon } from "../../components/ui/Icon";
-import { colors, fontSize, fontWeight, spacing, radius } from "../../styles/theme";
+import { type ThemeColors, fontSize, fontWeight, spacing, radius, useColors } from "../../styles/theme";
 
 const PROVIDERS: { id: AIProviderType; label: string }[] = [
   { id: "openai", label: "OpenAI" },
@@ -23,6 +23,8 @@ const PROVIDERS: { id: AIProviderType; label: string }[] = [
 ];
 
 export default function AISettingsScreen() {
+  const colors = useColors();
+  const styles = makeStyles(colors);
   const { t } = useTranslation();
   const {
     aiConfig,
@@ -84,7 +86,7 @@ export default function AISettingsScreen() {
   );
 
   return (
-    <SafeAreaView style={styles.container} edges={["top"]}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={["top"]}>
       <SettingsHeader
         title={t("settings.ai_title", "AI 设置")}
         right={addButton}
@@ -439,7 +441,7 @@ export default function AISettingsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   scroll: { flex: 1 },
   scrollContent: { padding: spacing.lg, gap: 16 },

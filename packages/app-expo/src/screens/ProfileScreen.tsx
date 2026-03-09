@@ -21,7 +21,7 @@ import type { RootStackParamList } from "@/navigation/RootNavigator";
 import { readingStatsService } from "@readany/core/stats";
 import type { OverallStats, DailyStats } from "@readany/core/stats";
 import { useReadingSessionStore } from "@readany/core/stores/reading-session-store";
-import { colors, radius, fontSize, fontWeight } from "@/styles/theme";
+import { type ThemeColors, radius, fontSize, fontWeight, useColors } from "@/styles/theme";
 import {
   BookOpenIcon,
   ClockIcon,
@@ -60,6 +60,8 @@ function StatCard({
   value: string;
   unit?: string;
 }) {
+  const colors = useColors();
+  const s = makeStyles(colors);
   return (
     <View style={s.statCard}>
       <View style={s.statCardHeader}>
@@ -76,17 +78,25 @@ function StatCard({
 
 /** Compact heatmap — last 16 weeks, matching Tauri MobileHeatmap */
 function MiniHeatmap({ dailyStats }: { dailyStats: DailyStats[] }) {
-  const CELL = 8;
-  const GAP = 2;
+  const themeColors = useColors();
+  const s = makeStyles(themeColors);
   const WEEKS = 16;
   const DAYS_PER_WEEK = 7;
+  const GAP = 2;
+  const [containerWidth, setContainerWidth] = useState(0);
+
+  // Calculate cell size based on container width
+  // containerWidth = WEEKS * CELL + (WEEKS - 1) * GAP
+  const CELL = containerWidth > 0 ? Math.floor((containerWidth - (WEEKS - 1) * GAP) / WEEKS) : 8;
+  const gridWidth = WEEKS * CELL + (WEEKS - 1) * GAP;
+  const gridHeight = DAYS_PER_WEEK * CELL + (DAYS_PER_WEEK - 1) * GAP;
 
   const cells = useMemo(() => {
     const statsMap = new Map<string, number>();
     for (const d of dailyStats) statsMap.set(d.date, d.totalTime);
 
     const today = new Date();
-    const result: { x: number; y: number; intensity: number }[] = [];
+    const result: { col: number; row: number; intensity: number }[] = [];
     const maxTime = Math.max(1, ...dailyStats.map((d) => d.totalTime));
 
     for (let w = WEEKS - 1; w >= 0; w--) {
@@ -96,8 +106,8 @@ function MiniHeatmap({ dailyStats }: { dailyStats: DailyStats[] }) {
         const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
         const time = statsMap.get(key) || 0;
         result.push({
-          x: (WEEKS - 1 - w) * (CELL + GAP),
-          y: d * (CELL + GAP),
+          col: WEEKS - 1 - w,
+          row: d,
           intensity: time > 0 ? Math.min(1, time / maxTime) : 0,
         });
       }
@@ -106,31 +116,36 @@ function MiniHeatmap({ dailyStats }: { dailyStats: DailyStats[] }) {
   }, [dailyStats]);
 
   const getColor = (intensity: number) => {
-    if (intensity === 0) return colors.muted;
-    if (intensity < 0.25) return "rgba(16,185,129,0.2)";
-    if (intensity < 0.5) return "rgba(16,185,129,0.4)";
-    if (intensity < 0.75) return "rgba(16,185,129,0.6)";
-    return "rgba(16,185,129,0.85)";
+    if (intensity <= 0) return themeColors.muted;
+    if (intensity < 0.25) return "rgba(16,185,129,0.3)";
+    if (intensity < 0.5) return "rgba(16,185,129,0.5)";
+    if (intensity < 0.75) return "rgba(16,185,129,0.7)";
+    return "rgba(16,185,129,0.9)";
   };
 
   return (
-    <View style={s.heatmapContainer}>
-      <View style={s.heatmapGrid}>
-        {cells.map((cell, i) => (
-          <View
-            key={i}
-            style={{
-              position: "absolute",
-              left: cell.x,
-              top: cell.y,
-              width: CELL,
-              height: CELL,
-              borderRadius: 2,
-              backgroundColor: getColor(cell.intensity),
-            }}
-          />
-        ))}
-      </View>
+    <View
+      style={s.heatmapContainer}
+      onLayout={(e) => setContainerWidth(e.nativeEvent.layout.width)}
+    >
+      {containerWidth > 0 && (
+        <View style={[s.heatmapGrid, { width: gridWidth, height: gridHeight }]}>
+          {cells.map((cell, i) => (
+            <View
+              key={i}
+              style={{
+                position: "absolute",
+                left: cell.col * (CELL + GAP),
+                top: cell.row * (CELL + GAP),
+                width: CELL,
+                height: CELL,
+                borderRadius: Math.max(2, CELL * 0.25),
+                backgroundColor: getColor(cell.intensity),
+              }}
+            />
+          ))}
+        </View>
+      )}
       <View style={s.heatmapLegend}>
         <Text style={s.heatmapLegendText}>少</Text>
         {[0, 0.25, 0.5, 0.75, 1].map((v) => (
@@ -143,6 +158,8 @@ function MiniHeatmap({ dailyStats }: { dailyStats: DailyStats[] }) {
 }
 
 export function ProfileScreen() {
+  const colors = useColors();
+  const s = makeStyles(colors);
   const { t } = useTranslation();
   const nav = useNavigation<Nav>();
   const [overall, setOverall] = useState<OverallStats | null>(null);
@@ -208,7 +225,7 @@ export function ProfileScreen() {
   const avgDaily = overall ? formatTime(overall.avgDailyTime) : "0m";
 
   return (
-    <SafeAreaView style={s.container} edges={["top"]}>
+    <SafeAreaView style={[s.container, { backgroundColor: colors.background }]} edges={["top"]}>
       <View style={s.header}>
         <Text style={s.headerTitle}>{t("profile.title", "我的")}</Text>
       </View>
@@ -294,7 +311,7 @@ export function ProfileScreen() {
   );
 }
 
-const s = StyleSheet.create({
+const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   header: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 12, borderBottomWidth: 0.5, borderBottomColor: colors.border },
   headerTitle: { fontSize: fontSize["2xl"], fontWeight: fontWeight.bold, color: colors.foreground },
@@ -315,8 +332,8 @@ const s = StyleSheet.create({
   heatmapTitle: { fontSize: fontSize.sm, fontWeight: fontWeight.medium, color: colors.mutedForeground },
   heatmapDetailBtn: { flexDirection: "row", alignItems: "center", gap: 4 },
   heatmapDetailText: { fontSize: fontSize.xs, color: colors.indigo },
-  heatmapContainer: {},
-  heatmapGrid: { height: 7 * 10, width: 16 * 10, alignSelf: "center" },
+  heatmapContainer: { width: "100%" },
+  heatmapGrid: { alignSelf: "center" },
   heatmapLegend: { flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: 4, marginTop: 8 },
   heatmapLegendText: { fontSize: 9, color: colors.mutedForeground },
   heatmapLegendCell: { width: 8, height: 8, borderRadius: 2 },

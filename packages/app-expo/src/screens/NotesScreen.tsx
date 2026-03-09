@@ -26,7 +26,7 @@ import { useAnnotationStore } from "@readany/core/stores/annotation-store";
 import { useLibraryStore } from "@/stores/library-store";
 import type { HighlightWithBook } from "@readany/core/db/database";
 import { HIGHLIGHT_COLOR_HEX } from "@readany/core/types";
-import { colors, radius, fontSize, fontWeight } from "@/styles/theme";
+import { type ThemeColors, radius, fontSize, fontWeight, useColors } from "@/styles/theme";
 import {
   NotebookPenIcon,
   HighlighterIcon,
@@ -44,6 +44,8 @@ type Nav = NativeStackNavigationProp<RootStackParamList>;
 type DetailTab = "notes" | "highlights";
 
 export function NotesScreen() {
+  const colors = useColors();
+  const s = makeStyles(colors);
   const { t } = useTranslation();
   const nav = useNavigation<Nav>();
   const {
@@ -198,7 +200,7 @@ export function NotesScreen() {
   // Loading
   if (isLoading) {
     return (
-      <SafeAreaView style={s.container} edges={["top"]}>
+      <SafeAreaView style={[s.container, { backgroundColor: colors.background }]} edges={["top"]}>
         <View style={s.loadingWrap}>
           <View style={s.spinner} />
           <Text style={s.loadingText}>{t("common.loading", "加载中...")}</Text>
@@ -210,7 +212,7 @@ export function NotesScreen() {
   // Empty
   if (bookNotebooks.length === 0) {
     return (
-      <SafeAreaView style={s.container} edges={["top"]}>
+      <SafeAreaView style={[s.container, { backgroundColor: colors.background }]} edges={["top"]}>
         <View style={s.header}>
           <Text style={s.headerTitle}>{t("notes.title", "笔记")}</Text>
         </View>
@@ -228,7 +230,7 @@ export function NotesScreen() {
   // Detail view
   if (selectedBookId && selectedBook) {
     return (
-      <SafeAreaView style={s.container} edges={["top"]}>
+      <SafeAreaView style={[s.container, { backgroundColor: colors.background }]} edges={["top"]}>
         {/* Detail header */}
         <View style={s.detailHeader}>
           <View style={s.detailHeaderTop}>
@@ -383,7 +385,7 @@ export function NotesScreen() {
 
   // Main list view
   return (
-    <SafeAreaView style={s.container} edges={["top"]}>
+    <SafeAreaView style={[s.container, { backgroundColor: colors.background }]} edges={["top"]}>
       <View style={s.header}>
         <View style={s.headerRow}>
           <Text style={s.headerTitle}>{t("notes.title", "笔记")}</Text>
@@ -481,6 +483,8 @@ function NotebookCard({
   };
   onPress: () => void;
 }) {
+  const colors = useColors();
+  const s = makeStyles(colors);
   return (
     <TouchableOpacity style={s.notebookCard} activeOpacity={0.7} onPress={onPress}>
       {/* Cover */}
@@ -536,8 +540,10 @@ function NoteCard({
   onCancelEdit: () => void;
   onDeleteNote: () => void;
   onNavigate: () => void;
-  t: (key: string, fallback?: string) => string;
+  t: ReturnType<typeof useTranslation>["t"];
 }) {
+  const colors = useColors();
+  const s = makeStyles(colors);
   return (
     <View style={s.noteCard}>
       <TouchableOpacity style={s.noteCardTop} onPress={onNavigate}>
@@ -600,6 +606,8 @@ function HighlightCard({
   onDelete: () => void;
   onNavigate: () => void;
 }) {
+  const colors = useColors();
+  const s = makeStyles(colors);
   return (
     <View style={s.highlightCard}>
       <TouchableOpacity
@@ -621,7 +629,7 @@ function HighlightCard({
   );
 }
 
-const s = StyleSheet.create({
+const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   loadingWrap: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12 },
   spinner: { width: 32, height: 32, borderRadius: 16, borderWidth: 2, borderColor: "rgba(224,224,230,0.3)", borderTopColor: colors.primary },

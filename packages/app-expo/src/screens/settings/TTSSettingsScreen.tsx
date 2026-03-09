@@ -16,7 +16,7 @@ import {
   type TTSEngine,
 } from "@readany/core/tts";
 import { SettingsHeader } from "./SettingsHeader";
-import { colors, fontSize, fontWeight, spacing, radius } from "../../styles/theme";
+import { colors, fontSize, fontWeight, spacing, radius, useColors } from "../../styles/theme";
 
 const ENGINES: { id: TTSEngine; labelKey: string }[] = [
   { id: "edge", labelKey: "tts.edgeEngine" },
@@ -25,6 +25,7 @@ const ENGINES: { id: TTSEngine; labelKey: string }[] = [
 ];
 
 export default function TTSSettingsScreen() {
+  const colors = useColors();
   const { t } = useTranslation();
   const { config, updateConfig, play, stop } = useTTSStore();
 
@@ -62,7 +63,7 @@ export default function TTSSettingsScreen() {
   );
 
   return (
-    <SafeAreaView style={styles.container} edges={["top"]}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={["top"]}>
       <SettingsHeader
         title={t("tts.title", "TTS 设置")}
         right={previewBtn}

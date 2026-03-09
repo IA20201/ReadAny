@@ -17,7 +17,7 @@ import {
   Dimensions,
   ActivityIndicator,
 } from "react-native";
-import { colors, radius, fontSize, fontWeight } from "@/styles/theme";
+import { type ThemeColors, radius, fontSize, fontWeight, useColors } from "@/styles/theme";
 import { HashIcon, DatabaseIcon, Trash2Icon, LoaderIcon } from "@/components/ui/Icon";
 
 const SCREEN_PADDING = 16;
@@ -46,6 +46,8 @@ export const BookCard = memo(function BookCard({
   isVectorizing,
   vectorProgress,
 }: BookCardProps) {
+  const colors = useColors();
+  const s = makeStyles(colors);
   const { t } = useTranslation();
   const [imageError, setImageError] = useState(false);
   const [showActions, setShowActions] = useState(false);
@@ -66,7 +68,7 @@ export const BookCard = memo(function BookCard({
       try {
         const platform = getPlatformService();
         const appData = await platform.getAppDataDir();
-        const absPath = platform.joinPath(appData, raw);
+        const absPath = await platform.joinPath(appData, raw);
         setResolvedCoverUrl(absPath);
       } catch {
         setResolvedCoverUrl(undefined);
@@ -251,7 +253,7 @@ export const BookCard = memo(function BookCard({
   );
 });
 
-const s = StyleSheet.create({
+const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   container: { width: coverWidth },
   coverWrap: {
     width: coverWidth,
