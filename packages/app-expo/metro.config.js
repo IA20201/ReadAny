@@ -15,7 +15,16 @@ config.resolver.nodeModulesPaths = [
   path.resolve(monorepoRoot, "node_modules"),
 ];
 
-// 3. Ensure @readany/core source files are resolved
-config.resolver.disableHierarchicalLookup = false;
+// 3. Add support for TypeScript files
+config.resolver.sourceExts = [...config.resolver.sourceExts, "ts", "tsx"];
+
+// 4. Force all packages to use the same React instance
+config.resolver.extraNodeModules = {
+  ...config.resolver.extraNodeModules,
+  react: path.resolve(projectRoot, "node_modules/react"),
+  "react/jsx-runtime": path.resolve(projectRoot, "node_modules/react/jsx-runtime"),
+  "react/jsx-dev-runtime": path.resolve(projectRoot, "node_modules/react/jsx-dev-runtime"),
+  "react-native": path.resolve(projectRoot, "node_modules/react-native"),
+};
 
 module.exports = config;

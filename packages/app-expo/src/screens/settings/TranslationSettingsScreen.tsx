@@ -8,7 +8,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useTranslation } from "react-i18next";
-import { useSettingsStore } from "@readany/core/stores";
+import { useSettingsStore } from "@/stores";
 import {
   TRANSLATOR_PROVIDERS,
   TRANSLATOR_LANGS,

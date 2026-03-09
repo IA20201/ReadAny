@@ -17,7 +17,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import { useTranslation } from "react-i18next";
 import { BUILTIN_EMBEDDING_MODELS } from "@readany/core/ai/builtin-embedding-models";
-import { useVectorModelStore } from "@readany/core/stores/vector-model-store";
+import { useVectorModelStore } from "@/stores/vector-model-store";
 import type { VectorModelConfig } from "@readany/core/types";
 import { type ThemeColors, radius, fontSize, fontWeight, useColors } from "@/styles/theme";
 import { ChevronLeftIcon, PlusIcon, EditIcon, Trash2Icon, CheckIcon, XIcon } from "@/components/ui/Icon";

@@ -9,7 +9,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useTranslation } from "react-i18next";
-import { useTTSStore } from "@readany/core/stores";
+import { useTTSStore } from "@/stores";
 import {
   DASHSCOPE_VOICES,
   EDGE_TTS_VOICES,

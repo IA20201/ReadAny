@@ -9,7 +9,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useTranslation } from "react-i18next";
-import { useSettingsStore } from "@readany/core/stores";
+import { useSettingsStore } from "@/stores";
 import type { AIEndpoint, AIProviderType } from "@readany/core/types";
 import { SettingsHeader } from "./SettingsHeader";
 import { PlusIcon, Trash2Icon, XIcon, LoaderIcon } from "../../components/ui/Icon";

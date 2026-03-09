@@ -12,12 +12,10 @@ import { StatusBar } from "expo-status-bar";
 
 import { setPlatformService } from "@readany/core/services";
 import { initI18nLanguage } from "@readany/core/i18n";
-import { setSessionEventSource } from "@readany/core/hooks";
-import { setTTSPlayerFactories } from "@readany/core/stores";
+import { setSessionEventSource, rnSessionEventSource } from "@/hooks";
+import { setTTSPlayerFactories } from "@/stores";
 
 import { ExpoPlatformService } from "@/lib/platform/expo-platform-service";
-import { rnSessionEventSource } from "@/lib/platform/rn-session-events";
-import { rnTTSPlayerFactories } from "@/lib/platform/rn-tts-factories";
 import { RootNavigator } from "@/navigation/RootNavigator";
 import { ThemeProvider, useTheme } from "@/styles/ThemeContext";
 
@@ -32,7 +30,6 @@ export default function App() {
 
       // 2. Register RN-specific adapters
       setSessionEventSource(rnSessionEventSource);
-      setTTSPlayerFactories(rnTTSPlayerFactories);
 
       // 3. Restore persisted language
       await initI18nLanguage();

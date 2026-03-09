@@ -5,7 +5,7 @@
 import type { Book, LibraryFilter, SortField, SortOrder } from "@readany/core/types";
 import * as db from "@readany/core/db/database";
 import { create } from "zustand";
-import { debouncedSave, loadFromFS } from "@readany/core/stores/persist";
+import { debouncedSave, loadFromFS } from "./persist";
 import { getPlatformService } from "@readany/core/services";
 import { extractBookMetadata } from "@/lib/book/metadata-extractor";
 import { generateId } from "@readany/core/utils";

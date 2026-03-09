@@ -18,7 +18,7 @@ import { useTranslation } from "react-i18next";
 import { useNavigation } from "@react-navigation/native";
 import { readingStatsService } from "@readany/core/stats";
 import type { OverallStats, DailyStats, PeriodBookStats, TrendPoint } from "@readany/core/stats";
-import { useReadingSessionStore } from "@readany/core/stores/reading-session-store";
+import { useReadingSessionStore } from "@/stores";
 import { type ThemeColors, radius, fontSize, fontWeight, useColors } from "@/styles/theme";
 import {
   BookOpenIcon,
