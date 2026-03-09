@@ -73,6 +73,25 @@ export interface IPlatformService {
   // ---- Update (desktop only, mobile returns noop) ----
   checkUpdate?(): Promise<UpdateInfo | null>;
   installUpdate?(): Promise<void>;
+
+  // ---- KV Storage (cross-platform key-value persistence) ----
+  // Web: localStorage, RN: AsyncStorage / expo-secure-store
+  kvGetItem(key: string): Promise<string | null>;
+  kvSetItem(key: string, value: string): Promise<void>;
+  kvRemoveItem(key: string): Promise<void>;
+  kvGetAllKeys(): Promise<string[]>;
+
+  // ---- Clipboard ----
+  // Web: navigator.clipboard, RN: expo-clipboard
+  copyToClipboard(content: string): Promise<void>;
+
+  // ---- File sharing / download ----
+  // Web: Blob + <a> download, RN: expo-file-system + expo-sharing
+  shareOrDownloadFile(
+    content: string,
+    filename: string,
+    mimeType: string,
+  ): Promise<void>;
 }
 
 /**

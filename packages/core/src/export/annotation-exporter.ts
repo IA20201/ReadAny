@@ -1,8 +1,11 @@
 /**
  * Annotation Exporter — export highlights and notes in multiple formats
  * Supports: Markdown, JSON, Obsidian (with frontmatter), Notion (clipboard-friendly)
+ *
+ * Cross-platform: uses IPlatformService for file download and clipboard operations.
  */
 import type { Book, Highlight, Note } from "../types";
+import { getPlatformService } from "../services/platform";
 
 export type ExportFormat = "markdown" | "json" | "obsidian" | "notion";
 
@@ -47,29 +50,17 @@ export class AnnotationExporter {
     }
   }
 
-  /** Trigger a file download with the exported content */
-  downloadAsFile(content: string, filename: string, format: ExportFormat): void {
+  /** Trigger a file download / share with the exported content (cross-platform) */
+  async downloadAsFile(content: string, filename: string, format: ExportFormat): Promise<void> {
     const mimeType = format === "json" ? "application/json" : "text/markdown";
-    const blob = new Blob([content], { type: `${mimeType};charset=utf-8` });
-    const url = URL.createObjectURL(blob);
-
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = filename;
-    a.style.display = "none";
-    document.body.appendChild(a);
-    a.click();
-
-    // Cleanup
-    setTimeout(() => {
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    }, 100);
+    const platform = getPlatformService();
+    await platform.shareOrDownloadFile(content, filename, mimeType);
   }
 
-  /** Copy export content to clipboard */
+  /** Copy export content to clipboard (cross-platform) */
   async copyToClipboard(content: string): Promise<void> {
-    await navigator.clipboard.writeText(content);
+    const platform = getPlatformService();
+    await platform.copyToClipboard(content);
   }
 
   // --- Format implementations ---

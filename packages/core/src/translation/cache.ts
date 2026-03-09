@@ -1,9 +1,12 @@
 /**
  * Translation Cache
- * Simple in-memory cache for translation results
+ * Cross-platform cache for translation results using IPlatformService KV storage.
+ *
+ * All methods are async to support both Web (localStorage) and RN (AsyncStorage).
  */
 
 import type { TranslatorName } from "./types";
+import { getPlatformService } from "../services/platform";
 
 const CACHE_PREFIX = "readany_translation_cache_";
 
@@ -30,22 +33,23 @@ function simpleHash(str: string): string {
 }
 
 /** Get translation from cache */
-export function getFromCache(
+export async function getFromCache(
   text: string,
   sourceLang: string,
   targetLang: string,
   provider: TranslatorName,
-): string | null {
+): Promise<string | null> {
   try {
+    const platform = getPlatformService();
     const key = getCacheKey(text, sourceLang, targetLang, provider);
-    const cached = localStorage.getItem(key);
+    const cached = await platform.kvGetItem(key);
     if (cached) {
       const { translation, timestamp } = JSON.parse(cached);
       // Cache expires after 7 days
       if (Date.now() - timestamp < 7 * 24 * 60 * 60 * 1000) {
         return translation;
       }
-      localStorage.removeItem(key);
+      await platform.kvRemoveItem(key);
     }
   } catch {
     // Ignore storage errors
@@ -54,16 +58,17 @@ export function getFromCache(
 }
 
 /** Store translation in cache */
-export function storeInCache(
+export async function storeInCache(
   text: string,
   translation: string,
   sourceLang: string,
   targetLang: string,
   provider: TranslatorName,
-): void {
+): Promise<void> {
   try {
+    const platform = getPlatformService();
     const key = getCacheKey(text, sourceLang, targetLang, provider);
-    localStorage.setItem(
+    await platform.kvSetItem(
       key,
       JSON.stringify({
         translation,
@@ -76,16 +81,12 @@ export function storeInCache(
 }
 
 /** Clear all translation cache */
-export function clearTranslationCache(): void {
+export async function clearTranslationCache(): Promise<void> {
   try {
-    const keysToRemove: string[] = [];
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (key?.startsWith(CACHE_PREFIX)) {
-        keysToRemove.push(key);
-      }
-    }
-    keysToRemove.forEach((key) => localStorage.removeItem(key));
+    const platform = getPlatformService();
+    const allKeys = await platform.kvGetAllKeys();
+    const keysToRemove = allKeys.filter((key) => key.startsWith(CACHE_PREFIX));
+    await Promise.all(keysToRemove.map((key) => platform.kvRemoveItem(key)));
   } catch {
     // Ignore storage errors
   }

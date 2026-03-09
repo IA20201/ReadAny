@@ -21,4 +21,4 @@ export type {
 export { setPlatformService, getPlatformService } from "./services";
 
 // i18n
-export { default as i18n } from "./i18n";
+export { default as i18n, initI18nLanguage, changeAndPersistLanguage } from "./i18n";

@@ -5,6 +5,10 @@
  * - Playback state (playing/paused/stopped)
  * - TTS configuration (engine, voice, rate, pitch, DashScope key)
  * - Persists config to FS
+ *
+ * Cross-platform: player factories are injectable. By default uses Web-based
+ * BrowserTTSPlayer/EdgeTTSPlayer/DashScopeTTSPlayer. Platforms without Web Audio
+ * (e.g. React Native) can override via `setTTSPlayerFactories()`.
  */
 import { create } from "zustand";
 import type { TTSConfig, ITTSPlayer } from "../tts/types";
@@ -14,23 +18,60 @@ import { withPersist } from "./persist";
 
 export type TTSPlayState = "stopped" | "playing" | "paused" | "loading";
 
+/**
+ * TTS player factory interface — allows platforms to provide custom player implementations.
+ */
+export interface TTSPlayerFactories {
+  createBrowserTTS: () => ITTSPlayer;
+  createEdgeTTS: () => ITTSPlayer;
+  createDashScopeTTS: () => ITTSPlayer;
+}
+
+/** Default Web-based factories */
+const defaultFactories: TTSPlayerFactories = {
+  createBrowserTTS: () => new BrowserTTSPlayer(),
+  createEdgeTTS: () => new EdgeTTSPlayer(),
+  createDashScopeTTS: () => new DashScopeTTSPlayer(),
+};
+
+let _factories: TTSPlayerFactories = defaultFactories;
+
+/**
+ * Override TTS player factories for platforms that cannot use Web Audio APIs.
+ * Call this at app startup before any TTS playback.
+ *
+ * Example (React Native):
+ *   setTTSPlayerFactories({
+ *     createBrowserTTS: () => new ExpoSpeechTTSPlayer(),
+ *     createEdgeTTS: () => new ExpoAVEdgeTTSPlayer(),
+ *     createDashScopeTTS: () => new ExpoAVDashScopeTTSPlayer(),
+ *   });
+ */
+export function setTTSPlayerFactories(factories: Partial<TTSPlayerFactories>): void {
+  _factories = { ...defaultFactories, ...factories };
+  // Reset cached instances so new factories take effect
+  _browserTTS = null;
+  _edgeTTS = null;
+  _dashscopeTTS = null;
+}
+
 /** Lazily-created singleton TTS player instances */
 let _browserTTS: ITTSPlayer | null = null;
 let _edgeTTS: ITTSPlayer | null = null;
 let _dashscopeTTS: ITTSPlayer | null = null;
 
 function getBrowserTTS(): ITTSPlayer {
-  if (!_browserTTS) _browserTTS = new BrowserTTSPlayer();
+  if (!_browserTTS) _browserTTS = _factories.createBrowserTTS();
   return _browserTTS;
 }
 
 function getEdgeTTS(): ITTSPlayer {
-  if (!_edgeTTS) _edgeTTS = new EdgeTTSPlayer();
+  if (!_edgeTTS) _edgeTTS = _factories.createEdgeTTS();
   return _edgeTTS;
 }
 
 function getDashScopeTTS(): ITTSPlayer {
-  if (!_dashscopeTTS) _dashscopeTTS = new DashScopeTTSPlayer();
+  if (!_dashscopeTTS) _dashscopeTTS = _factories.createDashScopeTTS();
   return _dashscopeTTS;
 }
 

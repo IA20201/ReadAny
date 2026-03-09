@@ -5,6 +5,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App";
 import "@readany/core/i18n";
+import { initI18nLanguage } from "@readany/core/i18n";
 import "./styles/globals.css";
 import { useLibraryStore } from "./stores/library-store";
 import { flushAllWrites } from "./stores/persist";
@@ -15,6 +16,9 @@ import { TauriPlatformService } from "./lib/platform/tauri-platform-service";
 const tauriPlatform = new TauriPlatformService();
 tauriPlatform.initSync().catch(console.error);
 setPlatformService(tauriPlatform);
+
+// Restore saved language from platform KV storage
+initI18nLanguage().catch(console.error);
 
 // Flush pending state writes before window closes
 window.addEventListener("beforeunload", () => {

@@ -193,4 +193,54 @@ export class TauriPlatformService implements IPlatformService {
       await relaunch();
     }
   }
+
+  // ---- KV Storage (backed by localStorage on desktop/web) ----
+
+  async kvGetItem(key: string): Promise<string | null> {
+    return localStorage.getItem(key);
+  }
+
+  async kvSetItem(key: string, value: string): Promise<void> {
+    localStorage.setItem(key, value);
+  }
+
+  async kvRemoveItem(key: string): Promise<void> {
+    localStorage.removeItem(key);
+  }
+
+  async kvGetAllKeys(): Promise<string[]> {
+    const keys: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key) keys.push(key);
+    }
+    return keys;
+  }
+
+  // ---- Clipboard ----
+
+  async copyToClipboard(content: string): Promise<void> {
+    await navigator.clipboard.writeText(content);
+  }
+
+  // ---- File sharing / download ----
+
+  async shareOrDownloadFile(
+    content: string,
+    filename: string,
+    mimeType: string,
+  ): Promise<void> {
+    const blob = new Blob([content], { type: `${mimeType};charset=utf-8` });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.style.display = "none";
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => {
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }, 100);
+  }
 }

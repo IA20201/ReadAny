@@ -31,12 +31,12 @@ export function AppearanceSettings() {
   }, [theme]);
 
   const handleLangChange = useCallback(
-    (code: string) => {
+    async (code: string) => {
       setLang(code);
-      i18n.changeLanguage(code);
-      localStorage.setItem("readany-lang", code);
+      const { changeAndPersistLanguage } = await import("@readany/core/i18n");
+      await changeAndPersistLanguage(code);
     },
-    [i18n],
+    [],
   );
 
   return (

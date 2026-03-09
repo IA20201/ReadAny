@@ -13,9 +13,9 @@ import { useTranslation } from "react-i18next";
 export function GeneralSettings() {
   const { t, i18n } = useTranslation();
 
-  const handleLanguageChange = (lang: string) => {
-    i18n.changeLanguage(lang);
-    localStorage.setItem("readany-lang", lang);
+  const handleLanguageChange = async (lang: string) => {
+    const { changeAndPersistLanguage } = await import("@readany/core/i18n");
+    await changeAndPersistLanguage(lang);
   };
 
   return (

@@ -6,7 +6,12 @@ export { useDrag } from "./use-drag";
 export { useThrottledValue, useThrottledCallback, useStreamingText } from "./use-throttled-value";
 export { useKeyboard } from "./use-keyboard";
 export { useTranslator, type UseTranslatorOptions } from "./useTranslator";
-export { useReadingSession } from "./use-reading-session";
+export {
+  useReadingSession,
+  setSessionEventSource,
+  webSessionEventSource,
+  type SessionEventSource,
+} from "./use-reading-session";
 export { useStreamingChat, type StreamingChatOptions, type StreamingState } from "./use-streaming-chat";
 
 // Reader hooks

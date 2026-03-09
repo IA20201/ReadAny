@@ -35,14 +35,16 @@ export function useTranslator(options: UseTranslatorOptions = {}) {
 
       const cachedResults: string[] = [];
       const needsTranslation: { index: number; text: string }[] = [];
-      textsToTranslate.forEach((text, index) => {
-        const cached = getFromCache(text, sourceLang, targetLanguage, providerId);
-        if (cached) {
-          cachedResults[index] = cached;
-        } else {
-          needsTranslation.push({ index, text });
-        }
-      });
+      await Promise.all(
+        textsToTranslate.map(async (text, index) => {
+          const cached = await getFromCache(text, sourceLang, targetLanguage, providerId);
+          if (cached) {
+            cachedResults[index] = cached;
+          } else {
+            needsTranslation.push({ index, text });
+          }
+        }),
+      );
 
       if (needsTranslation.length === 0) {
         return textsToTranslate.map((_, i) => cachedResults[i] || "");
@@ -86,11 +88,13 @@ export function useTranslator(options: UseTranslatorOptions = {}) {
           throw new Error(`Unknown translation provider: ${providerId}`);
         }
 
-        needsTranslation.forEach(({ text }, i) => {
-          if (translatedTexts[i]) {
-            storeInCache(text, translatedTexts[i], sourceLang, targetLanguage, providerId);
-          }
-        });
+        await Promise.all(
+          needsTranslation.map(async ({ text }, i) => {
+            if (translatedTexts[i]) {
+              await storeInCache(text, translatedTexts[i], sourceLang, targetLanguage, providerId);
+            }
+          }),
+        );
 
         const results = [...textsToTranslate];
         cachedResults.forEach((cached, i) => {

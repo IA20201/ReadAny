@@ -1,5 +1,9 @@
 /**
  * useReadingSession — reading session state machine hook
+ *
+ * Cross-platform: event listeners are provided by a SessionEventSource adapter.
+ * - Web: uses window/document event listeners (default)
+ * - React Native: inject an AppState-based adapter
  */
 import { type SessionEvent, createSessionDetector } from "../reader/session-detector";
 import { useReadingSessionStore } from "../stores/reading-session-store";
@@ -8,6 +12,50 @@ import { useCallback, useEffect, useRef } from "react";
 
 // Save session every 5 minutes
 const AUTO_SAVE_INTERVAL = 5 * 60 * 1000;
+
+/**
+ * Platform adapter for user activity / visibility / unload events.
+ * Each platform provides its own implementation.
+ */
+export interface SessionEventSource {
+  /** Subscribe to user activity events. Returns unsubscribe function. */
+  subscribeActivity(callback: () => void): () => void;
+  /** Subscribe to visibility changes. Returns unsubscribe function. */
+  subscribeVisibility(callback: (visible: boolean) => void): () => void;
+  /** Subscribe to app close / beforeunload. Returns unsubscribe function. */
+  subscribeBeforeUnload(callback: () => void): () => void;
+}
+
+/** Default Web implementation using window/document events */
+export const webSessionEventSource: SessionEventSource = {
+  subscribeActivity(callback) {
+    const events = ["mousemove", "keydown", "scroll", "click", "touchstart"] as const;
+    for (const evt of events) {
+      window.addEventListener(evt, callback);
+    }
+    return () => {
+      for (const evt of events) {
+        window.removeEventListener(evt, callback);
+      }
+    };
+  },
+  subscribeVisibility(callback) {
+    const handler = () => callback(!document.hidden);
+    document.addEventListener("visibilitychange", handler);
+    return () => document.removeEventListener("visibilitychange", handler);
+  },
+  subscribeBeforeUnload(callback) {
+    window.addEventListener("beforeunload", callback);
+    return () => window.removeEventListener("beforeunload", callback);
+  },
+};
+
+/** Global override — set by platforms that cannot use web events (e.g. React Native) */
+let _sessionEventSource: SessionEventSource = webSessionEventSource;
+
+export function setSessionEventSource(source: SessionEventSource): void {
+  _sessionEventSource = source;
+}
 
 export function useReadingSession(bookId: string | null, tabId?: string) {
   const { startSession, pauseSession, resumeSession, stopSession, updateActiveTime, saveCurrentSession } =
@@ -56,24 +104,19 @@ export function useReadingSession(bookId: string | null, tabId?: string) {
   useEffect(() => {
     if (!bookId) return;
 
+    const source = _sessionEventSource;
+
     const onActivity = () => {
       if (useAppStore.getState().activeTabId === tabId || !tabId) {
         sendEvent({ type: "activity" });
       }
     };
-    const onVisibility = () => sendEvent({ type: "visibility", visible: !document.hidden });
-    
-    const onBeforeUnload = () => {
-      stopSession();
-    };
 
-    window.addEventListener("mousemove", onActivity);
-    window.addEventListener("keydown", onActivity);
-    window.addEventListener("scroll", onActivity);
-    window.addEventListener("click", onActivity);
-    window.addEventListener("touchstart", onActivity);
-    document.addEventListener("visibilitychange", onVisibility);
-    window.addEventListener("beforeunload", onBeforeUnload);
+    const unsubActivity = source.subscribeActivity(onActivity);
+    const unsubVisibility = source.subscribeVisibility((visible) =>
+      sendEvent({ type: "visibility", visible }),
+    );
+    const unsubUnload = source.subscribeBeforeUnload(() => stopSession());
 
     sendEvent({ type: "activity" });
 
@@ -98,13 +141,9 @@ export function useReadingSession(bookId: string | null, tabId?: string) {
     }, 1000);
 
     return () => {
-      window.removeEventListener("mousemove", onActivity);
-      window.removeEventListener("keydown", onActivity);
-      window.removeEventListener("scroll", onActivity);
-      window.removeEventListener("click", onActivity);
-      window.removeEventListener("touchstart", onActivity);
-      document.removeEventListener("visibilitychange", onVisibility);
-      window.removeEventListener("beforeunload", onBeforeUnload);
+      unsubActivity();
+      unsubVisibility();
+      unsubUnload();
       clearInterval(timer);
       sendEvent({ type: "close" });
     };
