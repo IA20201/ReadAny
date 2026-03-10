@@ -28,7 +28,7 @@ export function useKeyboard(onAction: ActionHandler, options: UseKeyboardOptions
   );
 
   useEffect(() => {
-    if (!enabled) return;
+    if (!enabled || typeof window === "undefined") return;
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [enabled, handleKeyDown]);

@@ -9,6 +9,8 @@ import {
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
+  Keyboard,
+  Pressable,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTranslation } from "react-i18next";
@@ -104,13 +106,15 @@ export function BookChatScreen({ route, navigation }: Props) {
       <KeyboardAvoidingView
         style={s.content}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
-        keyboardVerticalOffset={insets.top + 50}
+        keyboardVerticalOffset={0}
       >
-        <MessageList
-          messages={allMessages}
-          isStreaming={isStreaming}
-          currentStep={currentStep}
-        />
+        <Pressable style={s.content} onPress={Keyboard.dismiss}>
+          <MessageList
+            messages={allMessages}
+            isStreaming={isStreaming}
+            currentStep={currentStep}
+          />
+        </Pressable>
         <ChatInput
           onSend={handleSend}
           onStop={stopStream}

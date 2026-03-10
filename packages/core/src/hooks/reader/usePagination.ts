@@ -83,6 +83,7 @@ export function usePagination({
   }, []);
 
   useEffect(() => {
+    if (typeof window === "undefined") return;
     const handleMessage = (event: MessageEvent) => {
       const data = event.data;
       if (!data?.type || data.bookKey !== bookKey) return;

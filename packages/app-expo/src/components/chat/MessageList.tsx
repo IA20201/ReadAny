@@ -9,6 +9,7 @@ import {
   FlatList,
   StyleSheet,
   TouchableOpacity,
+  Keyboard,
 } from "react-native";
 import { useTranslation } from "react-i18next";
 import type { MessageV2, QuotePart, TextPart } from "@readany/core/types/message";
@@ -108,6 +109,8 @@ export function MessageList({
         onScroll={handleScroll}
         scrollEventThrottle={100}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         ListFooterComponent={
           showStreamingIndicator ? (
             <StreamingIndicator step={currentStep!} />

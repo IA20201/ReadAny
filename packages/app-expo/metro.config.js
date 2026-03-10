@@ -21,23 +21,42 @@ config.resolver.sourceExts = [...config.resolver.sourceExts, "ts", "tsx"];
 // 4. Add .html to asset extensions so WebView can load local HTML files
 config.resolver.assetExts = [...config.resolver.assetExts, "html"];
 
-// 4. Force all packages to use the same React instance
+// 5. Force all packages to use the same React instance from the monorepo root
+// pnpm stores packages in node_modules/.pnpm/<package>@<version>/node_modules/<package>
+// IMPORTANT: react version must match react-native's renderer version (19.1.4)
+const reactPath = path.resolve(monorepoRoot, "node_modules/.pnpm/react@19.1.4/node_modules/react");
+const reactNativePath = path.resolve(monorepoRoot, "node_modules/.pnpm/react-native@0.81.6_@babel+core@7.29.0_@types+react@19.1.17_react@19.1.4/node_modules/react-native");
+
 config.resolver.extraNodeModules = {
   ...config.resolver.extraNodeModules,
-  react: path.resolve(projectRoot, "node_modules/react"),
-  "react/jsx-runtime": path.resolve(projectRoot, "node_modules/react/jsx-runtime"),
-  "react/jsx-dev-runtime": path.resolve(projectRoot, "node_modules/react/jsx-dev-runtime"),
-  "react-native": path.resolve(projectRoot, "node_modules/react-native"),
+  react: reactPath,
+  "react/jsx-runtime": path.resolve(reactPath, "jsx-runtime"),
+  "react/jsx-dev-runtime": path.resolve(reactPath, "jsx-dev-runtime"),
+  "react-native": reactNativePath,
 };
 
-// 5. Override resolver to redirect Node built-in "punycode" to the npm package
-const nodeBuiltinRedirects = {
+// 6. Override resolver to redirect modules that depend on Node.js built-ins
+const moduleRedirects = {
   punycode: path.resolve(projectRoot, "node_modules/punycode/punycode.js"),
 };
+
+// Redirect @readany/core modules that pull in LangChain (Node.js-only) to RN stubs
+const coreRedirects = {
+  "@readany/core/hooks/use-streaming-chat": path.resolve(
+    projectRoot,
+    "src/hooks/use-streaming-chat.rn.ts",
+  ),
+};
+
 const originalResolveRequest = config.resolver.resolveRequest;
 config.resolver.resolveRequest = (context, moduleName, platform) => {
-  if (nodeBuiltinRedirects[moduleName]) {
-    return { type: "sourceFile", filePath: nodeBuiltinRedirects[moduleName] };
+  // Redirect Node built-in polyfills
+  if (moduleRedirects[moduleName]) {
+    return { type: "sourceFile", filePath: moduleRedirects[moduleName] };
+  }
+  // Redirect @readany/core modules that depend on LangChain / Node APIs
+  if (coreRedirects[moduleName]) {
+    return { type: "sourceFile", filePath: coreRedirects[moduleName] };
   }
   if (originalResolveRequest) {
     return originalResolveRequest(context, moduleName, platform);

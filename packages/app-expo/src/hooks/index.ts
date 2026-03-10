@@ -2,9 +2,9 @@
  * Hooks for React Native
  */
 
-// Re-export the real useStreamingChat from core
-export { useStreamingChat } from "@readany/core/hooks/use-streaming-chat";
-export type { StreamingChatOptions, StreamingState } from "@readany/core/hooks/use-streaming-chat";
+// Use the RN-safe stub instead of the core version (which pulls in LangChain/Node APIs)
+export { useStreamingChat } from "./use-streaming-chat.rn";
+export type { StreamingChatOptions, StreamingState } from "./use-streaming-chat.rn";
 
 export interface SessionEventSource {
   emit: (event: string, data: unknown) => void;

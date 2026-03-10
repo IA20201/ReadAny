@@ -13,6 +13,7 @@ import {
   Animated,
   Dimensions,
   Pressable,
+  Keyboard,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTranslation } from "react-i18next";
@@ -214,17 +215,19 @@ export function ChatScreen() {
       <KeyboardAvoidingView
         style={s.content}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
-        keyboardVerticalOffset={insets.top + 44}
+        keyboardVerticalOffset={0}
       >
-        {allMessages.length > 0 ? (
-          <MessageList
-            messages={allMessages}
-            isStreaming={isStreaming}
-            currentStep={currentStep}
-          />
-        ) : (
-          <EmptyState colors={colors} onSuggestionPress={handleSend} />
-        )}
+        <Pressable style={s.content} onPress={Keyboard.dismiss}>
+          {allMessages.length > 0 ? (
+            <MessageList
+              messages={allMessages}
+              isStreaming={isStreaming}
+              currentStep={currentStep}
+            />
+          ) : (
+            <EmptyState colors={colors} onSuggestionPress={handleSend} />
+          )}
+        </Pressable>
         <ChatInput
           onSend={handleSend}
           onStop={stopStream}

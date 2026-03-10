@@ -27,6 +27,10 @@ export class BrowserTTSPlayer implements ITTSPlayer {
   get paused() { return this._paused; }
 
   speak(text: string, config: TTSConfig) {
+    if (typeof window === "undefined" || !window.speechSynthesis) {
+      console.warn("[TTS] SpeechSynthesis not available on this platform");
+      return;
+    }
     this.stop();
     this.chunks = splitIntoChunks(text);
     this.currentIndex = 0;
@@ -37,6 +41,7 @@ export class BrowserTTSPlayer implements ITTSPlayer {
   }
 
   private speakChunk(config: TTSConfig) {
+    if (typeof window === "undefined" || !window.speechSynthesis) return;
     if (this.currentIndex >= this.chunks.length) {
       const onEnd = this.onEnd;
       this._speaking = false;
@@ -79,6 +84,7 @@ export class BrowserTTSPlayer implements ITTSPlayer {
   }
 
   pause() {
+    if (typeof window === "undefined" || !window.speechSynthesis) return;
     if (!this._speaking || this._paused) return;
     window.speechSynthesis.pause();
     this._paused = true;
@@ -86,6 +92,7 @@ export class BrowserTTSPlayer implements ITTSPlayer {
   }
 
   resume() {
+    if (typeof window === "undefined" || !window.speechSynthesis) return;
     if (!this._speaking || !this._paused) return;
     window.speechSynthesis.resume();
     this._paused = false;
@@ -93,7 +100,9 @@ export class BrowserTTSPlayer implements ITTSPlayer {
   }
 
   stop() {
-    window.speechSynthesis.cancel();
+    if (typeof window !== "undefined" && window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+    }
     this.chunks = [];
     this.currentIndex = 0;
     this._speaking = false;

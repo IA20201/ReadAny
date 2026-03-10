@@ -12,6 +12,8 @@ import {
   Switch,
   ActivityIndicator,
   TextInput,
+  KeyboardAvoidingView,
+  Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
@@ -54,7 +56,16 @@ export default function VectorModelSettingsScreen() {
         <Text style={s.headerTitle}>{t("settings.vm_title", "向量模型")}</Text>
       </View>
 
-      <ScrollView style={s.scrollView} showsVerticalScrollIndicator={false}>
+      <KeyboardAvoidingView
+        style={s.keyboardView}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+      >
+        <ScrollView
+          style={s.scrollView}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+        >
         {/* Enable switch */}
         <View style={s.section}>
           <View style={s.enableCard}>
@@ -104,6 +115,7 @@ export default function VectorModelSettingsScreen() {
 
         <View style={{ height: 24 }} />
       </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
@@ -348,6 +360,7 @@ function RemoteModelsSection() {
 
 const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
+  keyboardView: { flex: 1 },
   header: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 0.5, borderBottomColor: colors.border },
   backBtn: { padding: 4 },
   headerTitle: { fontSize: fontSize.lg, fontWeight: fontWeight.semibold, color: colors.foreground },

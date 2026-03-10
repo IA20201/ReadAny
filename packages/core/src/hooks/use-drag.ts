@@ -95,6 +95,7 @@ export function useDrag(options: UseDragOptions = {}) {
   );
 
   useEffect(() => {
+    if (typeof window === "undefined") return;
     const onMouseMove = (e: MouseEvent) => handleMove(e.clientX, e.clientY);
     const onTouchMove = (e: TouchEvent) => {
       const touch = e.touches[0];

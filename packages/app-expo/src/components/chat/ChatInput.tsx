@@ -46,6 +46,7 @@ export function ChatInput({
   const handleSend = useCallback(() => {
     const trimmed = text.trim();
     if (!trimmed && quotes.length === 0) return;
+    inputRef.current?.blur();
     onSend(trimmed, deepThinking, quotes.length > 0 ? quotes : undefined);
     setText("");
     setDeepThinking(false);

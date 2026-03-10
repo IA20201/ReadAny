@@ -29,6 +29,7 @@ export interface SessionEventSource {
 /** Default Web implementation using window/document events */
 export const webSessionEventSource: SessionEventSource = {
   subscribeActivity(callback) {
+    if (typeof window === "undefined") return () => {};
     const events = ["mousemove", "keydown", "scroll", "click", "touchstart"] as const;
     for (const evt of events) {
       window.addEventListener(evt, callback);
@@ -40,11 +41,13 @@ export const webSessionEventSource: SessionEventSource = {
     };
   },
   subscribeVisibility(callback) {
+    if (typeof document === "undefined") return () => {};
     const handler = () => callback(!document.hidden);
     document.addEventListener("visibilitychange", handler);
     return () => document.removeEventListener("visibilitychange", handler);
   },
   subscribeBeforeUnload(callback) {
+    if (typeof window === "undefined") return () => {};
     window.addEventListener("beforeunload", callback);
     return () => window.removeEventListener("beforeunload", callback);
   },

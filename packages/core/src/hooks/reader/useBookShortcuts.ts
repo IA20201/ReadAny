@@ -82,7 +82,7 @@ export function useBookShortcuts({
   );
 
   useEffect(() => {
-    if (!enabled) return;
+    if (!enabled || typeof window === "undefined") return;
 
     const onKeydown = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement)?.tagName?.toLowerCase();
