@@ -37,10 +37,10 @@ export function ContextPopover() {
               const isSelected = selectedBooks.includes(book.id);
               return (
                 <button key={book.id} type="button" onClick={() => isSelected ? removeSelectedBook(book.id) : addSelectedBook(book.id)} className="flex w-full cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm transition-colors hover:bg-muted">
-                  <div className={`flex size-4 shrink-0 items-center justify-center rounded border ${isSelected ? "border-primary bg-primary text-primary-foreground" : "border-neutral-300"}`}>
+                  <div className={`flex size-4 shrink-0 items-center justify-center rounded border ${isSelected ? "border-primary bg-primary text-primary-foreground" : "border-border"}`}>
                     {isSelected && <Check className="size-3" />}
                   </div>
-                  <span className="truncate text-neutral-700">{book.meta.title}</span>
+                  <span className="truncate text-foreground">{book.meta.title}</span>
                 </button>
               );
             })}

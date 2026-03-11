@@ -210,15 +210,15 @@ function ToolCallPartView({ part }: { part: ToolCallPart }) {
   const getStatusIcon = () => {
     switch (part.status) {
       case "pending":
-        return <Circle className="h-4 w-4 text-neutral-300" />;
+        return <Circle className="h-4 w-4 text-muted-foreground/50" />;
       case "running":
-        return <Loader2 className="h-4 w-4 animate-spin text-blue-500" />;
+        return <Loader2 className="h-4 w-4 animate-spin text-primary" />;
       case "completed":
         return <CheckCircle className="h-4 w-4 text-emerald-500" />;
       case "error":
-        return <XCircle className="h-4 w-4 text-red-500" />;
+        return <XCircle className="h-4 w-4 text-destructive" />;
       default:
-        return <Circle className="h-4 w-4 text-neutral-300" />;
+        return <Circle className="h-4 w-4 text-muted-foreground/50" />;
     }
   };
 

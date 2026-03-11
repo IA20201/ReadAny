@@ -27,11 +27,11 @@ export function BookList({ books }: BookListProps) {
             className="flex cursor-pointer items-center gap-3 rounded-xl border bg-background p-3 shadow-sm transition-colors hover:bg-muted/50"
             onClick={() => handleOpen(book)}
           >
-            <div className="flex h-12 w-9 shrink-0 items-center justify-center overflow-hidden rounded-md bg-gradient-to-br from-neutral-100 to-neutral-200">
+            <div className="flex h-12 w-9 shrink-0 items-center justify-center overflow-hidden rounded-md bg-gradient-to-br from-muted to-muted/50">
               {book.meta.coverUrl ? (
                 <img src={book.meta.coverUrl} alt="" className="h-full w-full object-cover" />
               ) : (
-                <span className="text-sm font-bold text-neutral-400">{book.meta.title.charAt(0)}</span>
+                <span className="text-sm font-bold text-muted-foreground">{book.meta.title.charAt(0)}</span>
               )}
             </div>
             <div className="min-w-0 flex-1">
@@ -46,7 +46,7 @@ export function BookList({ books }: BookListProps) {
                   {t("home.new")}
                 </span>
               ) : pct >= 100 ? (
-                <span className="rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-medium text-green-700">
+                <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-600">
                   {t("home.complete")}
                 </span>
               ) : (

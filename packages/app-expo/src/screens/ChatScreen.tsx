@@ -114,14 +114,6 @@ export function ChatScreen() {
     [threads, getThreadsForContext],
   );
 
-  const activeThread = useMemo(
-    () =>
-      generalActiveThreadId
-        ? threads.find((th) => th.id === generalActiveThreadId)
-        : null,
-    [threads, generalActiveThreadId],
-  );
-
   // Streaming chat
   const {
     isStreaming,
@@ -132,16 +124,13 @@ export function ChatScreen() {
     stopStream,
   } = useStreamingChat();
 
-  // Messages
-  const storeMessages: MessageV2[] = useMemo(() => {
-    if (!activeThread) return [];
-    return convertToMessageV2(activeThread.messages);
-  }, [activeThread?.messages]);
+  // Messages - compute directly without useMemo to ensure reactivity
+  const activeThread = generalActiveThreadId
+    ? threads.find((th) => th.id === generalActiveThreadId)
+    : null;
 
-  const allMessages = useMemo(
-    () => mergeMessagesWithStreaming(storeMessages, currentMessage, isStreaming),
-    [storeMessages, currentMessage, isStreaming],
-  );
+  const displayMessages = convertToMessageV2(activeThread?.messages || []);
+  const allMessages = mergeMessagesWithStreaming(displayMessages, currentMessage, isStreaming);
 
   // Handlers
   const handleSend = useCallback(

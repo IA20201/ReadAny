@@ -135,7 +135,7 @@ export function AboutSettings() {
       {/* Update Ready */}
       {status === "ready" && (
         <div className="mb-4 w-full max-w-md space-y-2">
-          <div className="rounded-lg bg-emerald-500/10 p-3 text-center text-sm text-emerald-600">
+          <div className="rounded-lg bg-primary/10 p-3 text-center text-sm text-foreground">
             {t("settings.updateReadyMessage")}
           </div>
           <Button

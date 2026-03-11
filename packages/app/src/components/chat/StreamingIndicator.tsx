@@ -22,17 +22,17 @@ export function StreamingIndicator({ step, toolName, className }: StreamingIndic
         {step === "thinking" && (
           <>
             <div className="flex h-5 w-5 items-center justify-center">
-              <Brain className="h-4 w-4 animate-pulse text-violet-500" />
+              <Brain className="h-4 w-4 animate-pulse text-primary" />
             </div>
-            <span className="text-xs text-violet-600">{t("streaming.thinking")}</span>
+            <span className="text-xs text-foreground">{t("streaming.thinking")}</span>
           </>
         )}
         {step === "tool_calling" && (
           <>
             <div className="flex h-5 w-5 items-center justify-center">
-              <Wrench className="h-4 w-4 animate-spin text-blue-500" />
+              <Wrench className="h-4 w-4 animate-spin text-primary" />
             </div>
-            <span className="text-xs text-blue-600">
+            <span className="text-xs text-foreground">
               {toolName ? t("streaming.callingTool", { toolName }) : t("streaming.toolCalling")}
             </span>
           </>
@@ -40,9 +40,9 @@ export function StreamingIndicator({ step, toolName, className }: StreamingIndic
         {step === "responding" && (
           <>
             <div className="flex h-5 w-5 items-center justify-center">
-              <Loader2 className="h-4 w-4 animate-spin text-emerald-500" />
+              <Loader2 className="h-4 w-4 animate-spin text-primary" />
             </div>
-            <span className="text-xs text-emerald-600">{t("streaming.responding")}</span>
+            <span className="text-xs text-foreground">{t("streaming.responding")}</span>
           </>
         )}
       </div>
@@ -70,7 +70,7 @@ export function StreamingProgress({ steps, className }: StreamingProgressProps) 
           {index > 0 && (
             <span className={cn(
               "mx-1",
-              step.status === "completed" ? "text-emerald-400" : "text-neutral-300"
+              step.status === "completed" ? "text-primary" : "text-muted-foreground"
             )}>
               →
             </span>
@@ -78,9 +78,9 @@ export function StreamingProgress({ steps, className }: StreamingProgressProps) 
           <span
             className={cn(
               "rounded px-1.5 py-0.5",
-              step.status === "running" && "bg-blue-50 text-blue-600",
-              step.status === "completed" && "bg-emerald-50 text-emerald-600",
-              step.status === "pending" && "text-neutral-400"
+              step.status === "running" && "bg-primary/10 text-foreground",
+              step.status === "completed" && "bg-primary/10 text-foreground",
+              step.status === "pending" && "text-muted-foreground"
             )}
           >
             {step.label}

@@ -145,8 +145,8 @@ export function ChatInput({
                 onClick={toggleDeepThinking}
                 className={`flex items-center gap-1 rounded-full border px-2 py-1 text-xs transition-colors ${
                   deepThinking
-                    ? "border-violet-300 bg-violet-50 text-violet-600"
-                    : "border-neutral-200 text-muted-foreground hover:bg-muted hover:text-foreground"
+                    ? "border-primary/50 bg-primary/10 text-foreground"
+                    : "border-border text-muted-foreground hover:bg-muted hover:text-foreground"
                 }`}
               >
                 <Brain className="size-3" />
