@@ -21,7 +21,7 @@ import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "@/navigation/RootNavigator";
 
-import { useStreamingChat } from "@readany/core/hooks/use-streaming-chat";
+import { useStreamingChat } from "@readany/core/hooks";
 import { useChatStore } from "@/stores/chat-store";
 import { convertToMessageV2, mergeMessagesWithStreaming } from "@readany/core/utils/chat-utils";
 import type { MessageV2 } from "@readany/core/types/message";
