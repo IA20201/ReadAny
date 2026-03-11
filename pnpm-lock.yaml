@@ -36,7 +36,7 @@ importers:
         version: 2.1.24(@langchain/core@1.1.31(openai@6.27.0(ws@8.19.0)(zod@4.3.6)))
       '@langchain/langgraph':
         specifier: ^1.2.0
-        version: 1.2.1(@langchain/core@1.1.31(openai@6.27.0(ws@8.19.0)(zod@4.3.6)))(react-dom@19.1.4(react@19.1.4))(react@19.1.4)(zod-to-json-schema@3.25.1(zod@4.3.6))(zod@4.3.6)
+        version: 1.2.2(@langchain/core@1.1.31(openai@6.27.0(ws@8.19.0)(zod@4.3.6)))(react-dom@19.1.4(react@19.1.4))(react@19.1.4)(zod-to-json-schema@3.25.1(zod@4.3.6))(zod@4.3.6)
       '@langchain/openai':
         specifier: ^1.2.11
         version: 1.2.12(@langchain/core@1.1.31(openai@6.27.0(ws@8.19.0)(zod@4.3.6)))(ws@8.19.0)
@@ -147,7 +147,7 @@ importers:
         version: link:../foliate-js
       i18next:
         specifier: ^25.8.13
-        version: 25.8.17(typescript@5.8.3)
+        version: 25.8.18(typescript@5.8.3)
       lucide-react:
         specifier: ^0.468.0
         version: 0.468.0(react@19.1.4)
@@ -171,7 +171,7 @@ importers:
         version: 19.1.4(react@19.1.4)
       react-i18next:
         specifier: ^16.5.4
-        version: 16.5.6(i18next@25.8.17(typescript@5.8.3))(react-dom@19.1.4(react@19.1.4))(react@19.1.4)(typescript@5.8.3)
+        version: 16.5.8(i18next@25.8.18(typescript@5.8.3))(react-dom@19.1.4(react@19.1.4))(react@19.1.4)(typescript@5.8.3)
       react-markdown:
         specifier: ^10.1.0
         version: 10.1.0(@types/react@19.1.17)(react@19.1.4)
@@ -298,7 +298,7 @@ importers:
         version: 3.0.9(react-native@0.81.6(@babel/core@7.29.0)(@types/react@19.1.17)(react@19.1.4))(react@19.1.4)
       i18next:
         specifier: ^25.8.13
-        version: 25.8.17(typescript@5.9.3)
+        version: 25.8.18(typescript@5.9.3)
       pako:
         specifier: ^2.1.0
         version: 2.1.0
@@ -310,7 +310,7 @@ importers:
         version: 19.1.4
       react-i18next:
         specifier: ^16.5.4
-        version: 16.5.6(i18next@25.8.17(typescript@5.9.3))(react-native@0.81.6(@babel/core@7.29.0)(@types/react@19.1.17)(react@19.1.4))(react@19.1.4)(typescript@5.9.3)
+        version: 16.5.8(i18next@25.8.18(typescript@5.9.3))(react-native@0.81.6(@babel/core@7.29.0)(@types/react@19.1.17)(react@19.1.4))(react@19.1.4)(typescript@5.9.3)
       react-native:
         specifier: ~0.81.5
         version: 0.81.6(@babel/core@7.29.0)(@types/react@19.1.17)(react@19.1.4)
@@ -338,6 +338,9 @@ importers:
       react-native-webview:
         specifier: ~13.15.0
         version: 13.15.0(react-native@0.81.6(@babel/core@7.29.0)(@types/react@19.1.17)(react@19.1.4))(react@19.1.4)
+      whatwg-fetch:
+        specifier: ^3.6.20
+        version: 3.6.20
       zustand:
         specifier: ^5.0.5
         version: 5.0.11(@types/react@19.1.17)(react@19.1.4)(use-sync-external-store@1.6.0(react@19.1.4))
@@ -440,7 +443,7 @@ importers:
         version: link:../foliate-js
       i18next:
         specifier: ^25.8.13
-        version: 25.8.17(typescript@5.9.3)
+        version: 25.8.18(typescript@5.9.3)
       lucide-react:
         specifier: ^0.468.0
         version: 0.468.0(react@19.1.4)
@@ -461,7 +464,7 @@ importers:
         version: 19.1.4(react@19.1.4)
       react-i18next:
         specifier: ^16.5.4
-        version: 16.5.6(i18next@25.8.17(typescript@5.9.3))(react-dom@19.1.4(react@19.1.4))(react@19.1.4)(typescript@5.9.3)
+        version: 16.5.8(i18next@25.8.18(typescript@5.9.3))(react-dom@19.1.4(react@19.1.4))(react@19.1.4)(typescript@5.9.3)
       react-markdown:
         specifier: ^10.1.0
         version: 10.1.0(@types/react@19.1.17)(react@19.1.4)
@@ -534,7 +537,7 @@ importers:
         version: 2.1.24(@langchain/core@1.1.31(openai@6.27.0(ws@8.19.0)(zod@4.3.6)))
       '@langchain/langgraph':
         specifier: ^1.2.0
-        version: 1.2.1(@langchain/core@1.1.31(openai@6.27.0(ws@8.19.0)(zod@4.3.6)))(react-dom@19.1.4(react@19.1.4))(react@19.1.4)(zod-to-json-schema@3.25.1(zod@4.3.6))(zod@4.3.6)
+        version: 1.2.2(@langchain/core@1.1.31(openai@6.27.0(ws@8.19.0)(zod@4.3.6)))(react-dom@19.1.4(react@19.1.4))(react@19.1.4)(zod-to-json-schema@3.25.1(zod@4.3.6))(zod@4.3.6)
       '@langchain/openai':
         specifier: ^1.2.11
         version: 1.2.12(@langchain/core@1.1.31(openai@6.27.0(ws@8.19.0)(zod@4.3.6)))(ws@8.19.0)
@@ -543,13 +546,13 @@ importers:
         version: 2.1.1
       i18next:
         specifier: ^25.8.13
-        version: 25.8.17(typescript@5.9.3)
+        version: 25.8.18(typescript@5.9.3)
       react:
         specifier: 19.1.4
         version: 19.1.4
       react-i18next:
         specifier: ^16.5.4
-        version: 16.5.6(i18next@25.8.17(typescript@5.9.3))(react-dom@19.1.4(react@19.1.4))(react@19.1.4)(typescript@5.9.3)
+        version: 16.5.8(i18next@25.8.18(typescript@5.9.3))(react-dom@19.1.4(react@19.1.4))(react@19.1.4)(typescript@5.9.3)
       tailwind-merge:
         specifier: ^3.0.0
         version: 3.5.0
@@ -1940,22 +1943,31 @@ packages:
     peerDependencies:
       '@langchain/core': ^1.0.1
 
-  '@langchain/langgraph-sdk@1.6.5':
-    resolution: {integrity: sha512-JjprmbhgCnoNJ9DUKcvrEU+C9FfKsNGyT3ooqWxAY5Cx2qofhXmDJOpTCqqbxfDHPKG0RjTs5HgVK3WW5M6Big==}
+  '@langchain/langgraph-sdk@1.7.2':
+    resolution: {integrity: sha512-8ad5OTwqc15J/DxLNJYLn3IC2mpfow09nxJdszxhwm3KgsolGZIUV6g7m67C2p4j3cbQZD5USHt3hKEL0ahqoA==}
     peerDependencies:
+      '@angular/core': ^18.0.0 || ^19.0.0 || ^20.0.0
       '@langchain/core': ^1.1.16
       react: 19.1.4
       react-dom: 19.1.4
+      svelte: ^4.0.0 || ^5.0.0
+      vue: ^3.0.0
     peerDependenciesMeta:
+      '@angular/core':
+        optional: true
       '@langchain/core':
         optional: true
       react:
         optional: true
       react-dom:
         optional: true
+      svelte:
+        optional: true
+      vue:
+        optional: true
 
-  '@langchain/langgraph@1.2.1':
-    resolution: {integrity: sha512-OeLMejye1DZeZBPnurus2bqvjRi+pyrqfAXX77hYdUqKeQ3hAG7pLG04xdrvMs0pl/F57ZtwywqoE2oVqcI6JA==}
+  '@langchain/langgraph@1.2.2':
+    resolution: {integrity: sha512-1F94azb3b3TpHi5Jxa7gFvAYXuSIsEobEXk3/PD7+gkOobIC5Jty3+/ATSkH7joUo0bXCF/rgMOjRGusi6YvSQ==}
     engines: {node: '>=18'}
     peerDependencies:
       '@langchain/core': ^1.1.16
@@ -4591,8 +4603,8 @@ packages:
     resolution: {integrity: sha512-vK9P5/iUfdl95AI+JVyUuIcVtd4ofvtrOr3HNtM2yxC9bnMbEdp3x01OhQNnjb8IJYi38VlTE3mBXwcfvywuSw==}
     engines: {node: '>= 14'}
 
-  i18next@25.8.17:
-    resolution: {integrity: sha512-vWtCttyn5bpOK4hWbRAe1ZXkA+Yzcn2OcACT+WJavtfGMcxzkfvXTLMeOU8MUhRmAySKjU4VVuKlo0sSGeBokA==}
+  i18next@25.8.18:
+    resolution: {integrity: sha512-lzY5X83BiL5AP77+9DydbrqkQHFN9hUzWGjqjLpPcp5ZOzuu1aSoKaU3xbBLSjWx9dAzW431y+d+aogxOZaKRA==}
     peerDependencies:
       typescript: ^5
     peerDependenciesMeta:
@@ -5903,8 +5915,8 @@ packages:
     peerDependencies:
       react: 19.1.4
 
-  react-i18next@16.5.6:
-    resolution: {integrity: sha512-Ua7V2/efA88ido7KyK51fb8Ki8M/sRfW8LR/rZ/9ZKr2luhuTI7kwYZN5agT1rWG7aYm5G0RYE/6JR8KJoCMDw==}
+  react-i18next@16.5.8:
+    resolution: {integrity: sha512-2ABeHHlakxVY+LSirD+OiERxFL6+zip0PaHo979bgwzeHg27Sqc82xxXWIrSFmfWX0ZkrvXMHwhsi/NGUf5VQg==}
     peerDependencies:
       i18next: '>= 25.6.2'
       react: 19.1.4
@@ -8556,7 +8568,7 @@ snapshots:
       '@langchain/core': 1.1.31(openai@6.27.0(ws@8.19.0)(zod@4.3.6))
       uuid: 10.0.0
 
-  '@langchain/langgraph-sdk@1.6.5(@langchain/core@1.1.31(openai@6.27.0(ws@8.19.0)(zod@4.3.6)))(react-dom@19.1.4(react@19.1.4))(react@19.1.4)':
+  '@langchain/langgraph-sdk@1.7.2(@langchain/core@1.1.31(openai@6.27.0(ws@8.19.0)(zod@4.3.6)))(react-dom@19.1.4(react@19.1.4))(react@19.1.4)':
     dependencies:
       '@types/json-schema': 7.0.15
       p-queue: 9.1.0
@@ -8567,19 +8579,22 @@ snapshots:
       react: 19.1.4
       react-dom: 19.1.4(react@19.1.4)
 
-  '@langchain/langgraph@1.2.1(@langchain/core@1.1.31(openai@6.27.0(ws@8.19.0)(zod@4.3.6)))(react-dom@19.1.4(react@19.1.4))(react@19.1.4)(zod-to-json-schema@3.25.1(zod@4.3.6))(zod@4.3.6)':
+  '@langchain/langgraph@1.2.2(@langchain/core@1.1.31(openai@6.27.0(ws@8.19.0)(zod@4.3.6)))(react-dom@19.1.4(react@19.1.4))(react@19.1.4)(zod-to-json-schema@3.25.1(zod@4.3.6))(zod@4.3.6)':
     dependencies:
       '@langchain/core': 1.1.31(openai@6.27.0(ws@8.19.0)(zod@4.3.6))
       '@langchain/langgraph-checkpoint': 1.0.0(@langchain/core@1.1.31(openai@6.27.0(ws@8.19.0)(zod@4.3.6)))
-      '@langchain/langgraph-sdk': 1.6.5(@langchain/core@1.1.31(openai@6.27.0(ws@8.19.0)(zod@4.3.6)))(react-dom@19.1.4(react@19.1.4))(react@19.1.4)
+      '@langchain/langgraph-sdk': 1.7.2(@langchain/core@1.1.31(openai@6.27.0(ws@8.19.0)(zod@4.3.6)))(react-dom@19.1.4(react@19.1.4))(react@19.1.4)
       '@standard-schema/spec': 1.1.0
       uuid: 10.0.0
       zod: 4.3.6
     optionalDependencies:
       zod-to-json-schema: 3.25.1(zod@4.3.6)
     transitivePeerDependencies:
+      - '@angular/core'
       - react
       - react-dom
+      - svelte
+      - vue
 
   '@langchain/openai@1.2.12(@langchain/core@1.1.31(openai@6.27.0(ws@8.19.0)(zod@4.3.6)))(ws@8.19.0)':
     dependencies:
@@ -11514,13 +11529,13 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  i18next@25.8.17(typescript@5.8.3):
+  i18next@25.8.18(typescript@5.8.3):
     dependencies:
       '@babel/runtime': 7.28.6
     optionalDependencies:
       typescript: 5.8.3
 
-  i18next@25.8.17(typescript@5.9.3):
+  i18next@25.8.18(typescript@5.9.3):
     dependencies:
       '@babel/runtime': 7.28.6
     optionalDependencies:
@@ -13267,33 +13282,33 @@ snapshots:
     dependencies:
       react: 19.1.4
 
-  react-i18next@16.5.6(i18next@25.8.17(typescript@5.8.3))(react-dom@19.1.4(react@19.1.4))(react@19.1.4)(typescript@5.8.3):
+  react-i18next@16.5.8(i18next@25.8.18(typescript@5.8.3))(react-dom@19.1.4(react@19.1.4))(react@19.1.4)(typescript@5.8.3):
     dependencies:
       '@babel/runtime': 7.28.6
       html-parse-stringify: 3.0.1
-      i18next: 25.8.17(typescript@5.8.3)
+      i18next: 25.8.18(typescript@5.8.3)
       react: 19.1.4
       use-sync-external-store: 1.6.0(react@19.1.4)
     optionalDependencies:
       react-dom: 19.1.4(react@19.1.4)
       typescript: 5.8.3
 
-  react-i18next@16.5.6(i18next@25.8.17(typescript@5.9.3))(react-dom@19.1.4(react@19.1.4))(react@19.1.4)(typescript@5.9.3):
+  react-i18next@16.5.8(i18next@25.8.18(typescript@5.9.3))(react-dom@19.1.4(react@19.1.4))(react@19.1.4)(typescript@5.9.3):
     dependencies:
       '@babel/runtime': 7.28.6
       html-parse-stringify: 3.0.1
-      i18next: 25.8.17(typescript@5.9.3)
+      i18next: 25.8.18(typescript@5.9.3)
       react: 19.1.4
       use-sync-external-store: 1.6.0(react@19.1.4)
     optionalDependencies:
       react-dom: 19.1.4(react@19.1.4)
       typescript: 5.9.3
 
-  react-i18next@16.5.6(i18next@25.8.17(typescript@5.9.3))(react-native@0.81.6(@babel/core@7.29.0)(@types/react@19.1.17)(react@19.1.4))(react@19.1.4)(typescript@5.9.3):
+  react-i18next@16.5.8(i18next@25.8.18(typescript@5.9.3))(react-native@0.81.6(@babel/core@7.29.0)(@types/react@19.1.17)(react@19.1.4))(react@19.1.4)(typescript@5.9.3):
     dependencies:
       '@babel/runtime': 7.28.6
       html-parse-stringify: 3.0.1
-      i18next: 25.8.17(typescript@5.9.3)
+      i18next: 25.8.18(typescript@5.9.3)
       react: 19.1.4
       use-sync-external-store: 1.6.0(react@19.1.4)
     optionalDependencies:

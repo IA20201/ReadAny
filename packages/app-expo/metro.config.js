@@ -37,7 +37,7 @@ config.resolver.extraNodeModules = {
 
 // 6. Override resolver to redirect modules that depend on Node.js built-ins
 const moduleRedirects = {
-  punycode: path.resolve(projectRoot, "node_modules/punycode/punycode.js"),
+  punycode: path.resolve(monorepoRoot, "node_modules/punycode/punycode.js"),
 };
 
 // Redirect @readany/core modules that pull in LangChain (Node.js-only) to RN stubs

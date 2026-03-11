@@ -418,12 +418,69 @@
 
       const LONG_HOLD_MS = 500;
       let holdTimer = null;
+      let isSelecting = false;
+      let hasSelection = false;
 
-      doc.addEventListener('touchstart', () => {
-        holdTimer = setTimeout(() => { holdTimer = null; }, LONG_HOLD_MS);
+      // Track selection state
+      doc.addEventListener('selectionchange', () => {
+        const sel = doc.getSelection();
+        hasSelection = sel && !sel.isCollapsed && sel.toString().trim().length > 0;
+      });
+
+      doc.addEventListener('touchstart', (e) => {
+        // Check if touching selection handles or selected text
+        const sel = doc.getSelection();
+        if (sel && !sel.isCollapsed && sel.rangeCount > 0) {
+          const range = sel.getRangeAt(0);
+          const rects = range.getClientRects();
+          const touch = e.touches[0];
+          
+          // Check if touch is within or near the selection
+          for (let i = 0; i < rects.length; i++) {
+            const rect = rects[i];
+            const margin = 20; // Extra margin for selection handles
+            if (touch.clientX >= rect.left - margin && 
+                touch.clientX <= rect.right + margin &&
+                touch.clientY >= rect.top - margin && 
+                touch.clientY <= rect.bottom + margin) {
+              isSelecting = true;
+              break;
+            }
+          }
+        }
+        
+        if (!isSelecting) {
+          holdTimer = setTimeout(() => { holdTimer = null; }, LONG_HOLD_MS);
+        }
+      }, { passive: true });
+
+      doc.addEventListener('touchmove', (e) => {
+        // If we're selecting, clear the hold timer to prevent tap
+        if (isSelecting) {
+          if (holdTimer) {
+            clearTimeout(holdTimer);
+            holdTimer = null;
+          }
+        }
+      }, { passive: true });
+
+      doc.addEventListener('touchend', (e) => {
+        // Reset selection flag after a short delay
+        if (isSelecting) {
+          setTimeout(() => {
+            isSelecting = false;
+          }, 100);
+        }
       }, { passive: true });
 
       doc.addEventListener('click', (e) => {
+        // Prevent tap if we're selecting or have a selection
+        if (isSelecting || hasSelection) {
+          e.preventDefault();
+          e.stopPropagation();
+          return;
+        }
+        
         if (!holdTimer) return;
         clearTimeout(holdTimer);
         holdTimer = null;
