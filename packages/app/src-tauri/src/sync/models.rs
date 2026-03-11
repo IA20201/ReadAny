@@ -132,6 +132,7 @@ pub struct SyncProgress {
 }
 
 /// A detected conflict between local and remote data
+#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SyncConflict {
     pub id: String,
@@ -144,6 +145,7 @@ pub struct SyncConflict {
     pub conflict_type: ConflictType,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ConflictType {
     BothModified,
@@ -151,6 +153,7 @@ pub enum ConflictType {
     LocalModifiedRemoteDeleted,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ConflictResolution {
     KeepLocal,

@@ -62,35 +62,12 @@ jobs:
       - name: Install frontend dependencies
         run: pnpm install
 
-      # - name: Import Apple certificate (macOS only)
-      #   if: runner.os == 'macOS'
-      #   env:
-      #     APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-      #     APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-      #   run: |
-      #     CERTIFICATE_PATH=$RUNNER_TEMP/certificate.p12
-      #     KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
-      #     KEYCHAIN_PASSWORD=$(openssl rand -base64 32)
-
-      #     # 解码证书
-      #     echo -n "$APPLE_CERTIFICATE" | base64 --decode -o $CERTIFICATE_PATH
-
-      #     # 创建临时钥匙串
-      #     security create-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
-      #     security set-keychain-settings -lut 21600 $KEYCHAIN_PATH
-      #     security unlock-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
-
-      #     # 导入证书到临时钥匙串
-      #     security import $CERTIFICATE_PATH -P "$APPLE_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k $KEYCHAIN_PATH
-      #     security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
-      #     security list-keychain -d user -s $KEYCHAIN_PATH
-
       - name: Build Tauri app
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # macOS 代码签名
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          # macOS 代码签名（未配置证书时使用 ad-hoc 签名）
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY || '-' }}
           # macOS 公证（Notarization）
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
@@ -130,7 +107,7 @@ jobs:
             fi
             sleep 5
           done
-          
+
           # Check if release is a draft
           IS_DRAFT=$(gh release view ${{ github.ref_name }} --json isDraft --jq '.')
           if [ "$IS_DRAFT" = "true" ]; then
@@ -144,7 +121,7 @@ jobs:
         run: |
           VERSION="${{ steps.version.outputs.version }}"
           REPO="${{ github.repository }}"
-          
+
           cat > latest.json << EOF
           {
             "version": "${VERSION}",
