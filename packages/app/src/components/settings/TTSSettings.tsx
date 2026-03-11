@@ -58,13 +58,13 @@ export function TTSSettings() {
   return (
     <div className="space-y-4 p-4 pt-3">
       <section className="rounded-lg bg-muted/60 p-4">
-        <h2 className="mb-4 text-sm font-medium text-neutral-900">{t("tts.settingsTitle")}</h2>
-        <p className="mb-4 text-xs text-neutral-500">{t("tts.settingsDesc")}</p>
+        <h2 className="mb-4 text-sm font-medium text-foreground">{t("tts.settingsTitle")}</h2>
+        <p className="mb-4 text-xs text-muted-foreground">{t("tts.settingsDesc")}</p>
 
         <div className="space-y-5">
           {/* Engine selection — 3 engines */}
           <div className="space-y-2">
-            <span className="text-sm text-neutral-800">{t("tts.engine")}</span>
+            <span className="text-sm text-foreground">{t("tts.engine")}</span>
             <div className="grid grid-cols-3 gap-2">
               {engines.map(({ id, icon: Icon, label, desc }) => (
                 <button
@@ -91,8 +91,8 @@ export function TTSSettings() {
           {/* Rate */}
           <div>
             <div className="mb-3 flex items-center justify-between">
-              <span className="text-sm text-neutral-800">{t("tts.rate")}</span>
-              <span className="rounded bg-background px-2 py-0.5 text-xs font-medium text-neutral-600">
+              <span className="text-sm text-foreground">{t("tts.rate")}</span>
+              <span className="rounded bg-background px-2 py-0.5 text-xs font-medium text-muted-foreground">
                 {config.rate.toFixed(1)}x
               </span>
             </div>
@@ -109,8 +109,8 @@ export function TTSSettings() {
           {config.engine === "browser" && (
             <div>
               <div className="mb-3 flex items-center justify-between">
-                <span className="text-sm text-neutral-800">{t("tts.pitch")}</span>
-                <span className="rounded bg-background px-2 py-0.5 text-xs font-medium text-neutral-600">
+                <span className="text-sm text-foreground">{t("tts.pitch")}</span>
+                <span className="rounded bg-background px-2 py-0.5 text-xs font-medium text-muted-foreground">
                   {config.pitch.toFixed(1)}
                 </span>
               </div>
@@ -127,7 +127,7 @@ export function TTSSettings() {
           {/* Voice selection — engine-specific */}
           {config.engine === "edge" && (
             <div className="flex items-center justify-between">
-              <span className="text-sm text-neutral-800">{t("tts.voice")}</span>
+              <span className="text-sm text-foreground">{t("tts.voice")}</span>
               <Select
                 value={config.edgeVoice}
                 onValueChange={(v) => updateConfig({ edgeVoice: v })}
@@ -155,7 +155,7 @@ export function TTSSettings() {
 
           {config.engine === "browser" && (
             <div className="flex items-center justify-between">
-              <span className="text-sm text-neutral-800">{t("tts.voice")}</span>
+              <span className="text-sm text-foreground">{t("tts.voice")}</span>
               <Select
                 value={config.voiceName || "__default__"}
                 onValueChange={(v) => updateConfig({ voiceName: v === "__default__" ? "" : v })}
@@ -179,7 +179,7 @@ export function TTSSettings() {
             <>
               {/* DashScope voice */}
               <div className="flex items-center justify-between">
-                <span className="text-sm text-neutral-800">{t("tts.voice")}</span>
+                <span className="text-sm text-foreground">{t("tts.voice")}</span>
                 <Select
                   value={config.dashscopeVoice}
                   onValueChange={(v) => updateConfig({ dashscopeVoice: v })}
@@ -199,14 +199,14 @@ export function TTSSettings() {
 
               {/* DashScope API Key */}
               <div className="space-y-2">
-                <span className="text-sm text-neutral-800">{t("tts.apiKey")}</span>
+                <span className="text-sm text-foreground">{t("tts.apiKey")}</span>
                 <Input
                   type="password"
                   placeholder={t("tts.apiKeyPlaceholder")}
                   value={config.dashscopeApiKey}
                   onChange={(e) => updateConfig({ dashscopeApiKey: e.target.value })}
                 />
-                <p className="text-xs text-neutral-500">
+                <p className="text-xs text-muted-foreground">
                   {t("tts.apiKeyHint")}{" "}
                   <a
                     href="https://bailian.console.aliyun.com/cn-beijing/?tab=model#/api-key"

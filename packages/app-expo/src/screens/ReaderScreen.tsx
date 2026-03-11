@@ -146,7 +146,7 @@ export function ReaderScreen({ route, navigation }: Props) {
   const colors = useColors();
   const { mode: themeMode } = useTheme();
   const s = makeStyles(colors);
-  const { bookId } = route.params;
+  const { bookId, cfi } = route.params;
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
 
@@ -194,6 +194,7 @@ export function ReaderScreen({ route, navigation }: Props) {
   const footerAnim = useRef(new Animated.Value(FOOTER_HIDE_OFFSET)).current;
   const lastCfiRef = useRef<string>("");
   const locationHistoryRef = useRef<string[]>([]);
+  const lastNavigatedCfiRef = useRef<string | undefined>(undefined);
 
   const { books, updateBook } = useLibraryStore();
   const { startSession, stopSession } = useReadingSessionStore();
@@ -379,11 +380,24 @@ export function ReaderScreen({ route, navigation }: Props) {
 
   // Load annotations into reader when ready
   useEffect(() => {
-    if (!webViewReady || highlights.length === 0) return;
+    if (!webViewReady || loading || highlights.length === 0) return;
     for (const h of highlights) {
       bridge.addAnnotation({ value: h.cfi, color: h.color, note: h.note });
     }
-  }, [webViewReady, highlights.length]);
+  }, [webViewReady, loading, highlights]);
+
+  // Reset last navigated CFI when book changes
+  useEffect(() => {
+    lastNavigatedCfiRef.current = undefined;
+  }, [bookId]);
+
+  // Navigate to CFI when book is loaded (from NotesPage navigation)
+  useEffect(() => {
+    if (!webViewReady || loading || !cfi || cfi === lastNavigatedCfiRef.current) return;
+    console.log('[ReaderScreen] Navigating to CFI:', cfi);
+    bridge.goToCFI(cfi);
+    lastNavigatedCfiRef.current = cfi;
+  }, [webViewReady, loading, cfi, bridge]);
 
   // Lock navigation when selection is active
   useEffect(() => {

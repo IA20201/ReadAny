@@ -258,7 +258,7 @@ export const BookCard = memo(function BookCard({ book }: BookCardProps) {
                           else addTagToBook(book.id, tag);
                         }}
                       >
-                        <div className={`flex h-3.5 w-3.5 items-center justify-center rounded border ${hasTag ? "border-primary bg-primary" : "border-neutral-300"}`}>
+                        <div className={`flex h-3.5 w-3.5 items-center justify-center rounded border ${hasTag ? "border-primary bg-primary" : "border-border"}`}>
                           {hasTag && <Check className="h-2.5 w-2.5 text-white" />}
                         </div>
                         <span className="truncate">{tag}</span>
@@ -268,10 +268,10 @@ export const BookCard = memo(function BookCard({ book }: BookCardProps) {
                   {/* Quick add new tag */}
                   <div className="mt-1 border-t pt-1">
                     <div className="flex items-center gap-1 px-1">
-                      <Plus className="h-3 w-3 shrink-0 text-neutral-400" />
+                      <Plus className="h-3 w-3 shrink-0 text-muted-foreground" />
                       <input
                         type="text"
-                        className="w-full bg-transparent px-1 py-1 text-xs outline-none placeholder:text-neutral-400"
+                        className="w-full bg-transparent px-1 py-1 text-xs outline-none placeholder:text-muted-foreground"
                         placeholder={t("sidebar.tagPlaceholder")}
                         value={newTagInput}
                         onChange={(e) => setNewTagInput(e.target.value)}
@@ -313,17 +313,17 @@ export const BookCard = memo(function BookCard({ book }: BookCardProps) {
         {book.tags.length > 0 ? (
           <div className="mt-0.5 flex flex-wrap gap-0.5">
             {book.tags.slice(0, 2).map((tag) => (
-              <span key={tag} className="inline-flex items-center rounded-full bg-neutral-100 px-1.5 py-px text-[9px] text-neutral-500">
+              <span key={tag} className="inline-flex items-center rounded-full bg-muted px-1.5 py-px text-[9px] text-muted-foreground">
                 {tag}
               </span>
             ))}
             {book.tags.length > 2 && (
-              <span className="text-[9px] text-neutral-400">+{book.tags.length - 2}</span>
+              <span className="text-[9px] text-muted-foreground">+{book.tags.length - 2}</span>
             )}
           </div>
         ) : (
           <div className="mt-0.5 flex flex-wrap gap-0.5">
-            <span className="inline-flex items-center rounded-full bg-neutral-50 px-1.5 py-px text-[9px] text-neutral-400">
+            <span className="inline-flex items-center rounded-full bg-muted/50 px-1.5 py-px text-[9px] text-muted-foreground">
               {t("sidebar.uncategorized")}
             </span>
           </div>

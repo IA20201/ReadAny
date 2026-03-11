@@ -20,14 +20,14 @@ export function ReadSettingsPanel() {
   return (
     <div className="space-y-6 p-4 pt-3">
       <section className="rounded-lg bg-muted/60 p-4">
-        <h2 className="mb-4 text-sm font-medium text-neutral-900">{t("settings.reading_title")}</h2>
-        <p className="mb-2 text-xs text-neutral-500">{t("settings.reading_desc")}</p>
-        <p className="mb-4 text-xs text-neutral-400">{t("settings.readingNotice")}</p>
+        <h2 className="mb-4 text-sm font-medium text-foreground">{t("settings.reading_title")}</h2>
+        <p className="mb-2 text-xs text-muted-foreground">{t("settings.reading_desc")}</p>
+        <p className="mb-4 text-xs text-muted-foreground/60">{t("settings.readingNotice")}</p>
 
         <div className="space-y-5">
           {/* Font Theme */}
           <div className="flex items-center justify-between">
-            <span className="text-sm text-neutral-800">{t("settings.fontTheme")}</span>
+            <span className="text-sm text-foreground">{t("settings.fontTheme")}</span>
             <Select
               value={readSettings.fontTheme}
               onValueChange={(v) => updateReadSettings({ fontTheme: v })}
@@ -48,8 +48,8 @@ export function ReadSettingsPanel() {
           {/* Font Size */}
           <div>
             <div className="mb-3 flex items-center justify-between">
-              <span className="text-sm text-neutral-800">{t("settings.fontSize", { size: readSettings.fontSize })}</span>
-              <span className="rounded bg-background px-2 py-0.5 text-xs font-medium text-neutral-600">{readSettings.fontSize}px</span>
+              <span className="text-sm text-foreground">{t("settings.fontSize", { size: readSettings.fontSize })}</span>
+              <span className="rounded bg-background px-2 py-0.5 text-xs font-medium text-muted-foreground">{readSettings.fontSize}px</span>
             </div>
             <Slider
               min={12}
@@ -63,8 +63,8 @@ export function ReadSettingsPanel() {
           {/* Line Height */}
           <div>
             <div className="mb-3 flex items-center justify-between">
-              <span className="text-sm text-neutral-800">{t("settings.lineHeight", { height: readSettings.lineHeight })}</span>
-              <span className="rounded bg-background px-2 py-0.5 text-xs font-medium text-neutral-600">{readSettings.lineHeight}</span>
+              <span className="text-sm text-foreground">{t("settings.lineHeight", { height: readSettings.lineHeight })}</span>
+              <span className="rounded bg-background px-2 py-0.5 text-xs font-medium text-muted-foreground">{readSettings.lineHeight}</span>
             </div>
             <Slider
               min={1.2}
@@ -78,8 +78,8 @@ export function ReadSettingsPanel() {
           {/* Paragraph Spacing */}
           <div>
             <div className="mb-3 flex items-center justify-between">
-              <span className="text-sm text-neutral-800">{t("settings.paragraphSpacing")}</span>
-              <span className="rounded bg-background px-2 py-0.5 text-xs font-medium text-neutral-600">{readSettings.paragraphSpacing}px</span>
+              <span className="text-sm text-foreground">{t("settings.paragraphSpacing")}</span>
+              <span className="rounded bg-background px-2 py-0.5 text-xs font-medium text-muted-foreground">{readSettings.paragraphSpacing}px</span>
             </div>
             <Slider
               min={0}

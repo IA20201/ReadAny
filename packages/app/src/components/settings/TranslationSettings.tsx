@@ -91,15 +91,15 @@ export function TranslationSettings() {
   return (
     <div className="space-y-4 p-4 pt-3">
       <section className="rounded-lg bg-muted/60 p-4">
-        <h2 className="mb-4 text-sm font-medium text-neutral-900">{t("settings.translation_title")}</h2>
-        <p className="mb-4 text-xs text-neutral-500">
+        <h2 className="mb-4 text-sm font-medium text-foreground">{t("settings.translation_title")}</h2>
+        <p className="mb-4 text-xs text-muted-foreground">
           {t("settings.translation_desc")}
         </p>
 
         <div className="space-y-4">
           {/* 翻译引擎选择 */}
           <div className="space-y-2">
-            <label className="text-sm text-neutral-800">{t("settings.translationProvider")}</label>
+            <label className="text-sm text-foreground">{t("settings.translationProvider")}</label>
             <div className="relative" ref={providerPopoverRef}>
               <button
                 type="button"
@@ -138,7 +138,7 @@ export function TranslationSettings() {
           {/* AI 模型选择 (only show for AI provider) */}
           {isAIProvider && (
             <div className="space-y-2">
-              <label className="text-sm text-neutral-800">{t("settings.translationModel")}</label>
+              <label className="text-sm text-foreground">{t("settings.translationModel")}</label>
               {endpointsWithModels.length > 0 ? (
                 <div className="relative" ref={modelPopoverRef}>
                   <button
@@ -194,14 +194,14 @@ export function TranslationSettings() {
           {/* DeepL API Key (only show for DeepL) */}
           {!isAIProvider && (
             <div className="space-y-2">
-              <label className="text-sm text-neutral-800">{t("settings.apiKey")}</label>
+              <label className="text-sm text-foreground">{t("settings.apiKey")}</label>
               <Input
                 type="password"
                 placeholder={t("settings.apiKeyPlaceholder")}
                 value={translationConfig.provider.apiKey || ""}
                 onChange={(e) => handleApiKeyChange(e.target.value)}
               />
-              <p className="text-xs text-neutral-500">
+              <p className="text-xs text-muted-foreground">
                 {t("settings.deeplKeyHint")}
               </p>
             </div>

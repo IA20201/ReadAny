@@ -85,18 +85,18 @@ export function HomeSidebar() {
             <div key={item.tabType}>
               {item.expandable ? (
                 <div className="flex w-full items-center">
-                  <button type="button" className={`flex flex-1 items-center gap-2 rounded-md p-1 py-1 text-left text-sm transition-colors hover:bg-muted ${isActive ? "text-neutral-900" : "text-neutral-700"}`} onClick={() => handleNavClick(item.tabType)}>
+                  <button type="button" className={`flex flex-1 items-center gap-2 rounded-md p-1 py-1 text-left text-sm transition-colors hover:bg-muted ${isActive ? "text-foreground" : "text-muted-foreground"}`} onClick={() => handleNavClick(item.tabType)}>
                     <div className="flex flex-1 items-center gap-2">
                       <Icon size={16} className="shrink-0" />
                       <span className="font-medium text-sm">{t(item.labelKey)}</span>
                     </div>
-                    <div className="flex h-5 w-5 items-center justify-center rounded-full text-neutral-700 transition-colors hover:bg-neutral-100" onClick={(e) => { e.stopPropagation(); setIsLibraryExpanded(!isLibraryExpanded); }}>
+                    <div className="flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted" onClick={(e) => { e.stopPropagation(); setIsLibraryExpanded(!isLibraryExpanded); }}>
                       {isLibraryExpanded ? <ChevronDown size={16} className="shrink-0" /> : <ChevronRight size={16} className="shrink-0" />}
                     </div>
                   </button>
                 </div>
               ) : (
-                <button type="button" className={`flex w-full items-center gap-2 rounded-md p-1 py-1 text-left text-sm transition-colors hover:bg-muted ${isActive ? "text-neutral-900" : "text-neutral-700"}`} onClick={() => handleNavClick(item.tabType)}>
+                <button type="button" className={`flex w-full items-center gap-2 rounded-md p-1 py-1 text-left text-sm transition-colors hover:bg-muted ${isActive ? "text-foreground" : "text-muted-foreground"}`} onClick={() => handleNavClick(item.tabType)}>
                   <Icon size={16} className="shrink-0" />
                   <span className="font-medium text-sm">{t(item.labelKey)}</span>
                 </button>
@@ -107,7 +107,7 @@ export function HomeSidebar() {
                   <button
                     type="button"
                     className={`flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-xs transition-colors hover:bg-muted ${
-                      activeType === "home" && !activeTag ? "bg-muted text-neutral-900 font-medium" : "text-neutral-500 hover:text-neutral-700"
+                      activeType === "home" && !activeTag ? "bg-muted text-foreground font-medium" : "text-muted-foreground hover:text-foreground"
                     }`}
                     onClick={() => { setActiveTag(""); handleNavClick("home"); }}
                   >
@@ -144,7 +144,7 @@ export function HomeSidebar() {
                           <button
                             type="button"
                             className={`flex flex-1 items-center gap-1.5 rounded-md px-2 py-1 text-xs transition-colors hover:bg-muted ${
-                              activeTag === tag ? "bg-muted text-neutral-900 font-medium" : "text-neutral-500 hover:text-neutral-700"
+                              activeTag === tag ? "bg-muted text-foreground font-medium" : "text-muted-foreground hover:text-foreground"
                             }`}
                             onClick={() => { setActiveTag(tag); handleNavClick("home"); }}
                           >
@@ -154,7 +154,7 @@ export function HomeSidebar() {
                           {/* Tag context menu trigger */}
                           <button
                             type="button"
-                            className="absolute right-0 rounded p-0.5 text-neutral-400 opacity-0 transition-opacity hover:bg-neutral-200 hover:text-neutral-600 group-hover/tag:opacity-100"
+                            className="absolute right-0 rounded p-0.5 text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-foreground group-hover/tag:opacity-100"
                             onClick={(e) => { e.stopPropagation(); setTagMenuOpen(tagMenuOpen === tag ? null : tag); }}
                           >
                             <MoreHorizontal size={12} />
@@ -199,7 +199,7 @@ export function HomeSidebar() {
                   <button
                     type="button"
                     className={`flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-xs transition-colors hover:bg-muted ${
-                      activeTag === "__uncategorized__" ? "bg-muted text-neutral-900 font-medium" : "text-neutral-500 hover:text-neutral-700"
+                      activeTag === "__uncategorized__" ? "bg-muted text-foreground font-medium" : "text-muted-foreground hover:text-foreground"
                     }`}
                     onClick={() => { setActiveTag("__uncategorized__"); handleNavClick("home"); }}
                   >
@@ -234,14 +234,14 @@ export function HomeSidebar() {
                           setIsAddingTag(false);
                         }}
                       />
-                      <button type="button" className="p-0.5 text-neutral-400 hover:text-neutral-600" onClick={() => { setNewTagName(""); setIsAddingTag(false); }}>
+                      <button type="button" className="p-0.5 text-muted-foreground hover:text-foreground" onClick={() => { setNewTagName(""); setIsAddingTag(false); }}>
                         <X size={12} />
                       </button>
                     </div>
                   ) : (
                     <button
                       type="button"
-                      className="flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-xs text-neutral-400 transition-colors hover:bg-muted hover:text-neutral-600"
+                      className="flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                       onClick={() => setIsAddingTag(true)}
                     >
                       <Plus size={11} className="shrink-0" />
@@ -255,11 +255,11 @@ export function HomeSidebar() {
         })}
       </nav>
       <div className="space-y-1 px-2 py-3">
-        <button type="button" className="flex w-full items-center gap-2 rounded-md p-1 py-1 text-left text-neutral-600 text-sm hover:bg-muted" onClick={handleStatsClick}>
+        <button type="button" className="flex w-full items-center gap-2 rounded-md p-1 py-1 text-left text-muted-foreground text-sm hover:bg-muted hover:text-foreground" onClick={handleStatsClick}>
           <BarChart3 size={16} className="shrink-0" />
           <span className="text-sm">{t("stats.title")}</span>
         </button>
-        <button type="button" className="flex w-full items-center gap-2 rounded-md p-1 py-1 text-left text-neutral-600 text-sm hover:bg-muted" onClick={() => setShowSettings(true)}>
+        <button type="button" className="flex w-full items-center gap-2 rounded-md p-1 py-1 text-left text-muted-foreground text-sm hover:bg-muted hover:text-foreground" onClick={() => setShowSettings(true)}>
           <Settings size={16} className="shrink-0" />
           <span className="text-sm">{t("common.settings")}</span>
         </button>

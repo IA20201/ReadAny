@@ -19,6 +19,15 @@ setPlatformService(tauriPlatform);
 
 // Ensure i18n is fully initialized before rendering
 i18nReady.then(() => {
+  // Restore saved theme from localStorage
+  const savedTheme = localStorage.getItem("readany-theme");
+  if (savedTheme && ["light", "dark", "sepia"].includes(savedTheme)) {
+    document.documentElement.setAttribute("data-theme", savedTheme);
+  } else {
+    // Default to dark theme
+    document.documentElement.setAttribute("data-theme", "dark");
+  }
+
   // Restore saved language from platform KV storage
   initI18nLanguage().catch(console.error);
 

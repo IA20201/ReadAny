@@ -17,7 +17,7 @@ import AboutScreen from "@/screens/settings/AboutScreen";
 
 export type RootStackParamList = {
   Tabs: undefined;
-  Reader: { bookId: string };
+  Reader: { bookId: string; cfi?: string };
   BookChat: { bookId: string };
   Stats: undefined;
   Skills: undefined;

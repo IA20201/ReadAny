@@ -44,13 +44,13 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="flex min-h-[80vh] max-h-[80vh] w-[800px] max-w-[800px] flex-col overflow-hidden p-0">
         {/* Header */}
-        <div className="flex-shrink-0 border-b border-neutral-200 px-4 py-3.5">
+        <div className="flex-shrink-0 border-b border-border px-4 py-3.5">
           <DialogTitle className="text-base font-semibold">{t("settings.title")}</DialogTitle>
         </div>
 
         <div className="flex min-h-0 flex-1">
           {/* Sidebar */}
-          <div className="w-48 flex-shrink-0 overflow-y-auto border-r border-neutral-200 p-2.5">
+          <div className="w-48 flex-shrink-0 overflow-y-auto border-r border-border p-2.5">
             <nav className="space-y-0.5">
               {TAB_IDS.map((id) => (
                 <button
@@ -58,8 +58,8 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
                   className={cn(
                     "flex w-full items-center rounded-lg px-2.5 py-1.5 text-left text-sm transition-colors",
                     settingsTab === id
-                      ? "bg-muted/80 font-medium text-neutral-900"
-                      : "text-neutral-600 hover:bg-muted/50",
+                      ? "bg-muted/80 font-medium text-foreground"
+                      : "text-muted-foreground hover:bg-muted/50",
                   )}
                   onClick={() => setActiveTab(id)}
                 >

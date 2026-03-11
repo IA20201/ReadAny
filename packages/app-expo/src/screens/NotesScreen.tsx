@@ -26,6 +26,7 @@ import { useAnnotationStore, useLibraryStore } from "@/stores";
 import type { HighlightWithBook } from "@readany/core/db/database";
 import { HIGHLIGHT_COLOR_HEX } from "@readany/core/types";
 import { type ThemeColors, radius, fontSize, fontWeight, useColors } from "@/styles/theme";
+import { getPlatformService } from "@readany/core/services";
 import {
   NotebookPenIcon,
   HighlighterIcon,
@@ -65,6 +66,7 @@ export function NotesScreen() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editNote, setEditNote] = useState("");
   const [showExportMenu, setShowExportMenu] = useState(false);
+  const [resolvedCovers, setResolvedCovers] = useState<Map<string, string>>(new Map());
 
   useEffect(() => {
     setIsLoading(true);
@@ -111,6 +113,43 @@ export function NotesScreen() {
     return Array.from(grouped.values()).sort((a, b) => b.latestAt - a.latestAt);
   }, [highlightsWithBooks, t]);
 
+  // Resolve cover URLs from relative paths to absolute paths
+  useEffect(() => {
+    const resolveCovers = async () => {
+      const newMap = new Map<string, string>();
+      try {
+        const platform = getPlatformService();
+        const appData = await platform.getAppDataDir();
+
+        for (const book of bookNotebooks) {
+          if (!book.coverUrl) continue;
+
+          // If already absolute, use as-is
+          if (book.coverUrl.startsWith("http") || book.coverUrl.startsWith("blob") || book.coverUrl.startsWith("file")) {
+            newMap.set(book.bookId, book.coverUrl);
+            continue;
+          }
+
+          // Resolve relative path
+          try {
+            const absPath = await platform.joinPath(appData, book.coverUrl);
+            newMap.set(book.bookId, absPath);
+          } catch {
+            // If resolution fails, skip this cover
+          }
+        }
+
+        setResolvedCovers(newMap);
+      } catch (err) {
+        console.error("Failed to resolve cover URLs:", err);
+      }
+    };
+
+    if (bookNotebooks.length > 0) {
+      resolveCovers();
+    }
+  }, [bookNotebooks]);
+
   const selectedBook = useMemo(() => {
     if (!selectedBookId) return null;
     return bookNotebooks.find((b) => b.bookId === selectedBookId) || null;
@@ -153,7 +192,7 @@ export function NotesScreen() {
   }, [currentList, t]);
 
   const handleOpenBook = useCallback((bookId: string, cfi?: string) => {
-    nav.navigate("Reader", { bookId });
+    nav.navigate("Reader", { bookId, cfi });
   }, [nav]);
 
   const handleDeleteNote = useCallback((highlight: HighlightWithBook) => {
@@ -245,9 +284,9 @@ export function NotesScreen() {
             </TouchableOpacity>
 
             {/* Book cover */}
-            {selectedBook.coverUrl ? (
+            {(resolvedCovers.get(selectedBook.bookId) || selectedBook.coverUrl) ? (
               <Image
-                source={{ uri: selectedBook.coverUrl }}
+                source={{ uri: resolvedCovers.get(selectedBook.bookId) || selectedBook.coverUrl }}
                 style={s.detailCover}
                 resizeMode="cover"
               />
@@ -453,6 +492,7 @@ export function NotesScreen() {
         renderItem={({ item }) => (
           <NotebookCard
             book={item}
+            resolvedCoverUrl={resolvedCovers.get(item.bookId)}
             onPress={() => {
               setSelectedBookId(item.bookId);
               setSearchQuery("");
@@ -470,6 +510,7 @@ export function NotesScreen() {
 function NotebookCard({
   book,
   onPress,
+  resolvedCoverUrl,
 }: {
   book: {
     bookId: string;
@@ -481,14 +522,15 @@ function NotebookCard({
     highlightsOnlyCount: number;
   };
   onPress: () => void;
+  resolvedCoverUrl?: string;
 }) {
   const colors = useColors();
   const s = makeStyles(colors);
   return (
     <TouchableOpacity style={s.notebookCard} activeOpacity={0.7} onPress={onPress}>
       {/* Cover */}
-      {book.coverUrl ? (
-        <Image source={{ uri: book.coverUrl }} style={s.notebookCover} resizeMode="cover" />
+      {(resolvedCoverUrl || book.coverUrl) ? (
+        <Image source={{ uri: resolvedCoverUrl || book.coverUrl }} style={s.notebookCover} resizeMode="cover" />
       ) : (
         <View style={s.notebookCoverFallback}>
           <BookOpenIcon size={20} color={colors.mutedForeground} />
@@ -639,7 +681,7 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   headerTitle: { fontSize: fontSize["2xl"], fontWeight: fontWeight.bold, color: colors.foreground },
   searchToggle: { width: 36, height: 36, borderRadius: radius.full, alignItems: "center", justifyContent: "center" },
   statsRow: { flexDirection: "row", gap: 12, marginTop: 10 },
-  statBadge: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "rgba(51,51,54,0.5)", borderRadius: radius.lg, paddingHorizontal: 10, paddingVertical: 6 },
+  statBadge: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: colors.muted, borderRadius: radius.lg, paddingHorizontal: 10, paddingVertical: 6 },
   statValue: { fontSize: fontSize.sm, fontWeight: fontWeight.semibold, color: colors.foreground },
   statLabel: { fontSize: 10, color: colors.mutedForeground },
   searchBar: { flexDirection: "row", alignItems: "center", backgroundColor: colors.muted, borderRadius: radius.lg, paddingHorizontal: 12, height: 36, gap: 8, marginTop: 10 },
@@ -674,7 +716,7 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   exportBtn: { width: 32, height: 32, borderRadius: radius.full, alignItems: "center", justifyContent: "center" },
   // Tabs
   detailTabRow: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 16, paddingVertical: 12 },
-  tabSwitcher: { flexDirection: "row", borderWidth: 0.5, borderColor: "rgba(61,61,64,0.6)", borderRadius: radius.lg, padding: 2 },
+  tabSwitcher: { flexDirection: "row", borderWidth: 0.5, borderColor: colors.border, borderRadius: radius.lg, padding: 2 },
   tabBtn: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 6, borderRadius: radius.md },
   tabBtnActive: { backgroundColor: colors.primary },
   tabBtnText: { fontSize: fontSize.xs, fontWeight: fontWeight.medium, color: colors.mutedForeground },
@@ -688,14 +730,14 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   detailList: { flex: 1, paddingHorizontal: 16 },
   chapterGroup: { marginBottom: 16 },
   chapterDivider: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 8 },
-  chapterLine: { flex: 1, height: 0.5, backgroundColor: "rgba(61,61,64,0.5)" },
+  chapterLine: { flex: 1, height: 0.5, backgroundColor: colors.border },
   chapterName: { fontSize: fontSize.xs, fontWeight: fontWeight.medium, color: colors.mutedForeground, paddingHorizontal: 8 },
   // Note card
   noteCard: { backgroundColor: colors.card, borderRadius: radius.lg, borderWidth: 0.5, borderColor: colors.border, padding: 12, marginBottom: 8 },
   noteCardTop: { flexDirection: "row", alignItems: "flex-start", gap: 8 },
   colorDot: { width: 10, height: 10, borderRadius: 5, marginTop: 4 },
   noteQuote: { flex: 1, fontSize: fontSize.sm, color: colors.foreground, lineHeight: 20 },
-  noteBody: { marginTop: 8, backgroundColor: "rgba(51,51,54,0.5)", borderRadius: radius.sm, paddingHorizontal: 8, paddingVertical: 6 },
+  noteBody: { marginTop: 8, backgroundColor: colors.muted, borderRadius: radius.sm, paddingHorizontal: 8, paddingVertical: 6 },
   noteText: { fontSize: fontSize.xs, color: colors.mutedForeground, lineHeight: 16 },
   noteActions: { flexDirection: "row", justifyContent: "flex-end", gap: 4, marginTop: 8 },
   noteActionBtn: { padding: 6, borderRadius: radius.sm },
@@ -711,7 +753,7 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   highlightCard: { flexDirection: "row", alignItems: "flex-start", gap: 8, backgroundColor: colors.card, borderRadius: radius.lg, borderWidth: 0.5, borderColor: colors.border, padding: 12, marginBottom: 8 },
   highlightBody: { flex: 1, minWidth: 0 },
   highlightText: { fontSize: fontSize.sm, color: colors.foreground, lineHeight: 20 },
-  highlightChapter: { fontSize: fontSize.xs, color: "rgba(124,124,130,0.7)", marginTop: 4 },
+  highlightChapter: { fontSize: fontSize.xs, color: colors.mutedForeground, marginTop: 4 },
   highlightDeleteBtn: { padding: 6, borderRadius: radius.sm },
   // Export
   exportOverlay: { flex: 1 },

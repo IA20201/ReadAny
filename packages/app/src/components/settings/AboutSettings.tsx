@@ -90,8 +90,8 @@ export function AboutSettings() {
           alt="ReadAny Logo"
           className="mb-4 h-24 w-24 drop-shadow-lg"
         />
-        <h1 className="text-2xl font-bold text-neutral-900">ReadAny</h1>
-        <p className="mt-1 text-sm text-neutral-500">
+        <h1 className="text-2xl font-bold text-foreground">ReadAny</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
           {t("settings.aboutDesc")}
         </p>
       </div>
@@ -99,13 +99,13 @@ export function AboutSettings() {
       {/* Version Card */}
       <div className="mb-4 w-full max-w-md rounded-xl bg-muted/60 p-4">
         <div className="flex items-center justify-between">
-          <span className="text-sm text-neutral-600">{t("settings.version")}</span>
+          <span className="text-sm text-muted-foreground">{t("settings.version")}</span>
           <div className="flex items-center gap-2">
-            <span className="font-mono text-sm font-medium text-neutral-900">{appVersion || "..."}</span>
+            <span className="font-mono text-sm font-medium text-foreground">{appVersion || "..."}</span>
             <button
               onClick={handleCheckUpdate}
               disabled={status === "checking" || status === "downloading"}
-              className="rounded p-1 text-neutral-400 transition-colors hover:bg-neutral-200 hover:text-neutral-600 disabled:opacity-50"
+              className="rounded p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
               title={t("settings.checkUpdate")}
             >
               <RefreshCw className={`h-4 w-4 ${status === "checking" ? "animate-spin" : ""}`} />
@@ -119,10 +119,10 @@ export function AboutSettings() {
         <div className="mb-4 w-full max-w-md">
           <div className="rounded-lg bg-muted/60 p-3">
             <div className="mb-2 flex items-center justify-between text-sm">
-              <span className="text-neutral-600">{t("settings.downloading")}</span>
-              <span className="font-mono text-neutral-900">{progress}%</span>
+              <span className="text-muted-foreground">{t("settings.downloading")}</span>
+              <span className="font-mono text-foreground">{progress}%</span>
             </div>
-            <div className="h-2 w-full overflow-hidden rounded-full bg-neutral-200">
+            <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
               <div
                 className="h-full bg-primary transition-all"
                 style={{ width: `${progress}%` }}
@@ -135,7 +135,7 @@ export function AboutSettings() {
       {/* Update Ready */}
       {status === "ready" && (
         <div className="mb-4 w-full max-w-md space-y-2">
-          <div className="rounded-lg bg-green-50 p-3 text-center text-sm text-green-700">
+          <div className="rounded-lg bg-emerald-500/10 p-3 text-center text-sm text-emerald-600">
             {t("settings.updateReadyMessage")}
           </div>
           <Button
@@ -163,7 +163,7 @@ export function AboutSettings() {
           </DialogHeader>
           {update?.notes && (
             <div className="rounded-lg bg-muted/60 p-3 text-sm">
-              <p className="whitespace-pre-wrap text-neutral-700">{update.notes}</p>
+              <p className="whitespace-pre-wrap text-muted-foreground">{update.notes}</p>
             </div>
           )}
           <DialogFooter>
@@ -202,7 +202,7 @@ export function AboutSettings() {
               {t("settings.updateError")}
             </DialogTitle>
           </DialogHeader>
-          <div className="rounded-lg bg-red-50 p-3 text-sm text-red-700">
+          <div className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
             {error || t("settings.updateErrorMessage")}
           </div>
           <DialogFooter>
@@ -215,7 +215,7 @@ export function AboutSettings() {
 
       {/* Tech Stack */}
       <div className="mb-6 w-full max-w-md">
-        <h2 className="mb-3 text-sm font-medium text-neutral-900">
+        <h2 className="mb-3 text-sm font-medium text-foreground">
           {t("settings.techStack")}
         </h2>
         <div className="grid grid-cols-2 gap-2">
@@ -228,8 +228,8 @@ export function AboutSettings() {
                 <Icon className="h-4 w-4 text-primary" />
               </div>
               <div>
-                <div className="text-sm font-medium text-neutral-900">{name}</div>
-                <div className="text-xs text-neutral-500">{t(descKey)}</div>
+                <div className="text-sm font-medium text-foreground">{name}</div>
+                <div className="text-xs text-muted-foreground">{t(descKey)}</div>
               </div>
             </div>
           ))}
@@ -245,10 +245,10 @@ export function AboutSettings() {
           className="flex items-center justify-between rounded-lg bg-muted/60 p-3 transition-colors hover:bg-muted"
         >
           <div className="flex items-center gap-3">
-            <Github className="h-5 w-5 text-neutral-600" />
-            <span className="text-sm font-medium text-neutral-900">GitHub</span>
+            <Github className="h-5 w-5 text-muted-foreground" />
+            <span className="text-sm font-medium text-foreground">GitHub</span>
           </div>
-          <ExternalLink className="h-4 w-4 text-neutral-400" />
+          <ExternalLink className="h-4 w-4 text-muted-foreground" />
         </a>
 
         <a
@@ -258,17 +258,17 @@ export function AboutSettings() {
           className="flex items-center justify-between rounded-lg bg-muted/60 p-3 transition-colors hover:bg-muted"
         >
           <div className="flex items-center gap-3">
-            <BookOpen className="h-5 w-5 text-neutral-600" />
-            <span className="text-sm font-medium text-neutral-900">
+            <BookOpen className="h-5 w-5 text-muted-foreground" />
+            <span className="text-sm font-medium text-foreground">
               {t("settings.feedback")}
             </span>
           </div>
-          <ExternalLink className="h-4 w-4 text-neutral-400" />
+          <ExternalLink className="h-4 w-4 text-muted-foreground" />
         </a>
       </div>
 
       {/* Copyright */}
-      <div className="mt-8 text-center text-xs text-neutral-400">
+      <div className="mt-8 text-center text-xs text-muted-foreground/60">
         <p>© 2026 codedogQBY. All rights reserved.</p>
         <p className="mt-1">
           {t("settings.license")}

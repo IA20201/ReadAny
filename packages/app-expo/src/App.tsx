@@ -11,6 +11,7 @@ import { NavigationContainer, DefaultTheme, DarkTheme } from "@react-navigation/
 import { StatusBar } from "expo-status-bar";
 
 import { setPlatformService } from "@readany/core/services";
+import { initDatabase } from "@readany/core/db/database";
 import { initI18nLanguage } from "@readany/core/i18n";
 import { setSessionEventSource, rnSessionEventSource } from "@/hooks";
 import { setTTSPlayerFactories } from "@/stores";
@@ -28,10 +29,13 @@ export default function App() {
       const platform = new ExpoPlatformService();
       setPlatformService(platform);
 
-      // 2. Register RN-specific adapters
+      // 2. Initialize database (create tables)
+      await initDatabase();
+
+      // 3. Register RN-specific adapters
       setSessionEventSource(rnSessionEventSource);
 
-      // 3. Restore persisted language
+      // 4. Restore persisted language
       await initI18nLanguage();
 
       setReady(true);

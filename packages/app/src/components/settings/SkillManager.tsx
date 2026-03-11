@@ -20,7 +20,7 @@ const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
 
 function SkillIcon({ name }: { name?: string }) {
   const IconComponent = name && iconMap[name] ? iconMap[name] : Puzzle;
-  return <IconComponent className="h-4 w-4 text-neutral-500" />;
+  return <IconComponent className="h-4 w-4 text-muted-foreground" />;
 }
 
 export function SkillManager() {
@@ -73,15 +73,15 @@ export function SkillManager() {
       <section className="rounded-lg bg-muted/60 p-4">
         <div className="mb-4 flex items-center justify-between">
           <div>
-            <h2 className="text-sm font-medium text-neutral-900">
+            <h2 className="text-sm font-medium text-foreground">
               {t("settings.skills_title")}
             </h2>
-            <p className="mt-1 text-xs text-neutral-500">
+            <p className="mt-1 text-xs text-muted-foreground">
               {t("settings.skills_desc")}
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-xs text-neutral-500">
+            <span className="text-xs text-muted-foreground">
               {enabledCount}/{skills.length} {t("settings.enabled")}
             </span>
             <Button size="sm" variant="outline" className="gap-1.5">
@@ -93,29 +93,29 @@ export function SkillManager() {
 
         {loading ? (
           <div className="flex items-center justify-center py-8">
-            <div className="h-5 w-5 animate-spin rounded-full border-2 border-neutral-300 border-t-neutral-600" />
+            <div className="h-5 w-5 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-primary" />
           </div>
         ) : skills.length === 0 ? (
-          <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-neutral-200 py-12 text-center">
-            <Puzzle className="mb-3 h-8 w-8 text-neutral-300" />
-            <p className="text-sm text-neutral-500">{t("settings.noSkills")}</p>
+          <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border py-12 text-center">
+            <Puzzle className="mb-3 h-8 w-8 text-muted-foreground/50" />
+            <p className="text-sm text-muted-foreground">{t("settings.noSkills")}</p>
           </div>
         ) : (
           <div className="space-y-2">
             {skills.map((skill) => (
               <div
                 key={skill.id}
-                className="flex items-center justify-between rounded-lg bg-background p-3 shadow-sm transition-colors hover:bg-neutral-50"
+                className="flex items-center justify-between rounded-lg bg-background p-3 shadow-sm transition-colors hover:bg-muted/50"
               >
                 <div className="flex items-start gap-3">
-                  <div className="mt-0.5 rounded-md bg-neutral-100 p-1.5">
+                  <div className="mt-0.5 rounded-md bg-muted p-1.5">
                     <SkillIcon name={skill.icon} />
                   </div>
                   <div>
-                    <p className="text-sm font-medium text-neutral-800">
+                    <p className="text-sm font-medium text-foreground">
                       {skill.name}
                     </p>
-                    <p className="mt-0.5 text-xs text-neutral-500">
+                    <p className="mt-0.5 text-xs text-muted-foreground">
                       {skill.description}
                     </p>
                     {skill.parameters.length > 0 && (
@@ -123,13 +123,13 @@ export function SkillManager() {
                         {skill.parameters.slice(0, 3).map((p) => (
                           <span
                             key={p.name}
-                            className="rounded bg-neutral-100 px-1.5 py-0.5 text-[10px] text-neutral-400"
+                            className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground"
                           >
                             {p.name}
                           </span>
                         ))}
                         {skill.parameters.length > 3 && (
-                          <span className="text-[10px] text-neutral-400">
+                          <span className="text-[10px] text-muted-foreground">
                             +{skill.parameters.length - 3}
                           </span>
                         )}
@@ -139,7 +139,7 @@ export function SkillManager() {
                 </div>
                 <div className="flex items-center gap-2">
                   {skill.builtIn && (
-                    <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-medium text-blue-600">
+                    <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
                       {t("settings.builtIn")}
                     </span>
                   )}
@@ -155,10 +155,10 @@ export function SkillManager() {
       </section>
 
       <section className="rounded-lg bg-muted/60 p-4">
-        <h3 className="mb-3 text-sm font-medium text-neutral-900">
+        <h3 className="mb-3 text-sm font-medium text-foreground">
           {t("settings.skillUsage")}
         </h3>
-        <div className="space-y-2 text-xs text-neutral-600">
+        <div className="space-y-2 text-xs text-muted-foreground">
           <p>
             <strong>{t("settings.skillUsageSummary")}:</strong>{" "}
             {t("settings.skillUsageSummaryDesc")}

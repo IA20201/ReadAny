@@ -139,37 +139,37 @@ function ReasoningPartView({ part }: { part: ReasoningPart }) {
   return (
     <div className="my-1">
       <Collapsible open={isOpen} onOpenChange={setIsOpen}>
-        <div className="overflow-hidden rounded-lg border border-violet-200 bg-violet-50/50">
+        <div className="overflow-hidden rounded-lg border border-primary/20 bg-primary/5">
           <CollapsibleTrigger asChild>
-            <div className="flex h-auto w-full cursor-pointer items-center justify-between gap-2 px-3 py-2 hover:bg-violet-100/50">
+            <div className="flex h-auto w-full cursor-pointer items-center justify-between gap-2 px-3 py-2 hover:bg-primary/10">
               <div className="flex flex-1 items-center gap-2 overflow-hidden">
                 {part.status === "running" ? (
                   <div className="flex h-4 w-4 items-center justify-center">
-                    <div className="h-3 w-3 animate-pulse rounded-full bg-violet-400" />
+                    <div className="h-3 w-3 animate-pulse rounded-full bg-primary/60" />
                   </div>
                 ) : (
-                  <Brain className="h-4 w-4 text-violet-600" />
+                  <Brain className="h-4 w-4 text-primary" />
                 )}
-                <span className="text-sm font-medium text-violet-700">
+                <span className="text-sm font-medium text-foreground">
                   {part.status === "running" ? t("streaming.reasoningRunning") : t("streaming.reasoningDone")}
                 </span>
                 {part.thinkingType && (
-                  <span className="rounded bg-violet-100 px-1.5 py-0.5 text-xs text-violet-500">
+                  <span className="rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
                     {part.thinkingType}
                   </span>
                 )}
               </div>
               <ChevronDown
                 className={cn(
-                  "h-4 w-4 text-violet-400 transition-transform",
+                  "h-4 w-4 text-muted-foreground transition-transform",
                   isOpen && "rotate-180"
                 )}
               />
             </div>
           </CollapsibleTrigger>
           <CollapsibleContent>
-            <div className="max-h-48 overflow-y-auto border-t border-violet-200/50 bg-white/50 p-3">
-              <p className="whitespace-pre-wrap text-sm leading-relaxed text-violet-900">
+            <div className="max-h-48 overflow-y-auto border-t border-border/50 bg-muted/30 p-3">
+              <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground">
                 {throttledText}
               </p>
             </div>
@@ -228,49 +228,49 @@ function ToolCallPartView({ part }: { part: ToolCallPart }) {
 
   return (
     <div className="my-1">
-      <div className="overflow-hidden rounded-lg border border-neutral-200">
+      <div className="overflow-hidden rounded-lg border border-border">
         <Collapsible open={isOpen} onOpenChange={setIsOpen}>
           <CollapsibleTrigger asChild>
-            <div className="flex h-auto w-full cursor-pointer items-center justify-between gap-2 px-3 py-2 hover:bg-neutral-50">
+            <div className="flex h-auto w-full cursor-pointer items-center justify-between gap-2 px-3 py-2 hover:bg-muted/50">
               <div className="flex flex-1 items-center gap-2 overflow-hidden">
                 {getStatusIcon()}
-                <Wrench className="h-3.5 w-3.5 text-neutral-500" />
-                <span className="text-sm font-medium text-neutral-700">{label}</span>
+                <Wrench className="h-3.5 w-3.5 text-muted-foreground" />
+                <span className="text-sm font-medium text-foreground">{label}</span>
                 {queryText && (
-                  <span className="flex-1 truncate font-mono text-xs text-neutral-500">
+                  <span className="flex-1 truncate font-mono text-xs text-muted-foreground">
                     {queryText.slice(0, 50)}
                   </span>
                 )}
                 {scopeText && (
-                  <span className="rounded bg-neutral-100 px-1.5 py-0.5 text-xs text-neutral-500">
+                  <span className="rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
                     {scopeText}
                   </span>
                 )}
               </div>
               <ChevronDown
                 className={cn(
-                  "h-4 w-4 text-neutral-400 transition-transform",
+                  "h-4 w-4 text-muted-foreground transition-transform",
                   isOpen && "rotate-180"
                 )}
               />
             </div>
           </CollapsibleTrigger>
           <CollapsibleContent>
-            <div className="space-y-3 border-t border-neutral-100 bg-neutral-50/50 p-3">
+            <div className="space-y-3 border-t border-border bg-muted/30 p-3">
               {part.reasoning && (
-                <div className="rounded border border-violet-100 bg-violet-50/30 p-2">
-                  <p className="text-xs text-violet-700">{part.reasoning}</p>
+                <div className="rounded border border-primary/20 bg-primary/5 p-2">
+                  <p className="text-xs text-foreground">{part.reasoning}</p>
                 </div>
               )}
 
               {Object.keys(part.args).length > 0 && (
                 <div>
-                  <h4 className="mb-1.5 text-xs font-medium text-neutral-500">{t("common.params")}</h4>
-                  <div className="rounded border border-neutral-200 bg-white p-2 font-mono text-xs break-all">
+                  <h4 className="mb-1.5 text-xs font-medium text-muted-foreground">{t("common.params")}</h4>
+                  <div className="rounded border border-border bg-background p-2 font-mono text-xs break-all">
                     {Object.entries(part.args).map(([key, value]) => (
                       <div key={key} className="mb-0.5 last:mb-0">
-                        <span className="text-neutral-400">{key}:</span>{" "}
-                        <span className="text-neutral-600">
+                        <span className="text-muted-foreground">{key}:</span>{" "}
+                        <span className="text-foreground">
                           {typeof value === "string" && value.length > 100
                             ? value.slice(0, 100) + "..."
                             : String(value)}
@@ -283,9 +283,9 @@ function ToolCallPartView({ part }: { part: ToolCallPart }) {
 
               {part.result !== undefined && (
                 <div>
-                  <h4 className="mb-1.5 text-xs font-medium text-neutral-500">{t("common.result")}</h4>
-                  <div className="max-h-48 overflow-auto rounded border border-neutral-200 bg-white p-2 font-mono text-xs">
-                    <pre className="whitespace-pre-wrap text-neutral-600">
+                  <h4 className="mb-1.5 text-xs font-medium text-muted-foreground">{t("common.result")}</h4>
+                  <div className="max-h-48 overflow-auto rounded border border-border bg-background p-2 font-mono text-xs">
+                    <pre className="whitespace-pre-wrap text-foreground">
                       {typeof part.result === "string" && part.result.length > 500
                         ? part.result.slice(0, 500) + "..."
                         : JSON.stringify(part.result, null, 2)}
@@ -295,7 +295,7 @@ function ToolCallPartView({ part }: { part: ToolCallPart }) {
               )}
 
               {part.error && (
-                <div className="rounded border border-red-200 bg-red-50 p-2 text-xs text-red-600">
+                <div className="rounded border border-destructive/30 bg-destructive/10 p-2 text-xs text-destructive">
                   {part.error}
                 </div>
               )}
@@ -311,7 +311,7 @@ function MindmapPartView({ part }: { part: MindmapPart }) {
   const { t } = useTranslation();
   return (
     <div className="my-2">
-      <Suspense fallback={<div className="p-4 text-sm text-neutral-400">{t("streaming.loadingMindmap")}</div>}>
+      <Suspense fallback={<div className="p-4 text-sm text-muted-foreground">{t("streaming.loadingMindmap")}</div>}>
         <LazyMindmapView markdown={part.markdown} title={part.title} />
       </Suspense>
     </div>

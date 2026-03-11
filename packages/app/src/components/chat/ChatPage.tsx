@@ -63,7 +63,7 @@ function ThreadsSidebar({
         className={`absolute left-0 top-0 h-full w-72 transform rounded-r-2xl border-r bg-background px-3 py-3 shadow-lg transition-all duration-300 ease-out flex flex-col ${open ? "translate-x-0 opacity-100" : "-translate-x-full opacity-0"}`}
       >
         <div className="mb-3 flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-neutral-900">{t("chat.history")}</h3>
+          <h3 className="text-sm font-semibold text-foreground">{t("chat.history")}</h3>
           <button type="button" onClick={onClose} className="rounded-full p-1 hover:bg-muted">
             <X className="size-4" />
           </button>
@@ -86,7 +86,7 @@ function ThreadsSidebar({
                   onSelect(thread.id);
                   onClose();
                 }}
-                className={`group flex cursor-pointer items-start gap-2 rounded-lg px-3 py-2.5 transition-colors ${thread.id === activeThreadId ? "bg-primary/10 text-primary" : "text-neutral-700 hover:bg-muted"}`}
+                className={`group flex cursor-pointer items-start gap-2 rounded-lg px-3 py-2.5 transition-colors ${thread.id === activeThreadId ? "bg-primary/10 text-primary" : "text-foreground hover:bg-muted"}`}
               >
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-1.5">
@@ -138,7 +138,7 @@ function EmptyState({ onSuggestionClick }: { onSuggestionClick: (text: string) =
           <div className="rounded-full bg-primary/10 p-3">
             <Brain className="size-10 text-primary" />
           </div>
-          <h1 className="text-2xl font-semibold text-neutral-900">{t("chat.howCanIHelp")}</h1>
+          <h1 className="text-2xl font-semibold text-foreground">{t("chat.howCanIHelp")}</h1>
           <p className="text-sm text-muted-foreground">{t("chat.askAboutBooks")}</p>
         </div>
         <div>
@@ -151,7 +151,7 @@ function EmptyState({ onSuggestionClick }: { onSuggestionClick: (text: string) =
                 className="flex cursor-pointer flex-col items-start gap-3 rounded-xl bg-muted/70 p-4 transition-colors hover:bg-muted"
               >
                 <Icon className="size-5 text-muted-foreground" />
-                <span className="text-sm text-neutral-700">{t(key)}</span>
+                <span className="text-sm text-foreground">{t(key)}</span>
               </div>
             ))}
           </div>

@@ -110,67 +110,66 @@ export function useStreamingChat(options?: StreamingChatOptions) {
       setError(null);
       setStreaming(true);
 
-      const bookId = overrideBookId ?? options?.bookId;
-      const thread = await getOrCreateThread(bookId);
-
-      if (thread.messages.length === 0 && !thread.title) {
-        await updateThreadTitle(thread.id, content.slice(0, 50));
-      }
-
-      let aiPrompt = content.trim();
-      if (quotes && quotes.length > 0) {
-        const quotesText = quotes
-          .map((q) => `> ${q.text.slice(0, 300)}`)
-          .join("\n\n");
-        aiPrompt = content.trim()
-          ? `关于以下文本：\n${quotesText}\n\n${content.trim()}`
-          : `关于以下文本：\n${quotesText}\n\n请帮我分析这段文本。`;
-      }
-
-      const userMessageId = createMessageId();
-      const userParts: Part[] = [];
-      if (quotes && quotes.length > 0) {
-        for (const q of quotes) {
-          userParts.push(createQuotePart(q.text, q.source));
-        }
-      }
-      if (content.trim()) {
-        userParts.push(createTextPart(content.trim()));
-      }
-
-      const userMessage = {
-        id: userMessageId,
-        threadId: thread.id,
-        role: "user" as const,
-        content: aiPrompt,
-        parts: userParts,
-        partsOrder: userParts.map((p) => ({
-          type: p.type as "text" | "quote",
-          id: p.id,
-          ...(p.type === "text" ? { text: (p as TextPart).text } : {}),
-          ...(p.type === "quote" ? { text: (p as any).text, source: (p as any).source } : {}),
-        })),
-        createdAt: Date.now(),
-      };
-
-      await addMessage(thread.id, userMessage as any);
-
-      streamingRef.current = new StreamingChat();
-
-      const enabledSkills = await loadEnabledSkills();
-
-      const updatedThread: Thread = {
-        ...thread,
-        messages: [...thread.messages, userMessage as any],
-      };
-
-      const currentParts: Part[] = [];
-      let currentTextPart: TextPart | null = null;
-      let currentReasoningPart: ReasoningPart | null = null;
-      let currentToolCallPart: ToolCallPart | null = null;
-      void currentToolCallPart;
-
       try {
+        const bookId = overrideBookId ?? options?.bookId;
+        const thread = await getOrCreateThread(bookId);
+
+        if (thread.messages.length === 0 && !thread.title) {
+          await updateThreadTitle(thread.id, content.slice(0, 50));
+        }
+
+        let aiPrompt = content.trim();
+        if (quotes && quotes.length > 0) {
+          const quotesText = quotes
+            .map((q) => `> ${q.text.slice(0, 300)}`)
+            .join("\n\n");
+          aiPrompt = content.trim()
+            ? `关于以下文本：\n${quotesText}\n\n${content.trim()}`
+            : `关于以下文本：\n${quotesText}\n\n请帮我分析这段文本。`;
+        }
+
+        const userMessageId = createMessageId();
+        const userParts: Part[] = [];
+        if (quotes && quotes.length > 0) {
+          for (const q of quotes) {
+            userParts.push(createQuotePart(q.text, q.source));
+          }
+        }
+        if (content.trim()) {
+          userParts.push(createTextPart(content.trim()));
+        }
+
+        const userMessage = {
+          id: userMessageId,
+          threadId: thread.id,
+          role: "user" as const,
+          content: aiPrompt,
+          parts: userParts,
+          partsOrder: userParts.map((p) => ({
+            type: p.type as "text" | "quote",
+            id: p.id,
+            ...(p.type === "text" ? { text: (p as TextPart).text } : {}),
+            ...(p.type === "quote" ? { text: (p as any).text, source: (p as any).source } : {}),
+          })),
+          createdAt: Date.now(),
+        };
+
+        await addMessage(thread.id, userMessage as any);
+
+        streamingRef.current = new StreamingChat();
+
+        const enabledSkills = await loadEnabledSkills();
+
+        const updatedThread: Thread = {
+          ...thread,
+          messages: [...thread.messages, userMessage as any],
+        };
+
+        const currentParts: Part[] = [];
+        let currentTextPart: TextPart | null = null;
+        let currentReasoningPart: ReasoningPart | null = null;
+        let currentToolCallPart: ToolCallPart | null = null;
+        void currentToolCallPart;
         await streamingRef.current.stream({
           thread: updatedThread,
           book: options?.book || null,
@@ -437,7 +436,11 @@ export function useStreamingChat(options?: StreamingChatOptions) {
         });
       } catch (err) {
         setError(err instanceof Error ? err : new Error("Unknown error"));
-        setState((prev) => ({ ...prev, isStreaming: false, currentStep: "idle" }));
+        setState({
+          isStreaming: false,
+          currentMessage: null,
+          currentStep: "idle",
+        });
         setStreaming(false);
       }
     },
