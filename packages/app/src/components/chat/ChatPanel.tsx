@@ -6,7 +6,7 @@ import { convertToMessageV2, mergeMessagesWithStreaming } from "@readany/core/ut
 import { useChatStore } from "@/stores/chat-store";
 import { useSettingsStore } from "@/stores/settings-store";
 import type { Book, CitationPart } from "@readany/core/types";
-import { Brain, History, MessageCirclePlus, Trash2 } from "lucide-react";
+import { History, MessageCirclePlus, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ConfigGuideDialog, type ConfigGuideType } from "@/components/shared/ConfigGuideDialog";
@@ -286,9 +286,7 @@ export function ChatPanel({ book, onNavigateToCitation }: ChatPanelProps) {
         ) : (
           <div className="flex h-full flex-col items-start justify-end gap-3 overflow-y-auto p-4 pb-6">
             <div className="flex flex-col items-start gap-3 pl-1">
-              <div className="rounded-full bg-muted/70 p-2.5">
-                <Brain className="size-6 text-primary" />
-              </div>
+              <img src="/think.svg" alt="" className="h-28 w-28 shrink-0" />
               <div className="space-y-1">
                 <h3 className="text-lg font-semibold text-neutral-900">
                   {t("chat.aiAssistant")}

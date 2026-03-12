@@ -151,15 +151,15 @@ interface ThemeContextValue {
 }
 
 const ThemeContext = createContext<ThemeContextValue>({
-  mode: "dark",
-  colors: darkColors,
+  mode: "sepia",
+  colors: sepiaColors,
   setMode: () => {},
-  isDark: true,
+  isDark: false,
 });
 
 export function ThemeProvider({
   children,
-  initialMode = "dark",
+  initialMode = "sepia",
 }: {
   children: ReactNode;
   initialMode?: ThemeMode;

@@ -24,8 +24,8 @@ i18nReady.then(() => {
   if (savedTheme && ["light", "dark", "sepia"].includes(savedTheme)) {
     document.documentElement.setAttribute("data-theme", savedTheme);
   } else {
-    // Default to dark theme
-    document.documentElement.setAttribute("data-theme", "dark");
+    // Default to sepia theme
+    document.documentElement.setAttribute("data-theme", "sepia");
   }
 
   // Restore saved language from platform KV storage
