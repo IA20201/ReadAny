@@ -12,6 +12,7 @@
     "lint": "biome check ."
   },
   "dependencies": {
+    "@10play/tentap-editor": "^1.0.1",
     "@react-navigation/bottom-tabs": "^7.15.5",
     "@react-navigation/native": "^7.1.33",
     "@react-navigation/native-stack": "^7.14.4",
@@ -41,7 +42,6 @@
     "react-native-gesture-handler": "~2.28.0",
     "react-native-get-random-values": "~1.11.0",
     "react-native-markdown-display": "^7.0.2",
-    "react-native-pell-rich-editor": "^1.10.0",
     "react-native-reanimated": "~4.1.6",
     "react-native-safe-area-context": "~5.6.2",
     "react-native-screens": "~4.16.0",

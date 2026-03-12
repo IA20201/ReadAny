@@ -32,7 +32,7 @@ import { HIGHLIGHT_COLOR_HEX } from "@readany/core/types";
  * Features: stats header, book notebooks list with covers, detail view with
  * highlights/notes tabs, chapter grouping, color dots, edit/delete, export, search.
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Alert,
@@ -50,7 +50,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { RichEditor, RichToolbar, actions } from "react-native-pell-rich-editor";
+import { RichTextEditor } from "@/components/ui/RichTextEditor";
 import { MarkdownRenderer } from "@/components/chat/MarkdownRenderer";
 
 const NOTE_PNG = require("../../assets/note.png");
@@ -684,7 +684,6 @@ function NoteCard({
 }) {
   const colors = useColors();
   const s = makeStyles(colors);
-  const richTextRef = useRef<RichEditor>(null);
 
   return (
     <View style={s.noteCard}>
@@ -705,41 +704,12 @@ function NoteCard({
           behavior={Platform.OS === "ios" ? "padding" : "height"}
           style={s.editArea}
         >
-          <RichToolbar
-            editor={richTextRef}
-            actions={[
-              actions.setBold,
-              actions.setItalic,
-              actions.setUnderline,
-              actions.setStrikethrough,
-              actions.heading1,
-              actions.heading2,
-              actions.insertBulletsList,
-              actions.insertOrderedList,
-              actions.checkboxList,
-              actions.undo,
-              actions.redo,
-            ]}
-            style={{ backgroundColor: colors.muted, borderBottomWidth: 0.5, borderBottomColor: colors.border }}
-            iconTint={colors.foreground}
-            selectedIconTint={colors.primary}
-            iconSize={24}
-          />
-          <View style={{ flex: 1, minHeight: 120 }}>
-            <RichEditor
-              ref={richTextRef}
-              initialContentHTML={editNote}
-              onChange={(html) => setEditNote(html)}
+          <View style={s.editorContainer}>
+            <RichTextEditor
+              initialContent={editNote}
+              onChange={setEditNote}
               placeholder={t("notebook.addNote", "添加笔记...")}
-              editorStyle={{
-                backgroundColor: colors.background,
-                color: colors.foreground,
-                placeholderColor: colors.mutedForeground,
-                cssText: `body { font-size: 15px; line-height: 1.6; padding: 8px; }`,
-              }}
-              style={{ flex: 1 }}
-              useContainer={true}
-              initialHeight={120}
+              autoFocus
             />
           </View>
           <View style={s.editActions}>
@@ -1052,6 +1022,14 @@ const makeStyles = (colors: ThemeColors) =>
     noteActionBtn: { padding: 6, borderRadius: radius.sm },
     // Edit
     editArea: { marginTop: 8 },
+    editorContainer: {
+      flex: 1,
+      minHeight: 180,
+      borderRadius: radius.lg,
+      borderWidth: 1,
+      borderColor: colors.border,
+      overflow: "hidden",
+    },
     editInput: {
       minHeight: 80,
       backgroundColor: colors.muted,

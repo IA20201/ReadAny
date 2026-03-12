@@ -18,7 +18,7 @@ import * as Speech from "expo-speech";
  * Provides highlight (5 colors), note, copy, translate, AI chat, TTS, and delete actions.
  * Matches app-mobile styling with icon buttons and expandable color picker.
  */
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Dimensions,
@@ -26,10 +26,11 @@ import {
   Modal,
   Platform,
   StyleSheet,
+  Text,
   TouchableOpacity,
   View,
 } from "react-native";
-import { RichEditor, RichToolbar, actions } from "react-native-pell-rich-editor";
+import { RichTextEditor } from "@/components/ui/RichTextEditor";
 
 const HIGHLIGHT_COLORS = [
   { key: "yellow", hex: "#facc15" },
@@ -74,9 +75,8 @@ export function SelectionPopover({
   const colors = useColors();
   const s = useMemo(() => makeStyles(colors), [colors]);
   const [showNoteModal, setShowNoteModal] = useState(false);
-  const [noteText, setNoteText] = useState(existingHighlight?.note || "");
   const [showColors, setShowColors] = useState(!!existingHighlight);
-  const richTextRef = useRef<RichEditor>(null);
+  const [noteContent, setNoteContent] = useState(existingHighlight?.note || "");
 
   const buttonCount =
     5 + (onNote ? 1 : 0) + (onTranslate ? 1 : 0) + (existingHighlight && onRemoveHighlight ? 1 : 0);
@@ -131,12 +131,12 @@ export function SelectionPopover({
   }, []);
 
   const handleSaveNote = useCallback(() => {
-    if (onNote && noteText.trim()) {
-      onNote(noteText.trim(), selection.cfi);
+    if (onNote && noteContent.trim()) {
+      onNote(noteContent.trim(), selection.cfi);
     }
     setShowNoteModal(false);
     onDismiss();
-  }, [noteText, selection.cfi, onNote, onDismiss]);
+  }, [noteContent, selection.cfi, onNote, onDismiss]);
 
   const handleTranslate = useCallback(() => {
     if (onTranslate) {
@@ -237,44 +237,15 @@ export function SelectionPopover({
                 <XIcon size={20} color={colors.mutedForeground} />
               </TouchableOpacity>
             </View>
-            <Text style={s.noteModalPreview} numberOfLines={3}>
+            <Text style={s.noteModalPreview} numberOfLines={2}>
               {selection.text}
             </Text>
-            <RichToolbar
-              editor={richTextRef}
-              actions={[
-                actions.setBold,
-                actions.setItalic,
-                actions.setUnderline,
-                actions.setStrikethrough,
-                actions.heading1,
-                actions.heading2,
-                actions.insertBulletsList,
-                actions.insertOrderedList,
-                actions.checkboxList,
-                actions.undo,
-                actions.redo,
-              ]}
-              style={{ backgroundColor: colors.muted, borderBottomWidth: 0.5, borderBottomColor: colors.border }}
-              iconTint={colors.foreground}
-              selectedIconTint={colors.primary}
-              iconSize={24}
-            />
-            <View style={{ flex: 1, minHeight: 150 }}>
-              <RichEditor
-                ref={richTextRef}
-                initialContentHTML={noteText}
-                onChange={(html) => setNoteText(html)}
+            <View style={s.editorContainer}>
+              <RichTextEditor
+                initialContent={noteContent}
+                onChange={setNoteContent}
                 placeholder={t("reader.notePlaceholder", "写下你的想法...")}
-                editorStyle={{
-                  backgroundColor: colors.background,
-                  color: colors.foreground,
-                  placeholderColor: colors.mutedForeground,
-                  cssText: `body { font-size: 15px; line-height: 1.6; padding: 8px; }`,
-                }}
-                style={{ flex: 1 }}
-                useContainer={true}
-                initialHeight={150}
+                autoFocus
               />
             </View>
             <View style={s.noteModalActions}>
@@ -293,7 +264,6 @@ export function SelectionPopover({
 }
 
 import { fontSize as fs, fontWeight as fw } from "@/styles/theme";
-import { Text } from "react-native";
 
 const makeStyles = (colors: ThemeColors) =>
   StyleSheet.create({
@@ -349,14 +319,14 @@ const makeStyles = (colors: ThemeColors) =>
     modalOverlay: {
       flex: 1,
       justifyContent: "flex-end",
-      backgroundColor: "rgba(0,0,0,0.4)",
+      backgroundColor: "rgba(0,0,0,0.5)",
     },
     noteModal: {
       backgroundColor: colors.card,
       borderTopLeftRadius: radius.xxl,
       borderTopRightRadius: radius.xxl,
       padding: spacing.lg,
-      paddingBottom: spacing.xl,
+      maxHeight: "85%",
     },
     noteModalHeader: {
       flexDirection: "row",
@@ -383,6 +353,16 @@ const makeStyles = (colors: ThemeColors) =>
       marginBottom: spacing.md,
       fontStyle: "italic",
       lineHeight: 20,
+      paddingHorizontal: spacing.sm,
+      borderLeftWidth: 2,
+      borderLeftColor: colors.primary,
+    },
+    editorContainer: {
+      height: 200,
+      borderRadius: radius.lg,
+      borderWidth: 1,
+      borderColor: colors.border,
+      overflow: "hidden",
     },
     noteInput: {
       backgroundColor: colors.muted,
