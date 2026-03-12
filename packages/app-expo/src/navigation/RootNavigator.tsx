@@ -9,6 +9,7 @@ import SyncSettingsScreen from "@/screens/settings/SyncSettingsScreen";
 import TTSSettingsScreen from "@/screens/settings/TTSSettingsScreen";
 import TranslationSettingsScreen from "@/screens/settings/TranslationSettingsScreen";
 import VectorModelSettingsScreen from "@/screens/settings/VectorModelSettingsScreen";
+import { FullScreenNotesScreen } from "@/screens/FullScreenNotesScreen";
 /**
  * RootNavigator — top-level stack matching Tauri mobile App.tsx routes exactly.
  */
@@ -28,6 +29,7 @@ export type RootStackParamList = {
   TranslationSettings: undefined;
   SyncSettings: undefined;
   About: undefined;
+  FullScreenNotes: { bookId: string };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -67,6 +69,11 @@ export function RootNavigator() {
       <Stack.Screen name="TranslationSettings" component={TranslationSettingsScreen} />
       <Stack.Screen name="SyncSettings" component={SyncSettingsScreen} />
       <Stack.Screen name="About" component={AboutScreen} />
+      <Stack.Screen
+        name="FullScreenNotes"
+        component={FullScreenNotesScreen}
+        options={{ animation: "slide_from_right" }}
+      />
     </Stack.Navigator>
   );
 }

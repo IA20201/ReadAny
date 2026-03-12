@@ -14,7 +14,7 @@ import { useTranslation } from "react-i18next";
 export type TabParamList = {
   Library: undefined;
   Chat: undefined;
-  Notes: undefined;
+  Notes: { bookId?: string } | undefined;
   Profile: undefined;
 };
 

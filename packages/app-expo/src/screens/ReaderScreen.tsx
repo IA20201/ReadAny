@@ -28,6 +28,7 @@ import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { readingContextService } from "@readany/core/ai/reading-context-service";
 import { getPlatformService } from "@readany/core/services";
 import type { TOCItem } from "@readany/core/types";
+import { useReadingSession } from "@readany/core/hooks/use-reading-session";
 import { Asset } from "expo-asset";
 import * as FileSystem from "expo-file-system/legacy";
 /**
@@ -248,8 +249,9 @@ export function ReaderScreen({ route, navigation }: Props) {
   const locationHistoryRef = useRef<string[]>([]);
   const lastNavigatedCfiRef = useRef<string | undefined>(undefined);
 
+  const { } = useReadingSessionStore(); // Removed startSession and stopSession
+  const { sendEvent } = useReadingSession(bookId); // Added useReadingSession hook
   const { books, updateBook } = useLibraryStore();
-  const { startSession, stopSession } = useReadingSessionStore();
   const { addHighlight, removeHighlight, loadAnnotations, highlights } = useAnnotationStore();
   const ttsPlay = useTTSStore((s) => s.play);
   const ttsStop = useTTSStore((s) => s.stop);
@@ -348,6 +350,7 @@ export function ReaderScreen({ route, navigation }: Props) {
       readingContextService.clearSelection();
     },
     onTap: () => {
+      sendEvent({ type: "activity" });
       if (selection) {
         setSelection(null);
         return;
@@ -392,11 +395,9 @@ export function ReaderScreen({ route, navigation }: Props) {
     }
     setBookTitle(book.meta.title);
     updateBook(bookId, { lastOpenedAt: Date.now() });
-    startSession(bookId);
     loadAnnotations(bookId);
 
     return () => {
-      stopSession();
       readingContextService.clearContext();
     };
   }, [bookId]);
@@ -769,10 +770,10 @@ export function ReaderScreen({ route, navigation }: Props) {
           existingHighlight={
             highlights.find((h) => h.cfi === selection.cfi)
               ? {
-                  id: highlights.find((h) => h.cfi === selection.cfi)!.id,
-                  color: highlights.find((h) => h.cfi === selection.cfi)!.color,
-                  note: highlights.find((h) => h.cfi === selection.cfi)!.note,
-                }
+                id: highlights.find((h) => h.cfi === selection.cfi)!.id,
+                color: highlights.find((h) => h.cfi === selection.cfi)!.color,
+                note: highlights.find((h) => h.cfi === selection.cfi)!.note,
+              }
               : null
           }
           onRemoveHighlight={() => {
@@ -810,7 +811,10 @@ export function ReaderScreen({ route, navigation }: Props) {
                   </Text>
                 ) : null}
               </View>
-              <TouchableOpacity style={s.toolbarBtn} onPress={() => setShowNotebook(true)}>
+              <TouchableOpacity
+                style={s.toolbarBtn}
+                onPress={() => navigation.navigate("FullScreenNotes", { bookId })}
+              >
                 <NotebookPenIcon size={18} color="#fff" />
               </TouchableOpacity>
               <TouchableOpacity

@@ -21,7 +21,8 @@ import { ActivityIndicator, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
-import { rnSessionEventSource, setSessionEventSource } from "@/hooks";
+import { rnSessionEventSource } from "@/hooks";
+import { setSessionEventSource } from "@readany/core/hooks/use-reading-session";
 import { setStreamingFetch } from "@readany/core/ai/llm-provider";
 import { initDatabase } from "@readany/core/db/database";
 import { initI18nLanguage } from "@readany/core/i18n";

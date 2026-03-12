@@ -18,7 +18,7 @@ import * as Speech from "expo-speech";
  * Provides highlight (5 colors), note, copy, translate, AI chat, TTS, and delete actions.
  * Matches app-mobile styling with icon buttons and expandable color picker.
  */
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Dimensions,
@@ -26,10 +26,10 @@ import {
   Modal,
   Platform,
   StyleSheet,
-  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
+import { RichEditor, RichToolbar, actions } from "react-native-pell-rich-editor";
 
 const HIGHLIGHT_COLORS = [
   { key: "yellow", hex: "#facc15" },
@@ -76,6 +76,7 @@ export function SelectionPopover({
   const [showNoteModal, setShowNoteModal] = useState(false);
   const [noteText, setNoteText] = useState(existingHighlight?.note || "");
   const [showColors, setShowColors] = useState(!!existingHighlight);
+  const richTextRef = useRef<RichEditor>(null);
 
   const buttonCount =
     5 + (onNote ? 1 : 0) + (onTranslate ? 1 : 0) + (existingHighlight && onRemoveHighlight ? 1 : 0);
@@ -239,15 +240,43 @@ export function SelectionPopover({
             <Text style={s.noteModalPreview} numberOfLines={3}>
               {selection.text}
             </Text>
-            <TextInput
-              style={s.noteInput}
-              placeholder={t("reader.notePlaceholder", "写下你的想法...")}
-              placeholderTextColor={colors.mutedForeground}
-              value={noteText}
-              onChangeText={setNoteText}
-              multiline
-              autoFocus
+            <RichToolbar
+              editor={richTextRef}
+              actions={[
+                actions.setBold,
+                actions.setItalic,
+                actions.setUnderline,
+                actions.setStrikethrough,
+                actions.heading1,
+                actions.heading2,
+                actions.insertBulletsList,
+                actions.insertOrderedList,
+                actions.checkboxList,
+                actions.undo,
+                actions.redo,
+              ]}
+              style={{ backgroundColor: colors.muted, borderBottomWidth: 0.5, borderBottomColor: colors.border }}
+              iconTint={colors.foreground}
+              selectedIconTint={colors.primary}
+              iconSize={24}
             />
+            <View style={{ flex: 1, minHeight: 150 }}>
+              <RichEditor
+                ref={richTextRef}
+                initialContentHTML={noteText}
+                onChange={(html) => setNoteText(html)}
+                placeholder={t("reader.notePlaceholder", "写下你的想法...")}
+                editorStyle={{
+                  backgroundColor: colors.background,
+                  color: colors.foreground,
+                  placeholderColor: colors.mutedForeground,
+                  cssText: `body { font-size: 15px; line-height: 1.6; padding: 8px; }`,
+                }}
+                style={{ flex: 1 }}
+                useContainer={true}
+                initialHeight={150}
+              />
+            </View>
             <View style={s.noteModalActions}>
               <TouchableOpacity style={s.noteCancelBtn} onPress={() => setShowNoteModal(false)}>
                 <Text style={s.noteCancelText}>{t("common.cancel", "取消")}</Text>
