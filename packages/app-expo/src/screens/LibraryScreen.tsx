@@ -26,6 +26,7 @@ import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "@/navigation/RootNavigator";
 import type { Book, SortField } from "@readany/core/types";
 import { useLibraryStore } from "@/stores/library-store";
+import { useVectorModelStore } from "@/stores/vector-model-store";
 import { type ThemeColors, radius, fontSize, fontWeight, useColors } from "@/styles/theme";
 import {
   PlusIcon,
@@ -198,6 +199,24 @@ export function LibraryScreen() {
 
   const handleVectorize = useCallback(async (book: Book) => {
     if (vectorizingBookId) return;
+
+    // Check if vector model is configured
+    const hasCapability = useVectorModelStore.getState().hasVectorCapability();
+    if (!hasCapability) {
+      Alert.alert(
+        t("settings.vectorModel"),
+        t("vectorModel.notConfigured"),
+        [
+          { text: t("common.cancel"), style: "cancel" },
+          {
+            text: t("vectorModel.goSettings"),
+            onPress: () => nav.navigate("VectorModelSettings"),
+          },
+        ],
+      );
+      return;
+    }
+
     setVectorizingBookId(book.id);
     setVectorizingBookTitle(book.meta.title);
     setVectorProgress(null);
@@ -214,7 +233,7 @@ export function LibraryScreen() {
       setVectorizingBookId(null);
       setVectorProgress(null);
     }
-  }, [vectorizingBookId]);
+  }, [vectorizingBookId, nav, t]);
 
   const handleSortChange = useCallback(
     (field: SortField) => {
