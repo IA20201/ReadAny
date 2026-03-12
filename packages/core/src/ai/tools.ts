@@ -1090,16 +1090,20 @@ export function getAvailableTools(options: {
         createRagTocTool(options.bookId),
         createRagContextTool(options.bookId),
       );
+
+      // Content analysis tools (require chunks from vectorization)
+      tools.push(
+        createSummarizeTool(options.bookId),
+        createExtractEntitiesTool(options.bookId),
+        createAnalyzeArgumentsTool(options.bookId),
+        createFindQuotesTool(options.bookId),
+        createCompareSectionsTool(options.bookId),
+      );
     }
 
-    // Content analysis tools (always available when book is loaded)
+    // Annotation & citation tools (always available when book is loaded)
     tools.push(
-      createSummarizeTool(options.bookId),
-      createExtractEntitiesTool(options.bookId),
-      createAnalyzeArgumentsTool(options.bookId),
-      createFindQuotesTool(options.bookId),
       createGetAnnotationsTool(options.bookId),
-      createCompareSectionsTool(options.bookId),
       createAddCitationTool(options.bookId),
     );
   }

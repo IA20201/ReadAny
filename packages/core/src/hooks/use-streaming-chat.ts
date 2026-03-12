@@ -273,6 +273,9 @@ export function useStreamingChat(options?: StreamingChatOptions) {
 
             // Persist to store FIRST, then clear streaming state
             // This prevents the gap where message disappears
+            // Set currentStep to "idle" before addMessage to prevent
+            // the "thinking" indicator from briefly flashing during persist
+            setState((prev) => ({ ...prev, currentStep: "idle" }));
             await addMessage(thread.id, assistantMessage as any);
 
             setState({
@@ -350,6 +353,7 @@ export function useStreamingChat(options?: StreamingChatOptions) {
             };
 
             // Persist error message FIRST, then clear streaming state
+            setState((prev) => ({ ...prev, currentStep: "idle" }));
             await addMessage(thread.id, errorMessage as any);
 
             setState({

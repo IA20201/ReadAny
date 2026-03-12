@@ -25,6 +25,7 @@ import * as FileSystem from "expo-file-system/legacy";
 import { Asset } from "expo-asset";
 import { LinearGradient } from "expo-linear-gradient";
 import { getPlatformService } from "@readany/core/services";
+import { readingContextService } from "@readany/core/ai/reading-context-service";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "@/navigation/RootNavigator";
 import { useLibraryStore, useAnnotationStore, useReadingSessionStore, useTTSStore, useSettingsStore } from "@/stores";
@@ -258,6 +259,21 @@ export function ReaderScreen({ route, navigation }: Props) {
           currentCfi: detail.cfi,
         });
       }
+
+      // Sync reading context for AI tools
+      readingContextService.updateContext({
+        bookId,
+        bookTitle: book?.meta?.title || "",
+        currentChapter: {
+          index: detail.section?.current ?? 0,
+          title: detail.tocItem?.label || "",
+          href: detail.tocItem?.href || "",
+        },
+        currentPosition: {
+          cfi: detail.cfi || "",
+          percentage: (detail.fraction ?? 0) * 100,
+        },
+      });
     },
     onTocReady: (items: TOCItem[]) => {
       setToc(items);
@@ -265,10 +281,20 @@ export function ReaderScreen({ route, navigation }: Props) {
     onSelection: (detail: SelectionEvent) => {
       console.log("[ReaderScreen] onSelection callback called:", detail.text);
       setSelection(detail);
+      // Sync selection for AI tools
+      if (detail.cfi) {
+        readingContextService.updateSelection({
+          text: detail.text,
+          cfi: detail.cfi,
+          chapterIndex: 0,
+          chapterTitle: "",
+        });
+      }
     },
     onSelectionCleared: () => {
       console.log("[ReaderScreen] onSelectionCleared callback called");
       setSelection(null);
+      readingContextService.clearSelection();
     },
     onTap: () => {
       if (selection) {
@@ -317,6 +343,7 @@ export function ReaderScreen({ route, navigation }: Props) {
 
     return () => {
       stopSession();
+      readingContextService.clearContext();
     };
   }, [bookId]);
 
