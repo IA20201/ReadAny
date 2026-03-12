@@ -22,6 +22,7 @@ import { BUILTIN_EMBEDDING_MODELS } from "@readany/core/ai/builtin-embedding-mod
 import { useVectorModelStore } from "@/stores/vector-model-store";
 import type { VectorModelConfig } from "@readany/core/types";
 import { type ThemeColors, radius, fontSize, fontWeight, useColors } from "@/styles/theme";
+import { PasswordInput } from "../../components/ui/PasswordInput";
 import { ChevronLeftIcon, PlusIcon, EditIcon, Trash2Icon, CheckIcon, XIcon } from "@/components/ui/Icon";
 
 export default function VectorModelSettingsScreen() {
@@ -333,7 +334,7 @@ function RemoteModelsSection() {
           <TextInput style={s.fieldInput} value={formUrl} onChangeText={setFormUrl} placeholder="https://api.openai.com/v1/embeddings" placeholderTextColor={colors.mutedForeground} />
 
           <Text style={s.fieldLabel}>{t("settings.vm_apiKey", "API Key")}</Text>
-          <TextInput style={s.fieldInput} value={formApiKey} onChangeText={setFormApiKey} placeholder="sk-..." placeholderTextColor={colors.mutedForeground} secureTextEntry />
+          <PasswordInput style={s.fieldInput} value={formApiKey} onChangeText={setFormApiKey} placeholder="sk-..." placeholderTextColor={colors.mutedForeground} />
 
           <Text style={s.fieldLabel}>{t("settings.vm_description", "描述")}</Text>
           <TextInput style={s.fieldInput} value={formDesc} onChangeText={setFormDesc} placeholderTextColor={colors.mutedForeground} />

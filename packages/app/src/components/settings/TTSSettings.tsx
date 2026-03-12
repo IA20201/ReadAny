@@ -13,6 +13,7 @@ import {
 } from "@/lib/tts/tts-service";
 import type { TTSEngine } from "@/lib/tts/tts-service";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import {
   Select,
   SelectContent,
@@ -200,8 +201,7 @@ export function TTSSettings() {
               {/* DashScope API Key */}
               <div className="space-y-2">
                 <span className="text-sm text-foreground">{t("tts.apiKey")}</span>
-                <Input
-                  type="password"
+                <PasswordInput
                   placeholder={t("tts.apiKeyPlaceholder")}
                   value={config.dashscopeApiKey}
                   onChange={(e) => updateConfig({ dashscopeApiKey: e.target.value })}

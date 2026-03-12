@@ -17,6 +17,7 @@ import {
   type TranslationTargetLang,
 } from "@readany/core/types/translation";
 import { SettingsHeader } from "./SettingsHeader";
+import { PasswordInput } from "../../components/ui/PasswordInput";
 import { type ThemeColors, fontSize, fontWeight, spacing, radius, useColors } from "../../styles/theme";
 
 export default function TranslationSettingsScreen() {
@@ -87,7 +88,7 @@ export default function TranslationSettingsScreen() {
             <Text style={styles.sectionTitle}>
               {t("translation.deeplApiKey", "DeepL API Key")}
             </Text>
-            <TextInput
+            <PasswordInput
               style={styles.apiKeyInput}
               value={translationConfig.provider.apiKey || ""}
               onChangeText={(v) =>
@@ -103,7 +104,6 @@ export default function TranslationSettingsScreen() {
                 "输入 DeepL API Key",
               )}
               placeholderTextColor={colors.mutedForeground}
-              secureTextEntry
             />
           </View>
         )}

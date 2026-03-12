@@ -13,6 +13,7 @@ import {
 import type { TTSEngine } from "@/lib/tts/tts-service";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import {
   Select,
   SelectContent,
@@ -143,8 +144,7 @@ export function TTSControls({ onClose, className }: TTSControlsProps) {
                   <span className="text-xs text-muted-foreground w-16 shrink-0">
                     API Key
                   </span>
-                  <Input
-                    type="password"
+                  <PasswordInput
                     className="h-7 flex-1 text-xs"
                     placeholder={t("tts.apiKeyPlaceholder")}
                     value={config.dashscopeApiKey}

@@ -14,6 +14,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useTranslation } from "react-i18next";
 import { SettingsHeader } from "./SettingsHeader";
+import { PasswordInput } from "../../components/ui/PasswordInput";
 import { type ThemeColors, fontSize, fontWeight, spacing, radius, useColors } from "../../styles/theme";
 
 export default function SyncSettingsScreen() {
@@ -178,13 +179,12 @@ export default function SyncSettingsScreen() {
               <Text style={styles.fieldLabel}>
                 {t("settings.syncPassword", "密码")}
               </Text>
-              <TextInput
+              <PasswordInput
                 style={styles.input}
                 value={password}
                 onChangeText={setPassword}
                 placeholder={t("settings.syncPassword", "密码")}
                 placeholderTextColor={colors.mutedForeground}
-                secureTextEntry
               />
             </View>
 

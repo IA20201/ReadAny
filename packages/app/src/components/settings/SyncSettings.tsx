@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useSyncStore } from "@/stores/sync-store";
 import { Switch } from "@/components/ui/switch";
+import { PasswordInput } from "@/components/ui/password-input";
 
 export function SyncSettings() {
   const { t } = useTranslation();
@@ -118,8 +119,7 @@ export function SyncSettings() {
               <label className="mb-1 block text-sm text-foreground">
                 {t("settings.syncPassword")}
               </label>
-              <input
-                type="password"
+              <PasswordInput
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm text-foreground outline-none focus:border-primary"

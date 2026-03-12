@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import {
   Select,
   SelectContent,
@@ -137,8 +138,7 @@ function EndpointCard({
       {/* API Key */}
       <div>
         <label className="mb-1 block text-xs text-muted-foreground">{t("settings.ai_apiKey")}</label>
-        <Input
-          type="password"
+        <PasswordInput
           value={endpoint.apiKey}
           onChange={(e) => onUpdate(endpoint.id, { apiKey: e.target.value })}
           placeholder={PROVIDER_DEFAULTS[endpoint.provider || "openai"].keyPlaceholder}

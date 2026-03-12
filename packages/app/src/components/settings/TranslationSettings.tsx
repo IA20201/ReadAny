@@ -1,4 +1,5 @@
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { TRANSLATOR_PROVIDERS } from "@readany/core/types/translation";
 import { Check, ChevronDown } from "lucide-react";
 /**
@@ -195,8 +196,7 @@ export function TranslationSettings() {
           {!isAIProvider && (
             <div className="space-y-2">
               <label className="text-sm text-foreground">{t("settings.apiKey")}</label>
-              <Input
-                type="password"
+              <PasswordInput
                 placeholder={t("settings.apiKeyPlaceholder")}
                 value={translationConfig.provider.apiKey || ""}
                 onChange={(e) => handleApiKeyChange(e.target.value)}

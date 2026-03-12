@@ -6,6 +6,7 @@
  */
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Switch } from "@/components/ui/switch";
 import { BUILTIN_EMBEDDING_MODELS } from "@readany/core/ai/builtin-embedding-models";
 import { loadEmbeddingPipeline } from "@readany/core/ai/local-embedding-service";
@@ -394,8 +395,7 @@ function RemoteModelsSection() {
 
           <div>
             <label className="mb-1 block text-xs text-muted-foreground">{t("settings.vm_apiKey")}</label>
-            <Input
-              type="password"
+            <PasswordInput
               value={formData.apiKey}
               onChange={(e) => setFormData((p) => ({ ...p, apiKey: e.target.value }))}
               placeholder="sk-..."

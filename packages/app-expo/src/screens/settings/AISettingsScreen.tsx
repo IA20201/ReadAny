@@ -15,6 +15,7 @@ import { useSettingsStore } from "@/stores";
 import type { AIEndpoint, AIProviderType } from "@readany/core/types";
 import { SettingsHeader } from "./SettingsHeader";
 import { PlusIcon, Trash2Icon, XIcon, LoaderIcon } from "../../components/ui/Icon";
+import { PasswordInput } from "../../components/ui/PasswordInput";
 import { type ThemeColors, fontSize, fontWeight, spacing, radius, useColors } from "../../styles/theme";
 
 const PROVIDERS: { id: AIProviderType; label: string }[] = [
@@ -217,7 +218,7 @@ export default function AISettingsScreen() {
                     <Text style={styles.fieldLabel}>
                       {t("settings.ai_apiKey", "API Key")}
                     </Text>
-                    <TextInput
+                    <PasswordInput
                       style={styles.input}
                       value={ep.apiKey}
                       onChangeText={(v) =>
@@ -225,7 +226,6 @@ export default function AISettingsScreen() {
                       }
                       placeholder="sk-..."
                       placeholderTextColor={colors.mutedForeground}
-                      secureTextEntry
                     />
                   </View>
 

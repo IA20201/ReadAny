@@ -18,6 +18,7 @@ import {
   type TTSEngine,
 } from "@readany/core/tts";
 import { SettingsHeader } from "./SettingsHeader";
+import { PasswordInput } from "../../components/ui/PasswordInput";
 import { type ThemeColors, fontSize, fontWeight, spacing, radius, useColors } from "../../styles/theme";
 
 const ENGINES: { id: TTSEngine; labelKey: string }[] = [
@@ -187,7 +188,7 @@ export default function TTSSettingsScreen() {
                 <Text style={styles.fieldLabel}>
                   {t("tts.apiKey", "DashScope API Key")}
                 </Text>
-                <TextInput
+                <PasswordInput
                   style={styles.input}
                   value={config.dashscopeApiKey || ""}
                   onChangeText={(v) =>
@@ -195,7 +196,6 @@ export default function TTSSettingsScreen() {
                   }
                   placeholder="sk-..."
                   placeholderTextColor={colors.mutedForeground}
-                  secureTextEntry
                 />
               </View>
             </>
