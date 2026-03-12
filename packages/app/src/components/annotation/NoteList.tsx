@@ -2,7 +2,7 @@
  * NoteList — list of notes for the current book
  */
 import { useAnnotationStore } from "@/stores/annotation-store";
-import { FileText } from "lucide-react";
+import { NotebookPen } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 export function NoteList() {
@@ -12,7 +12,7 @@ export function NoteList() {
   if (notes.length === 0) {
     return (
       <div className="flex h-full flex-col items-center justify-center p-4 text-center text-sm text-muted-foreground">
-        <FileText className="mb-2 h-8 w-8" />
+        <NotebookPen className="mb-2 h-8 w-8" />
         <p>{t("notes.noNotes")}</p>
         <p className="text-xs">{t("notes.selectToCreate")}</p>
       </div>

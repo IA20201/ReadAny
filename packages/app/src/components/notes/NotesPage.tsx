@@ -14,9 +14,8 @@ import {
   Edit3,
   Check,
   X,
-  MessageSquareText,
+  NotebookPen,
   ChevronLeft,
-  FileText,
 } from "lucide-react";
 import { cn } from "@readany/core/utils";
 import { useAnnotationStore } from "@/stores/annotation-store";
@@ -390,7 +389,7 @@ export function NotesPage() {
                   )}
                   onClick={() => setDetailTab("notes")}
                 >
-                  <MessageSquareText className="h-3 w-3" />
+                  <NotebookPen className="h-3 w-3" />
                   {t("notebook.notesSection")} ({selectedBook.notesCount})
                 </button>
                 <button
@@ -424,7 +423,7 @@ export function NotesPage() {
           <div className="flex-1 overflow-y-auto">
             {currentList.length === 0 ? (
               <div className="flex h-full flex-col items-center justify-center p-6 text-center">
-                <FileText className="mb-3 h-10 w-10 text-muted-foreground/40" />
+                <NotebookPen className="mb-3 h-10 w-10 text-muted-foreground/40" />
                 <p className="text-sm text-muted-foreground">
                   {searchQuery ? t("notes.noSearchResults") : (detailTab === "notes" ? t("notes.noNotes") : t("highlights.noHighlights"))}
                 </p>
@@ -534,7 +533,7 @@ function NotebookCard({ book, onClick }: NotebookCardProps) {
           <span className="text-[9px] font-medium text-white">{book.highlightsOnlyCount}</span>
           {book.notesCount > 0 && (
             <>
-              <MessageSquareText className="ml-0.5 h-2.5 w-2.5 text-white/80" />
+              <NotebookPen className="ml-0.5 h-2.5 w-2.5 text-white/80" />
               <span className="text-[9px] font-medium text-white">{book.notesCount}</span>
             </>
           )}
