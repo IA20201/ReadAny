@@ -2,7 +2,7 @@
  * ChatPanel — book-scoped sidebar chat panel.
  */
 import { useStreamingChat } from "@/hooks/use-streaming-chat";
-import { convertToMessageV2, mergeMessagesWithStreaming } from "@readany/core/utils/chat-utils";
+import { convertToMessageV2, mergeMessagesWithStreaming, groupThreadsByTime, getMonthLabel, formatRelativeTimeShort } from "@readany/core/utils";
 import { useChatStore } from "@/stores/chat-store";
 import { useSettingsStore } from "@/stores/settings-store";
 import type { Book, CitationPart } from "@readany/core/types";
@@ -17,19 +17,6 @@ import { ModelSelector } from "./ModelSelector";
 interface ChatPanelProps {
   book?: Book | null;
   onNavigateToCitation?: (citation: CitationPart) => void;
-}
-
-function formatRelativeTime(ts: number, t: (key: string) => string): string {
-  const diff = Date.now() - ts;
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return t("chat.justNow");
-  if (mins < 60) return `${mins}m`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h`;
-  const days = Math.floor(hours / 24);
-  if (days < 30) return `${days}d`;
-  const months = Math.floor(days / 30);
-  return `${months}mo`;
 }
 
 export function ChatPanel({ book, onNavigateToCitation }: ChatPanelProps) {
@@ -219,55 +206,92 @@ export function ChatPanel({ book, onNavigateToCitation }: ChatPanelProps) {
         </div>
 
         {/* Thread list popover */}
-        {showThreadList && bookThreads.length > 0 && (
+        {showThreadList && (
           <div
             ref={popoverRef}
             className="absolute left-1 right-1 top-8 z-50 animate-in fade-in slide-in-from-top-1 duration-150 rounded-lg border border-border/60 bg-background shadow-lg"
           >
             <div className="max-h-56 space-y-1 overflow-y-auto p-1.5">
-              {bookThreads.map((thread) => {
-                const lastMsg = thread.messages.length > 0
-                  ? thread.messages[thread.messages.length - 1]
-                  : null;
-                const preview = lastMsg?.content?.slice(0, 60) || "";
-                return (
-                  <div
-                    key={thread.id}
-                    className={`group flex cursor-pointer items-start gap-2 rounded-md px-2.5 py-2 transition-colors ${
-                      thread.id === activeThreadId
-                        ? "bg-primary/10 text-primary"
-                        : "text-neutral-600 hover:bg-muted"
-                    }`}
-                    onClick={() => handleSelectThread(thread.id)}
-                  >
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-1.5">
-                        <span className="truncate text-xs font-medium">
-                          {thread.title || t("chat.newChat")}
-                        </span>
-                        <span className="shrink-0 text-[10px] text-muted-foreground/50">
-                          {formatRelativeTime(thread.updatedAt, t)}
-                        </span>
+              {bookThreads.length === 0 ? (
+                <p className="py-4 text-center text-xs text-muted-foreground">
+                  {t("chat.noConversations")}
+                </p>
+              ) : (() => {
+                const grouped = groupThreadsByTime(bookThreads);
+                const sections: { key: string; label: string; threads: typeof bookThreads }[] = [
+                  { key: "today", label: t("chat.today"), threads: grouped.today },
+                  { key: "yesterday", label: t("chat.yesterday"), threads: grouped.yesterday },
+                  { key: "last7Days", label: t("chat.last7Days"), threads: grouped.last7Days },
+                  { key: "last30Days", label: t("chat.last30Days"), threads: grouped.last30Days },
+                ];
+
+                const olderByMonth = new Map<string, typeof bookThreads>();
+                for (const thread of grouped.older) {
+                  const monthLabel = getMonthLabel(thread.updatedAt);
+                  if (!olderByMonth.has(monthLabel)) {
+                    olderByMonth.set(monthLabel, []);
+                  }
+                  olderByMonth.get(monthLabel)!.push(thread);
+                }
+                const sortedMonths = [...olderByMonth.keys()].sort((a, b) => b.localeCompare(a));
+                for (const month of sortedMonths) {
+                  sections.push({ key: month, label: month, threads: olderByMonth.get(month)! });
+                }
+
+                return sections.map(({ key, label, threads }) => {
+                  if (threads.length === 0) return null;
+                  return (
+                    <div key={key}>
+                      <div className="px-2 py-1 text-[10px] font-medium text-muted-foreground">
+                        {label}
                       </div>
-                      {preview && (
-                        <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
-                          {preview}
-                        </p>
-                      )}
+                      {threads.map((thread) => {
+                        const lastMsg = thread.messages.length > 0
+                          ? thread.messages[thread.messages.length - 1]
+                          : null;
+                        const preview = lastMsg?.content?.slice(0, 60) || "";
+                        return (
+                          <div
+                            key={thread.id}
+                            className={`group flex cursor-pointer items-start gap-2 rounded-md px-2.5 py-2 transition-colors ${
+                              thread.id === activeThreadId
+                                ? "bg-primary/10 text-primary"
+                                : "text-neutral-600 hover:bg-muted"
+                            }`}
+                            onClick={() => handleSelectThread(thread.id)}
+                          >
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-1.5">
+                                <span className="truncate text-xs font-medium">
+                                  {thread.title || t("chat.newChat")}
+                                </span>
+                                <span className="shrink-0 text-[10px] text-muted-foreground/50">
+                                  {formatRelativeTimeShort(thread.updatedAt, t)}
+                                </span>
+                              </div>
+                              {preview && (
+                                <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
+                                  {preview}
+                                </p>
+                              )}
+                            </div>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteThread(thread.id);
+                              }}
+                              className="mt-0.5 hidden shrink-0 rounded p-0.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive group-hover:block"
+                            >
+                              <Trash2 className="size-3" />
+                            </button>
+                          </div>
+                        );
+                      })}
                     </div>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDeleteThread(thread.id);
-                      }}
-                      className="mt-0.5 hidden shrink-0 rounded p-0.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive group-hover:block"
-                    >
-                      <Trash2 className="size-3" />
-                    </button>
-                  </div>
-                );
-              })}
+                  );
+                });
+              })()}
             </div>
           </div>
         )}

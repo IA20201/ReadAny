@@ -10,13 +10,9 @@ import type {
   TextPart,
   ToolCallPart,
 } from "@readany/core/types/message";
-/**
- * PartRenderer — renders individual message parts (text, reasoning, tool calls, citations, mindmaps).
- * React Native version adapted from app-mobile PartRenderer.
- */
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { MarkdownRenderer } from "./MarkdownRenderer";
 
 interface PartProps {
@@ -103,7 +99,9 @@ function ReasoningPartView({ part }: { part: ReasoningPart }) {
       </TouchableOpacity>
       {isOpen && (
         <View style={s.body}>
-          <Text style={s.bodyText}>{throttledText}</Text>
+          <ScrollView style={s.bodyScroll} nestedScrollEnabled>
+            <Text style={s.bodyText}>{throttledText}</Text>
+          </ScrollView>
         </View>
       )}
     </View>
@@ -195,12 +193,14 @@ function ToolCallPartView({ part }: { part: ToolCallPart }) {
           {part.result !== undefined && (
             <View style={s.section}>
               <Text style={s.sectionTitle}>{t("common.result", "结果")}</Text>
-              <View style={s.codeBlock}>
-                <Text style={s.codeText} numberOfLines={10}>
-                  {typeof part.result === "string" && part.result.length > 300
-                    ? `${part.result.slice(0, 300)}...`
-                    : JSON.stringify(part.result, null, 2)}
-                </Text>
+              <View style={s.codeBlockScroll}>
+                <ScrollView style={{ maxHeight: 200 }} nestedScrollEnabled>
+                  <Text style={s.codeText}>
+                    {typeof part.result === "string" && part.result.length > 500
+                      ? `${part.result.slice(0, 500)}...`
+                      : JSON.stringify(part.result, null, 2)}
+                  </Text>
+                </ScrollView>
               </View>
             </View>
           )}
@@ -309,6 +309,9 @@ const makeReasoningStyles = (colors: ThemeColors) =>
       paddingVertical: 8,
       maxHeight: 200,
     },
+    bodyScroll: {
+      flex: 1,
+    },
     bodyText: {
       fontSize: fs.sm,
       lineHeight: 18,
@@ -372,6 +375,14 @@ const makeToolStyles = (colors: ThemeColors) =>
       backgroundColor: colors.card,
       borderRadius: radius.sm,
       padding: 8,
+    },
+    codeBlockScroll: {
+      borderWidth: 0.5,
+      borderColor: colors.border,
+      backgroundColor: colors.card,
+      borderRadius: radius.sm,
+      padding: 8,
+      maxHeight: 200,
     },
     codeText: {
       fontSize: fs.xs,

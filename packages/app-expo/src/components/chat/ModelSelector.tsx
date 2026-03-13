@@ -117,7 +117,7 @@ export function ModelSelector({ onNavigateToSettings }: ModelSelectorProps) {
                         >
                           {model}
                         </Text>
-                        {isActive && <CheckIcon size={12} color={colors.indigo} />}
+                        {isActive && <CheckIcon size={12} color={colors.primary} />}
                       </TouchableOpacity>
                     );
                   })}
@@ -191,7 +191,7 @@ const makeStyles = (colors: ThemeColors) =>
       borderRadius: radius.md,
     },
     modelItemActive: {
-      backgroundColor: withOpacity(colors.indigo, 0.08),
+      backgroundColor: withOpacity(colors.primary, 0.08),
     },
     modelText: {
       fontSize: fs.xs,
@@ -199,7 +199,7 @@ const makeStyles = (colors: ThemeColors) =>
       flex: 1,
     },
     modelTextActive: {
-      color: colors.indigo,
+      color: colors.primary,
       fontWeight: fw.medium,
     },
   });

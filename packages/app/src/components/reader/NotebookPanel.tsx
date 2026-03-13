@@ -370,7 +370,7 @@ export function NotebookPanel({ bookId, onClose, onGoToCfi, onAddAnnotation, onD
         {/* Empty state */}
         {bookHighlights.length === 0 && !isEditing && (
           <div className="flex h-full flex-col items-center justify-center p-6 text-center">
-            <NotebookPen className="mb-3 h-10 w-10 text-muted-foreground/50" />
+            <img src="/note.svg" alt="" className="mb-4 h-32 w-32" />
             <p className="text-sm text-muted-foreground">
               {t("notebook.empty")}
             </p>

@@ -5,3 +5,11 @@ export { eventBus } from "./event-bus";
 export type { EventMap } from "./event-bus";
 export { convertToMessageV2, mergeMessagesWithStreaming } from "./chat-utils";
 export { generateId } from "./generate-id";
+export {
+  getTimeGroup,
+  getMonthLabel,
+  groupThreadsByTime,
+  groupThreadsByMonth,
+  formatRelativeTimeShort,
+} from "./time-group";
+export type { TimeGroup, GroupedThreads } from "./time-group";

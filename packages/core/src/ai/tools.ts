@@ -3,6 +3,7 @@ import { emitLibraryChanged } from "../events/library-events";
 import { getBuiltinSkills } from "./skills/builtin-skills";
 import { search } from "../rag/search";
 import { getContextTools } from "./context-tools";
+import { loadFromFS, debouncedSave } from "../stores/persist";
 /**
  * AI Tool registration — conditional tool registration based on book state
  * Full implementation with RAG search pipeline integration
@@ -1088,12 +1089,12 @@ function createTagBooksTool(): ToolDefinition {
   };
 }
 
-/** Manage book tags: rename, delete, remove from book, set book tags */
+/** Manage book tags: create, rename, delete, remove from book, set book tags */
 function createManageBookTagsTool(): ToolDefinition {
   return {
     name: "manageBookTags",
     description:
-      "Manage book tags: rename a tag across all books, delete one or more tags from all books, remove specific tags from a book, or replace all tags of a book. Use when the user asks to modify, rename, or delete tags. For delete action, you can delete multiple tags at once by passing a JSON array.",
+      "Manage book tags: create new tags (without assigning to books), rename a tag across all books, delete one or more tags from all books, remove specific tags from a book, or replace all tags of a book. Use when the user asks to create, modify, rename, or delete tags. For delete action, you can delete multiple tags at once by passing a JSON array.",
     parameters: {
       reasoning: {
         type: "string",
@@ -1103,7 +1104,7 @@ function createManageBookTagsTool(): ToolDefinition {
       action: {
         type: "string",
         description:
-          '"rename" | "delete" | "removeFromBook" | "setBookTags"',
+          '"create" | "rename" | "delete" | "removeFromBook" | "setBookTags"',
         required: true,
       },
       tag: {
@@ -1121,11 +1122,40 @@ function createManageBookTagsTool(): ToolDefinition {
       tags: {
         type: "string",
         description:
-          'JSON array of tags. For delete action: tags to delete. For removeFromBook/setBookTags: tags to remove/set. Example: ["科幻","小说"]',
+          'JSON array of tags. For create action: tags to create. For delete action: tags to delete. For removeFromBook/setBookTags: tags to remove/set. Example: ["科幻","小说"]',
       },
     },
     execute: async (args) => {
       const action = args.action as string;
+
+      if (action === "create") {
+        let tagsToCreate: string[] = [];
+        if (args.tags) {
+          tagsToCreate = JSON.parse(args.tags as string);
+        } else if (args.tag) {
+          tagsToCreate = [args.tag as string];
+        }
+        if (tagsToCreate.length === 0) {
+          return { success: false, error: "tag or tags is required for create" };
+        }
+        // Load existing tags
+        const existingTags = (await loadFromFS<string[]>("library-tags")) || [];
+        const existingSet = new Set(existingTags);
+        const newTags: string[] = [];
+        for (const tag of tagsToCreate) {
+          if (!existingSet.has(tag)) {
+            newTags.push(tag);
+            existingSet.add(tag);
+          }
+        }
+        if (newTags.length === 0) {
+          return { success: true, action: "create", createdTags: [], message: "All tags already exist" };
+        }
+        const allTags = [...existingSet].sort();
+        debouncedSave("library-tags", allTags);
+        emitLibraryChanged();
+        return { success: true, action: "create", createdTags: newTags, totalTags: allTags.length };
+      }
 
       if (action === "rename") {
         const oldTag = args.tag as string;

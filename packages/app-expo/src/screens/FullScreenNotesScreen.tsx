@@ -7,10 +7,6 @@ import { NotesView } from "./NotesView";
 import type { RootStackParamList } from "@/navigation/RootNavigator";
 import { useTranslation } from "react-i18next";
 
-/**
- * FullScreenNotesScreen — Standalone notes page without bottom tab bar.
- * Used when navigating from the Reader screen.
- */
 export function FullScreenNotesScreen() {
     const colors = useColors();
     const navigation = useNavigation();
@@ -29,7 +25,7 @@ export function FullScreenNotesScreen() {
                 </Text>
                 <View style={{ width: 40 }} />
             </View>
-            <NotesView initialBookId={bookId} showBackButton={false} edges={[]} />
+            <NotesView initialBookId={bookId} showBackButton={false} edges={[]} hideDetailHeader />
         </SafeAreaView>
     );
 }

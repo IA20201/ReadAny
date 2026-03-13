@@ -25,7 +25,7 @@ import { useChatStore } from "@/stores/chat-store";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useStreamingChat } from "@readany/core/hooks";
 import type { AttachedQuote } from "@readany/core/types";
-import { convertToMessageV2, mergeMessagesWithStreaming } from "@readany/core/utils/chat-utils";
+import { convertToMessageV2, mergeMessagesWithStreaming, groupThreadsByTime, getMonthLabel, formatRelativeTimeShort } from "@readany/core/utils";
 import { Alert } from "react-native";
 
 import { ChatInput } from "@/components/chat/ChatInput";
@@ -179,19 +179,34 @@ export function ChatScreen() {
   );
 
   const formatTime = useCallback(
-    (ts: number) => {
-      const diff = Date.now() - ts;
-      const mins = Math.floor(diff / 60000);
-      if (mins < 1) return t("chat.justNow", "刚刚");
-      if (mins < 60) return `${mins}m`;
-      const hours = Math.floor(mins / 60);
-      if (hours < 24) return `${hours}h`;
-      const days = Math.floor(hours / 24);
-      if (days < 30) return `${days}d`;
-      return `${Math.floor(days / 30)}mo`;
-    },
+    (ts: number) => formatRelativeTimeShort(ts, t),
     [t],
   );
+
+  const groupedThreads = useMemo(() => {
+    const grouped = groupThreadsByTime(generalThreads);
+    const sections: { key: string; label: string; threads: typeof generalThreads }[] = [
+      { key: "today", label: t("chat.today", "今天"), threads: grouped.today },
+      { key: "yesterday", label: t("chat.yesterday", "昨天"), threads: grouped.yesterday },
+      { key: "last7Days", label: t("chat.last7Days", "7 天内"), threads: grouped.last7Days },
+      { key: "last30Days", label: t("chat.last30Days", "30 天内"), threads: grouped.last30Days },
+    ];
+
+    const olderByMonth = new Map<string, typeof generalThreads>();
+    for (const thread of grouped.older) {
+      const monthLabel = getMonthLabel(thread.updatedAt);
+      if (!olderByMonth.has(monthLabel)) {
+        olderByMonth.set(monthLabel, []);
+      }
+      olderByMonth.get(monthLabel)!.push(thread);
+    }
+    const sortedMonths = [...olderByMonth.keys()].sort((a, b) => b.localeCompare(a));
+    for (const month of sortedMonths) {
+      sections.push({ key: month, label: month, threads: olderByMonth.get(month)! });
+    }
+
+    return sections;
+  }, [generalThreads, t]);
 
   return (
     <SafeAreaView style={s.container} edges={["top"]}>
@@ -263,42 +278,50 @@ export function ChatScreen() {
                 <Text style={s.sidebarEmptyText}>{t("chat.noConversations", "暂无对话")}</Text>
               </View>
             ) : (
-              generalThreads.map((thread) => {
-                const isActive = thread.id === generalActiveThreadId;
-                const lastMsg =
-                  thread.messages.length > 0 ? thread.messages[thread.messages.length - 1] : null;
-                const preview = lastMsg?.content?.slice(0, 60) || "";
+              groupedThreads.map(({ key, label, threads }) => {
+                if (threads.length === 0) return null;
                 return (
-                  <TouchableOpacity
-                    key={thread.id}
-                    style={[s.threadItem, isActive && s.threadItemActive]}
-                    onPress={() => handleSelectThread(thread.id)}
-                    activeOpacity={0.7}
-                  >
-                    <View style={s.threadContent}>
-                      <View style={s.threadTitleRow}>
-                        <Text
-                          style={[s.threadTitle, isActive && s.threadTitleActive]}
-                          numberOfLines={1}
+                  <View key={key}>
+                    <Text style={s.sectionLabel}>{label}</Text>
+                    {threads.map((thread) => {
+                      const isActive = thread.id === generalActiveThreadId;
+                      const lastMsg =
+                        thread.messages.length > 0 ? thread.messages[thread.messages.length - 1] : null;
+                      const preview = lastMsg?.content?.slice(0, 60) || "";
+                      return (
+                        <TouchableOpacity
+                          key={thread.id}
+                          style={[s.threadItem, isActive && s.threadItemActive]}
+                          onPress={() => handleSelectThread(thread.id)}
+                          activeOpacity={0.7}
                         >
-                          {thread.title || t("chat.newChat", "新对话")}
-                        </Text>
-                        <Text style={s.threadTime}>{formatTime(thread.updatedAt)}</Text>
-                      </View>
-                      {preview ? (
-                        <Text style={s.threadPreview} numberOfLines={1}>
-                          {preview}
-                        </Text>
-                      ) : null}
-                    </View>
-                    <TouchableOpacity
-                      style={s.threadDeleteBtn}
-                      onPress={() => removeThread(thread.id)}
-                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                    >
-                      <Trash2Icon size={12} color={colors.mutedForeground} />
-                    </TouchableOpacity>
-                  </TouchableOpacity>
+                          <View style={s.threadContent}>
+                            <View style={s.threadTitleRow}>
+                              <Text
+                                style={[s.threadTitle, isActive && s.threadTitleActive]}
+                                numberOfLines={1}
+                              >
+                                {thread.title || t("chat.newChat", "新对话")}
+                              </Text>
+                              <Text style={s.threadTime}>{formatTime(thread.updatedAt)}</Text>
+                            </View>
+                            {preview ? (
+                              <Text style={s.threadPreview} numberOfLines={1}>
+                                {preview}
+                              </Text>
+                            ) : null}
+                          </View>
+                          <TouchableOpacity
+                            style={s.threadDeleteBtn}
+                            onPress={() => removeThread(thread.id)}
+                            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                          >
+                            <Trash2Icon size={12} color={colors.mutedForeground} />
+                          </TouchableOpacity>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
                 );
               })
             )}
@@ -494,6 +517,13 @@ const makeStyles = (colors: ThemeColors) =>
       fontSize: fs.xs,
       color: colors.mutedForeground,
     },
+    sectionLabel: {
+      fontSize: 10,
+      fontWeight: fw.medium,
+      color: colors.mutedForeground,
+      paddingHorizontal: 10,
+      paddingVertical: 4,
+    },
     threadItem: {
       flexDirection: "row",
       alignItems: "flex-start",
@@ -503,7 +533,7 @@ const makeStyles = (colors: ThemeColors) =>
       paddingVertical: 10,
     },
     threadItemActive: {
-      backgroundColor: withOpacity(colors.indigo, 0.08),
+      backgroundColor: withOpacity(colors.primary, 0.08),
     },
     threadContent: {
       flex: 1,
@@ -521,7 +551,7 @@ const makeStyles = (colors: ThemeColors) =>
       flex: 1,
     },
     threadTitleActive: {
-      color: colors.indigo,
+      color: colors.primary,
     },
     threadTime: {
       fontSize: 9,

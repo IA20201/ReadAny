@@ -3,7 +3,7 @@
  * Uses core's useStreamingChat hook for AI streaming.
  */
 import { useStreamingChat } from "@readany/core/hooks";
-import { convertToMessageV2, mergeMessagesWithStreaming } from "@readany/core/utils/chat-utils";
+import { convertToMessageV2, mergeMessagesWithStreaming, groupThreadsByTime, getMonthLabel, formatRelativeTimeShort } from "@readany/core/utils";
 import { useChatReaderStore, useChatStore, useSettingsStore } from "@readany/core/stores";
 import type { CitationPart } from "@readany/core/types";
 import {
@@ -14,7 +14,6 @@ import {
   Lightbulb,
   MessageCirclePlus,
   ScrollText,
-  Search,
   Trash2,
   X,
 } from "lucide-react";
@@ -26,19 +25,6 @@ import { MobileChatInput } from "./MobileChatInput";
 import { MessageList } from "./MessageList";
 import { MobileModelSelector } from "./MobileModelSelector";
 import { MobileContextPopover } from "./MobileContextPopover";
-
-function formatRelativeTime(ts: number, t: (key: string) => string): string {
-  const diff = Date.now() - ts;
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return t("chat.justNow");
-  if (mins < 60) return `${mins}m`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h`;
-  const days = Math.floor(hours / 24);
-  if (days < 30) return `${days}d`;
-  const months = Math.floor(days / 30);
-  return `${months}mo`;
-}
 
 function ThreadsSidebar({
   open,
@@ -84,51 +70,84 @@ function ThreadsSidebar({
               {t("chat.noConversations")}
             </p>
           )}
-          {generalThreads.map((thread) => {
-            const lastMsg =
-              thread.messages.length > 0
-                ? thread.messages[thread.messages.length - 1]
-                : null;
-            const preview = lastMsg?.content?.slice(0, 60) || "";
-            return (
-              <div
-                key={thread.id}
-                onClick={() => {
-                  onSelect(thread.id);
-                  onClose();
-                }}
-                className={`group flex items-start gap-2 rounded-lg px-3 py-2.5 transition-colors ${
-                  thread.id === activeThreadId
-                    ? "bg-primary/10 text-primary"
-                    : "text-neutral-700 active:bg-muted"
-                }`}
-              >
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-1.5">
-                    <span className="truncate text-sm font-medium">
-                      {thread.title || t("chat.newChat")}
-                    </span>
-                    <span className="shrink-0 text-[10px] text-muted-foreground/50">
-                      {formatRelativeTime(thread.updatedAt, t)}
-                    </span>
+          {(() => {
+            const grouped = groupThreadsByTime(generalThreads);
+            const sections: { key: string; label: string; threads: typeof generalThreads }[] = [
+              { key: "today", label: t("chat.today"), threads: grouped.today },
+              { key: "yesterday", label: t("chat.yesterday"), threads: grouped.yesterday },
+              { key: "last7Days", label: t("chat.last7Days"), threads: grouped.last7Days },
+              { key: "last30Days", label: t("chat.last30Days"), threads: grouped.last30Days },
+            ];
+
+            const olderByMonth = new Map<string, typeof generalThreads>();
+            for (const thread of grouped.older) {
+              const monthLabel = getMonthLabel(thread.updatedAt);
+              if (!olderByMonth.has(monthLabel)) {
+                olderByMonth.set(monthLabel, []);
+              }
+              olderByMonth.get(monthLabel)!.push(thread);
+            }
+            const sortedMonths = [...olderByMonth.keys()].sort((a, b) => b.localeCompare(a));
+            for (const month of sortedMonths) {
+              sections.push({ key: month, label: month, threads: olderByMonth.get(month)! });
+            }
+
+            return sections.map(({ key, label, threads }) => {
+              if (threads.length === 0) return null;
+              return (
+                <div key={key} className="mb-2">
+                  <div className="px-3 py-1 text-[10px] font-medium text-muted-foreground">
+                    {label}
                   </div>
-                  {preview && (
-                    <p className="mt-0.5 truncate text-xs text-muted-foreground">{preview}</p>
-                  )}
+                  {threads.map((thread) => {
+                    const lastMsg =
+                      thread.messages.length > 0
+                        ? thread.messages[thread.messages.length - 1]
+                        : null;
+                    const preview = lastMsg?.content?.slice(0, 60) || "";
+                    return (
+                      <div
+                        key={thread.id}
+                        onClick={() => {
+                          onSelect(thread.id);
+                          onClose();
+                        }}
+                        className={`group flex items-start gap-2 rounded-lg px-3 py-2.5 transition-colors ${
+                          thread.id === activeThreadId
+                            ? "bg-primary/10 text-primary"
+                            : "text-neutral-700 active:bg-muted"
+                        }`}
+                      >
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5">
+                            <span className="truncate text-sm font-medium">
+                              {thread.title || t("chat.newChat")}
+                            </span>
+                            <span className="shrink-0 text-[10px] text-muted-foreground/50">
+                              {formatRelativeTimeShort(thread.updatedAt, t)}
+                            </span>
+                          </div>
+                          {preview && (
+                            <p className="mt-0.5 truncate text-xs text-muted-foreground">{preview}</p>
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            removeThread(thread.id);
+                          }}
+                          className="mt-0.5 shrink-0 rounded p-1 text-muted-foreground active:bg-destructive/10 active:text-destructive"
+                        >
+                          <Trash2 className="size-3.5" />
+                        </button>
+                      </div>
+                    );
+                  })}
                 </div>
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    removeThread(thread.id);
-                  }}
-                  className="mt-0.5 shrink-0 rounded p-1 text-muted-foreground active:bg-destructive/10 active:text-destructive"
-                >
-                  <Trash2 className="size-3.5" />
-                </button>
-              </div>
-            );
-          })}
+              );
+            });
+          })()}
         </div>
       </div>
     </div>
