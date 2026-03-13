@@ -292,7 +292,7 @@ export function ProfileScreen() {
           <View style={s.heatmapHeader}>
             <Text style={s.heatmapTitle}>{t("profile.readingActivity", "阅读活动")}</Text>
             <TouchableOpacity style={s.heatmapDetailBtn} onPress={() => nav.navigate("Stats")}>
-              <BarChart3Icon size={14} color={colors.indigo} />
+              <BarChart3Icon size={14} color={colors.primary} />
               <Text style={s.heatmapDetailText}>{t("profile.viewDetails", "查看详情")}</Text>
             </TouchableOpacity>
           </View>
@@ -394,7 +394,7 @@ const makeStyles = (colors: ThemeColors) =>
       color: colors.mutedForeground,
     },
     heatmapDetailBtn: { flexDirection: "row", alignItems: "center", gap: 4 },
-    heatmapDetailText: { fontSize: fontSize.xs, color: colors.indigo },
+    heatmapDetailText: { fontSize: fontSize.xs, color: colors.primary },
     heatmapContainer: { width: "100%" },
     heatmapGrid: { alignSelf: "center" },
     heatmapLegend: {

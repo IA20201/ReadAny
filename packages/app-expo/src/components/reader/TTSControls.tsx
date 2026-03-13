@@ -166,7 +166,7 @@ export function TTSControls({ onClose }: TTSControlsProps) {
 
       <View style={s.mainBar}>
         <View style={s.leftSection}>
-          <Volume2Icon size={16} color={colors.indigo} />
+          <Volume2Icon size={16} color={colors.primary} />
           <Text style={s.stateLabel}>{stateLabel}</Text>
         </View>
 
@@ -302,7 +302,7 @@ const makeStyles = (colors: ThemeColors) =>
       width: 36,
       height: 36,
       borderRadius: radius.full,
-      backgroundColor: colors.indigo,
+      backgroundColor: colors.primary,
       alignItems: "center",
       justifyContent: "center",
     },

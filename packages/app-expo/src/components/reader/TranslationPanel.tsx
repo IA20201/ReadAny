@@ -145,7 +145,7 @@ export function TranslationPanel({ text, onClose }: TranslationPanelProps) {
                   <Text style={[s.langOptionText, targetLang === lang && s.langOptionTextActive]}>
                     {label}
                   </Text>
-                  {targetLang === lang && <CheckIcon size={14} color={colors.indigo} />}
+                  {targetLang === lang && <CheckIcon size={14} color={colors.primary} />}
                 </TouchableOpacity>
               ),
             )}
@@ -161,7 +161,7 @@ export function TranslationPanel({ text, onClose }: TranslationPanelProps) {
           <Text style={s.translationLabel}>{t("translation.translation", "译文")}</Text>
           {loading ? (
             <View style={s.loadingWrap}>
-              <ActivityIndicator size="small" color={colors.indigo} />
+              <ActivityIndicator size="small" color={colors.primary} />
               <Text style={s.loadingText}>{t("translation.translating", "翻译中...")}</Text>
             </View>
           ) : error ? (
@@ -262,7 +262,7 @@ const makeStyles = (colors: ThemeColors) =>
       color: colors.foreground,
     },
     langOptionTextActive: {
-      color: colors.indigo,
+      color: colors.primary,
       fontWeight: fontWeight.medium,
     },
     content: {
@@ -310,7 +310,7 @@ const makeStyles = (colors: ThemeColors) =>
       paddingHorizontal: 12,
       paddingVertical: 6,
       borderRadius: radius.lg,
-      backgroundColor: colors.indigo,
+      backgroundColor: colors.primary,
       alignSelf: "flex-start",
     },
     retryBtnText: {

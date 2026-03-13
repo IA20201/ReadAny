@@ -108,7 +108,9 @@ export async function triggerVectorizeBook(
       embedding?: number[];
     }> = [];
 
-    for (const chapter of chapters) {
+    const totalChapters = chapters.length;
+    for (let i = 0; i < chapters.length; i++) {
+      const chapter = chapters[i];
       const chunks = chunkContent(
         chapter.content,
         bookId,
@@ -122,6 +124,10 @@ export async function triggerVectorizeBook(
         chapter.segments,
       );
       allChunks.push(...chunks);
+      progress.processedChunks = i + 1;
+      progress.totalChunks = totalChapters;
+      onProgress?.(progress);
+      await yieldToUI();
     }
 
     if (allChunks.length === 0) {

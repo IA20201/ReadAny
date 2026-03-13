@@ -109,7 +109,7 @@ export function ThreadList({
           <Text style={s.headerTitle}>{t("chat.threads", "对话列表")}</Text>
         </View>
         <TouchableOpacity style={s.newBtn} onPress={onCreate} activeOpacity={0.7}>
-          <MessageCirclePlusIcon size={16} color={colors.indigo} />
+          <MessageCirclePlusIcon size={16} color={colors.primary} />
           <Text style={s.newBtnText}>{t("chat.newThread", "新对话")}</Text>
         </TouchableOpacity>
       </View>
@@ -159,12 +159,12 @@ const makeStyles = (colors: ThemeColors) =>
       paddingHorizontal: 10,
       paddingVertical: 6,
       borderRadius: radius.lg,
-      backgroundColor: withOpacity(colors.indigo, 0.1),
+      backgroundColor: withOpacity(colors.primary, 0.1),
     },
     newBtnText: {
       fontSize: fs.xs,
       fontWeight: fw.medium,
-      color: colors.indigo,
+      color: colors.primary,
     },
     item: {
       flexDirection: "row",
@@ -175,7 +175,7 @@ const makeStyles = (colors: ThemeColors) =>
       marginHorizontal: 8,
     },
     itemActive: {
-      backgroundColor: withOpacity(colors.indigo, 0.08),
+      backgroundColor: withOpacity(colors.primary, 0.08),
     },
     itemContent: { flex: 1, gap: 2 },
     itemHeader: {
@@ -189,7 +189,7 @@ const makeStyles = (colors: ThemeColors) =>
       color: colors.foreground,
       flex: 1,
     },
-    itemTitleActive: { color: colors.indigo },
+    itemTitleActive: { color: colors.primary },
     itemTime: {
       fontSize: fs.xs,
       color: colors.mutedForeground,

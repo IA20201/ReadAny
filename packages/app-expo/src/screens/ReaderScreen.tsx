@@ -197,7 +197,7 @@ const makeTocStyles = (colors: ThemeColors) =>
     expandBtn: { width: 20, height: 20, alignItems: "center", justifyContent: "center" },
     expandPlaceholder: { width: 20 },
     itemText: { fontSize: fontSize.sm, color: colors.foreground, flex: 1 },
-    itemTextActive: { color: colors.indigo, fontWeight: fontWeight.medium },
+    itemTextActive: { color: colors.primary, fontWeight: fontWeight.medium },
   });
 
 // ──────────────────────────── ReaderScreen ────────────────────────────
@@ -700,7 +700,7 @@ export function ReaderScreen({ route, navigation }: Props) {
     return (
       <SafeAreaView style={[s.container, { backgroundColor: colors.background }]}>
         <View style={s.loadingWrap}>
-          <ActivityIndicator size="large" color={colors.indigo} />
+          <ActivityIndicator size="large" color={colors.primary} />
           <Text style={s.loadingText}>{t("reader.loading", "正在加载...")}</Text>
         </View>
       </SafeAreaView>
@@ -724,7 +724,7 @@ export function ReaderScreen({ route, navigation }: Props) {
     return (
       <View style={s.container}>
         <View style={s.loadingWrap}>
-          <ActivityIndicator size="large" color={colors.indigo} />
+          <ActivityIndicator size="large" color={colors.primary} />
           <Text style={s.loadingText}>{t("reader.loading", "加载阅读器...")}</Text>
         </View>
       </View>
@@ -780,7 +780,7 @@ export function ReaderScreen({ route, navigation }: Props) {
       {/* Loading overlay */}
       {loading && (
         <View style={s.loadingOverlay}>
-          <ActivityIndicator size="large" color={colors.indigo} />
+          <ActivityIndicator size="large" color={colors.primary} />
         </View>
       )}
 
@@ -940,7 +940,7 @@ export function ReaderScreen({ route, navigation }: Props) {
                 style={[s.toolbarBtn, showTTS && s.toolbarBtnActive]}
                 onPress={handleToggleTTS}
               >
-                <Volume2Icon size={18} color={showTTS ? colors.indigo : "#fff"} />
+                <Volume2Icon size={18} color={showTTS ? colors.primary : "#fff"} />
               </TouchableOpacity>
               <TouchableOpacity style={s.toolbarBtn} onPress={() => setShowSettings(true)}>
                 <SettingsIcon size={18} color="#fff" />
@@ -1587,7 +1587,7 @@ const makeStyles = (colors: ThemeColors) =>
       borderRadius: 1.5,
       overflow: "hidden",
     },
-    sliderFill: { height: "100%", backgroundColor: colors.indigo, borderRadius: 1.5 },
+    sliderFill: { height: "100%", backgroundColor: colors.primary, borderRadius: 1.5 },
 
     thinProgressWrap: {
       position: "absolute",
@@ -1597,7 +1597,7 @@ const makeStyles = (colors: ThemeColors) =>
       backgroundColor: "rgba(255,255,255,0.05)",
       zIndex: 40,
     },
-    thinProgressFill: { height: "100%", backgroundColor: colors.indigo, opacity: 0.8 },
+    thinProgressFill: { height: "100%", backgroundColor: colors.primary, opacity: 0.8 },
 
     searchBarWrap: {
       position: "absolute",

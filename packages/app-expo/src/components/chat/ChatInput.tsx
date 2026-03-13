@@ -174,7 +174,7 @@ const makeStyles = (colors: ThemeColors) =>
     },
     quoteChipText: {
       fontSize: fs.xs,
-      color: colors.indigo,
+      color: colors.primary,
       flex: 1,
     },
     input: {

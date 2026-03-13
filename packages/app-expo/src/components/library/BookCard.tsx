@@ -192,7 +192,7 @@ export const BookCard = memo(function BookCard({
               <AnimatedLoader />
               <Text style={s.vecOverlayText}>
                 {vectorProgress?.status === "chunking"
-                  ? t("home.vec_chunking")
+                  ? `${vecPct}%`
                   : vectorProgress?.status === "embedding"
                     ? `${vecPct}%`
                     : vectorProgress?.status === "indexing"

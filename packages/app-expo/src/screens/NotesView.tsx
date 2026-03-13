@@ -248,14 +248,15 @@ export function NotesView({ initialBookId, showBackButton, edges = ["top"], hide
         {
           text: t("common.delete", "删除"),
           style: "destructive",
-          onPress: () => {
+          onPress: async () => {
             removeHighlight(highlight.id);
+            await loadAllHighlightsWithBooks(500);
             loadStats();
           },
         },
       ]);
     },
-    [removeHighlight, loadStats, t],
+    [removeHighlight, loadAllHighlightsWithBooks, loadStats, t],
   );
 
   const handleDeleteHighlight = useCallback(
@@ -268,15 +269,16 @@ export function NotesView({ initialBookId, showBackButton, edges = ["top"], hide
           {
             text: t("common.delete", "删除"),
             style: "destructive",
-            onPress: () => {
+            onPress: async () => {
               removeHighlight(highlight.id);
+              await loadAllHighlightsWithBooks(500);
               loadStats();
             },
           },
         ],
       );
     },
-    [removeHighlight, loadStats, t],
+    [removeHighlight, loadAllHighlightsWithBooks, loadStats, t],
   );
 
   const startEditNote = useCallback((highlight: HighlightWithBook) => {

@@ -161,7 +161,7 @@ export const BookCard = memo(function BookCard({ book }: BookCardProps) {
             <Loader2 className="h-6 w-6 animate-spin text-white" />
             <span className="mt-1.5 text-xs font-medium text-white">
               {vectorProgress?.status === "chunking"
-                ? t("home.vec_chunking")
+                ? `${vecPct}%`
                 : vectorProgress?.status === "embedding"
                   ? `${vecPct}%`
                   : vectorProgress?.status === "indexing"
