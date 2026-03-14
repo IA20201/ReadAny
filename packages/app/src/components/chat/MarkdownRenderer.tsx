@@ -21,19 +21,38 @@ function MermaidBlock({ code }: { code: string }) {
   const [scale, setScale] = useState(1);
   const svgRef = useRef<HTMLDivElement>(null);
   const fullscreenSvgRef = useRef<HTMLDivElement>(null);
+  const svgCacheRef = useRef<string>("");
+  const codeRef = useRef<string>("");
   
-  const { svg, error } = useMemo(() => {
+  // Only re-render SVG when code changes
+  const svg = useMemo(() => {
+    if (code === codeRef.current && svgCacheRef.current) {
+      return svgCacheRef.current;
+    }
     try {
-      return {
-        svg: renderMermaidSVG(code, {
-          bg: "var(--background)",
-          fg: "var(--foreground)",
-          transparent: true,
-        }),
-        error: null,
-      };
+      const rendered = renderMermaidSVG(code, {
+        bg: "var(--background)",
+        fg: "var(--foreground)",
+        transparent: true,
+      });
+      codeRef.current = code;
+      svgCacheRef.current = rendered;
+      return rendered;
     } catch (err) {
-      return { svg: null, error: err instanceof Error ? err : new Error(String(err)) };
+      return null;
+    }
+  }, [code]);
+
+  const error = useMemo(() => {
+    try {
+      renderMermaidSVG(code, {
+        bg: "var(--background)",
+        fg: "var(--foreground)",
+        transparent: true,
+      });
+      return null;
+    } catch (err) {
+      return err instanceof Error ? err : new Error(String(err));
     }
   }, [code]);
 
@@ -142,7 +161,7 @@ function MermaidBlock({ code }: { code: string }) {
                   width: `${100 / scale}%`,
                   height: `${100 / scale}%`,
                 }}
-                dangerouslySetInnerHTML={{ __html: svg! }}
+                dangerouslySetInnerHTML={{ __html: svg || "" }}
               />
             </div>
           </div>
@@ -166,7 +185,7 @@ function MermaidBlock({ code }: { code: string }) {
               width: `${100 / scale}%`,
               height: `${100 / scale}%`,
             }}
-            dangerouslySetInnerHTML={{ __html: svg! }}
+            dangerouslySetInnerHTML={{ __html: svg || "" }}
           />
         </div>
         <div className="absolute right-2 top-2 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
