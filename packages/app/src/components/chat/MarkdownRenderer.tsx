@@ -6,7 +6,7 @@
  */
 import { renderMermaidSVG } from "beautiful-mermaid";
 import { Check, Copy, ArrowUpRight, Download, Maximize2, Minimize2, ZoomIn, ZoomOut } from "lucide-react";
-import React, { useMemo, useState, useRef, useCallback } from "react";
+import React, { useMemo, useState, useRef, useCallback, memo } from "react";
 import Markdown from "react-markdown";
 import rehypeHighlight from "rehype-highlight";
 import remarkGfm from "remark-gfm";
@@ -15,29 +15,21 @@ import { useTranslation } from "react-i18next";
 import { createPortal } from "react-dom";
 
 /** Mermaid code block — renders synchronously, zero-flash */
-function MermaidBlock({ code }: { code: string }) {
+const MermaidBlock = memo(function MermaidBlock({ code }: { code: string }) {
   const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
   const [scale, setScale] = useState(1);
   const svgRef = useRef<HTMLDivElement>(null);
   const fullscreenSvgRef = useRef<HTMLDivElement>(null);
-  const svgCacheRef = useRef<string>("");
-  const codeRef = useRef<string>("");
   
-  // Only re-render SVG when code changes
+  // Memoize SVG rendering - only re-render when code changes
   const svg = useMemo(() => {
-    if (code === codeRef.current && svgCacheRef.current) {
-      return svgCacheRef.current;
-    }
     try {
-      const rendered = renderMermaidSVG(code, {
+      return renderMermaidSVG(code, {
         bg: "var(--background)",
         fg: "var(--foreground)",
         transparent: true,
       });
-      codeRef.current = code;
-      svgCacheRef.current = rendered;
-      return rendered;
     } catch (err) {
       return null;
     }
@@ -212,7 +204,7 @@ function MermaidBlock({ code }: { code: string }) {
       {fullscreenOverlay}
     </>
   );
-}
+});
 
 /** Copy button for code blocks */
 function CopyButton({ text }: { text: string }) {
@@ -290,148 +282,140 @@ function processCitationText(
   });
 }
 
-/** Create markdown components with citation processing */
+// Static components that don't depend on citations
+const StaticCode = memo(function StaticCode({
+  className: codeClassName,
+  children,
+  ...props
+}: React.ComponentProps<"code">) {
+  const text = String(children).replace(/\n$/, "");
+  const langMatch = /language-(\w+)/.exec(codeClassName || "");
+  const lang = langMatch?.[1];
+
+  // Inline code (no language class, no newlines)
+  if (!lang && !text.includes("\n")) {
+    return (
+      <code
+        className="rounded-md bg-muted px-1.5 py-0.5 text-[0.85em] font-mono"
+        {...props}
+      >
+        {children}
+      </code>
+    );
+  }
+
+  // Mermaid diagram
+  if (lang === "mermaid") {
+    // mermaid mindmap syntax is not supported by beautiful-mermaid,
+    // render as a styled code block instead of crashing
+    if (text.trim().startsWith("mindmap")) {
+      return (
+        <div className="group/code relative">
+          <div className="absolute left-3 top-0 z-10 rounded-b-md bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+            mindmap
+          </div>
+          <CopyButton text={text} />
+          <pre className="!mt-0 !mb-0 rounded-lg border bg-muted/30 p-4">
+            <code className="text-sm">{text}</code>
+          </pre>
+        </div>
+      );
+    }
+    return <MermaidBlock code={text} />;
+  }
+
+  // Regular code block with copy button
+  return (
+    <div className="group/code relative">
+      {lang && (
+        <div className="absolute left-3 top-0 z-10 rounded-b-md bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+          {lang}
+        </div>
+      )}
+      <CopyButton text={text} />
+      <pre className="!mt-0 !mb-0">
+        <code className={codeClassName} {...props}>
+          {children}
+        </code>
+      </pre>
+    </div>
+  );
+});
+
+const StaticLink = memo(function StaticLink({ href, children, ...props }: React.ComponentProps<"a">) {
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="text-primary underline decoration-primary/30 underline-offset-2 hover:decoration-primary/60"
+      {...props}
+    >
+      {children}
+    </a>
+  );
+});
+
+const StaticTable = memo(function StaticTable({ children, ...props }: React.ComponentProps<"table">) {
+  return (
+    <div className="my-3 overflow-x-auto rounded-lg border">
+      <table className="min-w-full" {...props}>
+        {children}
+      </table>
+    </div>
+  );
+});
+
+// Create wrapper components that handle citations
 function createMdComponents(
   citations?: CitationPart[],
   onCitationClick?: (citation: CitationPart) => void
 ) {
-  return {
-  // Code blocks: mermaid → diagram, others → highlighted with copy button
-  code({
-    className: codeClassName,
-    children,
-    ...props
-  }: React.ComponentProps<"code">) {
-    const text = String(children).replace(/\n$/, "");
-    const langMatch = /language-(\w+)/.exec(codeClassName || "");
-    const lang = langMatch?.[1];
-
-    // Inline code (no language class, no newlines)
-    if (!lang && !text.includes("\n")) {
-      return (
-        <code
-          className="rounded-md bg-muted px-1.5 py-0.5 text-[0.85em] font-mono"
-          {...props}
-        >
-          {children}
-        </code>
-      );
-    }
-
-    // Mermaid diagram
-    if (lang === "mermaid") {
-      // mermaid mindmap syntax is not supported by beautiful-mermaid,
-      // render as a styled code block instead of crashing
-      if (text.trim().startsWith("mindmap")) {
-        return (
-          <div className="group/code relative">
-            <div className="absolute left-3 top-0 z-10 rounded-b-md bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
-              mindmap
-            </div>
-            <CopyButton text={text} />
-            <pre className="!mt-0 !mb-0 rounded-lg border bg-muted/30 p-4">
-              <code className="text-sm">{text}</code>
-            </pre>
-          </div>
-        );
+  const CodeComponent = citations || onCitationClick
+    ? function Code(props: React.ComponentProps<"code">) {
+        return <StaticCode {...props} />;
       }
-      return <MermaidBlock code={text} />;
-    }
+    : StaticCode;
 
-    // Regular code block with copy button
-    return (
-      <div className="group/code relative">
-        {lang && (
-          <div className="absolute left-3 top-0 z-10 rounded-b-md bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
-            {lang}
-          </div>
-        )}
-        <CopyButton text={text} />
-        <pre className="!mt-0 !mb-0">
-          <code className={codeClassName} {...props}>
-            {children}
-          </code>
-        </pre>
-      </div>
-    );
-  },
+  const wrapWithCitations = (Component: React.ComponentType<any>) => {
+    return function Wrapped(props: any) {
+      return (
+        <Component {...props}>
+          {processCitationText(props.children, citations, onCitationClick)}
+        </Component>
+      );
+    };
+  };
 
-  // Links open externally
-  a({ href, children, ...props }: React.ComponentProps<"a">) {
-    return (
-      <a
-        href={href}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="text-primary underline decoration-primary/30 underline-offset-2 hover:decoration-primary/60"
-        {...props}
-      >
-        {children}
-      </a>
-    );
-  },
-
-  // Tables
-  table({ children, ...props }: React.ComponentProps<"table">) {
-    return (
-      <div className="my-3 overflow-x-auto rounded-lg border">
-        <table className="min-w-full" {...props}>
+  return {
+    code: CodeComponent,
+    a: StaticLink,
+    table: StaticTable,
+    th: wrapWithCitations(function Th({ children, ...props }: React.ComponentProps<"th">) {
+      return (
+        <th className="bg-muted/50 px-3 py-2 text-left text-xs font-semibold" {...props}>
           {children}
-        </table>
-      </div>
-    );
-  },
-  th({ children, ...props }: React.ComponentProps<"th">) {
-    return (
-      <th className="bg-muted/50 px-3 py-2 text-left text-xs font-semibold" {...props}>
-        {processCitationText(children, citations, onCitationClick)}
-      </th>
-    );
-  },
-  td({ children, ...props }: React.ComponentProps<"td">) {
-    return (
-      <td className="border-t px-3 py-2 text-sm" {...props}>
-        {processCitationText(children, citations, onCitationClick)}
-      </td>
-    );
-  },
-
-  // Text-containing elements with citation processing
-  p({ children, ...props }: React.ComponentProps<"p">) {
-    return <p {...props}>{processCitationText(children, citations, onCitationClick)}</p>;
-  },
-  li({ children, ...props }: React.ComponentProps<"li">) {
-    return <li {...props}>{processCitationText(children, citations, onCitationClick)}</li>;
-  },
-  strong({ children, ...props }: React.ComponentProps<"strong">) {
-    return <strong {...props}>{processCitationText(children, citations, onCitationClick)}</strong>;
-  },
-  em({ children, ...props }: React.ComponentProps<"em">) {
-    return <em {...props}>{processCitationText(children, citations, onCitationClick)}</em>;
-  },
-  blockquote({ children, ...props }: React.ComponentProps<"blockquote">) {
-    return (
-      <blockquote {...props}>{processCitationText(children, citations, onCitationClick)}</blockquote>
-    );
-  },
-  h1({ children, ...props }: React.ComponentProps<"h1">) {
-    return <h1 {...props}>{processCitationText(children, citations, onCitationClick)}</h1>;
-  },
-  h2({ children, ...props }: React.ComponentProps<"h2">) {
-    return <h2 {...props}>{processCitationText(children, citations, onCitationClick)}</h2>;
-  },
-  h3({ children, ...props }: React.ComponentProps<"h3">) {
-    return <h3 {...props}>{processCitationText(children, citations, onCitationClick)}</h3>;
-  },
-  h4({ children, ...props }: React.ComponentProps<"h4">) {
-    return <h4 {...props}>{processCitationText(children, citations, onCitationClick)}</h4>;
-  },
-  h5({ children, ...props }: React.ComponentProps<"h5">) {
-    return <h5 {...props}>{processCitationText(children, citations, onCitationClick)}</h5>;
-  },
-  h6({ children, ...props }: React.ComponentProps<"h6">) {
-    return <h6 {...props}>{processCitationText(children, citations, onCitationClick)}</h6>;
-  },
+        </th>
+      );
+    }),
+    td: wrapWithCitations(function Td({ children, ...props }: React.ComponentProps<"td">) {
+      return (
+        <td className="border-t px-3 py-2 text-sm" {...props}>
+          {children}
+        </td>
+      );
+    }),
+    p: wrapWithCitations("p"),
+    li: wrapWithCitations("li"),
+    strong: wrapWithCitations("strong"),
+    em: wrapWithCitations("em"),
+    blockquote: wrapWithCitations("blockquote"),
+    h1: wrapWithCitations("h1"),
+    h2: wrapWithCitations("h2"),
+    h3: wrapWithCitations("h3"),
+    h4: wrapWithCitations("h4"),
+    h5: wrapWithCitations("h5"),
+    h6: wrapWithCitations("h6"),
   };
 }
 
