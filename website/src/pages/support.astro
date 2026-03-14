@@ -110,34 +110,43 @@ const categories = [
 
 <script is:inline>
   // Search bar logic
-  const searchInput = document.getElementById('support-search-input');
-  const searchBtn = document.querySelector('.search-btn');
+  function initSupportSearch() {
+    const searchInput = document.getElementById('support-search-input');
+    const searchBtn = document.querySelector('.search-btn');
 
-  function openSearch() {
-    // Find Starlight's search button and click it to open the modal
-    const starlightSearchBtn = document.querySelector('button[data-open-modal]');
-    if (starlightSearchBtn) {
-      starlightSearchBtn.click();
-      
-      // Try to transfer the search query to the modal's input
-      const query = searchInput.value;
-      if (query) {
-        setTimeout(() => {
-          const modalInput = document.querySelector('.pagefind-ui__search-input');
-          if (modalInput) {
-            modalInput.value = query;
-            modalInput.dispatchEvent(new Event('input', { bubbles: true }));
-          }
-        }, 100);
+    function openSearch() {
+      // Find Starlight's search button and click it to open the modal
+      const starlightSearchBtn = document.querySelector('site-search button[data-open-modal]');
+      if (starlightSearchBtn) {
+        starlightSearchBtn.click();
+
+        // Try to transfer the search query to the modal's input
+        const query = searchInput?.value;
+        if (query) {
+          setTimeout(() => {
+            const modalInput = document.querySelector('.pagefind-ui__search-input');
+            if (modalInput) {
+              modalInput.value = query;
+              modalInput.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+          }, 100);
+        }
       }
     }
+
+    searchInput?.addEventListener('click', openSearch);
+    searchInput?.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') openSearch();
+    });
+    searchBtn?.addEventListener('click', openSearch);
   }
 
-  searchInput?.addEventListener('click', openSearch);
-  searchInput?.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') openSearch();
-  });
-  searchBtn?.addEventListener('click', openSearch);
+  // Initialize on page load
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initSupportSearch);
+  } else {
+    initSupportSearch();
+  }
 </script>
 
 <style>

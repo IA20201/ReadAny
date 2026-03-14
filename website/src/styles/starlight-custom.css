@@ -493,13 +493,6 @@ article {
   margin-bottom: 0.5rem;
 }
 
-.sl-markdown-content>p:first-of-type {
-  text-align: center;
-  color: var(--sl-color-gray-3);
-  font-size: 1.125rem;
-  margin-bottom: 2rem;
-}
-
 /* ── Footer ─────────────────────────────────────────── */
 .sl-footer {
   border-top: 1px solid var(--sl-color-border);
@@ -568,7 +561,7 @@ article {
   border: none !important;
   border-bottom: 1px solid var(--sl-color-border) !important;
   border-radius: 0 !important;
-  padding: 1.75rem 1.5rem !important;
+  padding: 1.75rem 1.5rem 1.75rem 3.5rem !important;
   font-size: 1.25rem !important;
   font-weight: 500 !important;
   color: var(--foreground) !important;
@@ -703,4 +696,62 @@ article {
   .main-pane {
     max-width: 100%;
   }
+}
+
+/* ── Scrollbar Styles ─────────────────────────────────────────── */
+/* Light theme scrollbar */
+[data-theme="light"] ::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+[data-theme="light"] ::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+
+[data-theme="light"] ::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 5px;
+}
+
+[data-theme="light"] ::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Dark theme scrollbar */
+[data-theme="dark"] ::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+[data-theme="dark"] ::-webkit-scrollbar-track {
+  background: #27272a;
+}
+
+[data-theme="dark"] ::-webkit-scrollbar-thumb {
+  background: #52525b;
+  border-radius: 5px;
+}
+
+[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
+  background: #71717a;
+}
+
+/* Sepia theme scrollbar */
+[data-theme="sepia"] ::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+[data-theme="sepia"] ::-webkit-scrollbar-track {
+  background: #e6d9c3;
+}
+
+[data-theme="sepia"] ::-webkit-scrollbar-thumb {
+  background: #c4b5a0;
+  border-radius: 5px;
+}
+
+[data-theme="sepia"] ::-webkit-scrollbar-thumb:hover {
+  background: #a89a82;
 }
