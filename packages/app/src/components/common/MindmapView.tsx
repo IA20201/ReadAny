@@ -2,7 +2,7 @@ import { useEffect, useRef, useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Transformer } from "markmap-lib";
 import { Markmap } from "markmap-view";
-import { Maximize2, Minimize2, Download, ZoomIn, ZoomOut } from "lucide-react";
+import { Maximize2, Minimize2, Download, RotateCcw } from "lucide-react";
 import { createPortal } from "react-dom";
 import { toast } from "sonner";
 
@@ -20,8 +20,6 @@ export function MindmapView({ markdown, title }: MindmapViewProps) {
   const markmapRef = useRef<Markmap | null>(null);
   const fullscreenMarkmapRef = useRef<Markmap | null>(null);
   const [expanded, setExpanded] = useState(false);
-  const [scale, setScale] = useState(1);
-  const [showTooltip, setShowTooltip] = useState(false);
 
   const renderMap = useCallback(() => {
     if (!svgRef.current || !markdown) return;
@@ -33,7 +31,7 @@ export function MindmapView({ markdown, title }: MindmapViewProps) {
       markmapRef.current.fit();
     } else {
       const mm = Markmap.create(svgRef.current, {
-        autoFit: false,
+        autoFit: true,
         fitRatio: 0.8,
         duration: 300,
         maxWidth: 300,
@@ -61,9 +59,6 @@ export function MindmapView({ markdown, title }: MindmapViewProps) {
         `,
       }, root);
       markmapRef.current = mm;
-      // Set initial scale to 1
-      mm.svg.select('g').attr('transform', 'translate(400,200) scale(1)');
-      setScale(1);
     }
   }, [markdown]);
 
@@ -76,7 +71,7 @@ export function MindmapView({ markdown, title }: MindmapViewProps) {
       fullscreenMarkmapRef.current.setData(root);
     } else {
       const mm = Markmap.create(fullscreenSvgRef.current, {
-        autoFit: false,
+        autoFit: true,
         fitRatio: 0.8,
         duration: 300,
         maxWidth: 400,
@@ -104,53 +99,12 @@ export function MindmapView({ markdown, title }: MindmapViewProps) {
         `,
       }, root);
       fullscreenMarkmapRef.current = mm;
-      // Set initial scale to 1 (center in fullscreen container)
-      mm.svg.select('g').attr('transform', `translate(${window.innerWidth * 0.45},${window.innerHeight * 0.45}) scale(1)`);
-      setScale(1);
     }
   }, [markdown, expanded]);
 
   useEffect(() => {
     renderMap();
   }, [renderMap]);
-
-  // Update scale display on interaction end
-  useEffect(() => {
-    const handleInteractionEnd = (e: Event) => {
-      const target = e.target as HTMLElement;
-      
-      // Check if click is inside our mindmap containers
-      const isInMindmap = target.closest('[data-mindmap="true"]');
-      const isInFullscreen = target.closest('[data-fullscreen="true"]');
-      
-      if (!isInMindmap && !isInFullscreen) return;
-      
-      setTimeout(() => {
-        const mm = isInFullscreen ? fullscreenMarkmapRef.current : markmapRef.current;
-        
-        if (mm) {
-          const svg = mm.svg;
-          const g = svg.select('g');
-          const transform = g.attr('transform') || '';
-          const scaleMatch = transform.match(/scale\(([^)]+)\)/);
-          if (scaleMatch) {
-            setScale(parseFloat(scaleMatch[1]));
-          }
-        }
-      }, 350);
-    };
-
-    document.addEventListener('dblclick', handleInteractionEnd, true);
-
-    return () => {
-      document.removeEventListener('dblclick', handleInteractionEnd, true);
-    };
-  }, []);
-
-  // Reset scale when expanding/collapsing
-  useEffect(() => {
-    setScale(1);
-  }, [expanded]);
 
   useEffect(() => {
     if (expanded) {
@@ -173,17 +127,22 @@ export function MindmapView({ markdown, title }: MindmapViewProps) {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [expanded]);
 
+  const handleReset = useCallback(() => {
+    const mm = expanded ? fullscreenMarkmapRef.current : markmapRef.current;
+    if (mm) {
+      mm.fit();
+    }
+  }, [expanded]);
+
   const handleDownload = useCallback(() => {
     const svgElement = expanded ? fullscreenSvgRef.current : svgRef.current;
     if (!svgElement) return;
 
-    // Use original SVG to calculate bounds (more accurate)
     const gElement = svgElement.querySelector('g');
     let contentX = -500, contentY = -500, contentWidth = 2000, contentHeight = 1500;
     
     if (gElement) {
       try {
-        // Get bbox from original SVG
         const bbox = gElement.getBBox();
         const padding = 50;
         contentX = bbox.x - padding;
@@ -191,29 +150,23 @@ export function MindmapView({ markdown, title }: MindmapViewProps) {
         contentWidth = bbox.width + padding * 2;
         contentHeight = bbox.height + padding * 2;
       } catch (e) {
-        // Use defaults
       }
     }
     
-    // Clone the SVG to modify it
     const clonedSvg = svgElement.cloneNode(true) as SVGSVGElement;
     
-    // Reset transform on g element to show all content at original scale
     const clonedG = clonedSvg.querySelector('g');
     if (clonedG) {
       clonedG.setAttribute('transform', 'translate(0,0) scale(1)');
     }
     
-    // Set viewBox to fit all content
     clonedSvg.setAttribute('viewBox', `${contentX} ${contentY} ${contentWidth} ${contentHeight}`);
     clonedSvg.setAttribute('width', String(contentWidth));
     clonedSvg.setAttribute('height', String(contentHeight));
     
-    // Remove any existing width/height styles
     clonedSvg.style.width = '';
     clonedSvg.style.height = '';
     
-    // Add white background
     const bgRect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
     bgRect.setAttribute("x", String(contentX));
     bgRect.setAttribute("y", String(contentY));
@@ -222,7 +175,6 @@ export function MindmapView({ markdown, title }: MindmapViewProps) {
     bgRect.setAttribute("fill", "white");
     clonedSvg.insertBefore(bgRect, clonedSvg.firstChild);
     
-    // Add font styles and color overrides
     const style = document.createElementNS("http://www.w3.org/2000/svg", "style");
     style.textContent = `
       .markmap {
@@ -242,7 +194,6 @@ export function MindmapView({ markdown, title }: MindmapViewProps) {
     clonedSvg.insertBefore(style, clonedSvg.firstChild);
 
     let svgData = new XMLSerializer().serializeToString(clonedSvg);
-    // Replace any remaining CSS variables with actual values
     svgData = svgData.replace(/var\(--foreground\)/g, '#333');
     svgData = svgData.replace(/var\(--background\)/g, '#fff');
     svgData = svgData.replace(/var\(--muted\)/g, '#f5f5f5');
@@ -257,92 +208,8 @@ export function MindmapView({ markdown, title }: MindmapViewProps) {
     document.body.removeChild(downloadLink);
     URL.revokeObjectURL(svgUrl);
     
-    // Show success message
     toast.success(t("common.downloadSuccess", "图表已下载"));
   }, [expanded, title, t]);
-
-  const handleZoomIn = useCallback(() => {
-    const newScale = Math.min(scale + 0.2, 3);
-    setScale(newScale);
-    // Apply zoom using markmap's transform
-    if (markmapRef.current) {
-      const svg = markmapRef.current.svg;
-      const g = svg.select('g');
-      const currentTransform = g.attr('transform') || '';
-      const translateMatch = currentTransform.match(/translate\(([^,]+),\s*([^)]+)\)/);
-      if (translateMatch) {
-        const x = parseFloat(translateMatch[1]);
-        const y = parseFloat(translateMatch[2]);
-        g.attr('transform', `translate(${x},${y}) scale(${newScale})`);
-      }
-    }
-    if (fullscreenMarkmapRef.current) {
-      const svg = fullscreenMarkmapRef.current.svg;
-      const g = svg.select('g');
-      const currentTransform = g.attr('transform') || '';
-      const translateMatch = currentTransform.match(/translate\(([^,]+),\s*([^)]+)\)/);
-      if (translateMatch) {
-        const x = parseFloat(translateMatch[1]);
-        const y = parseFloat(translateMatch[2]);
-        g.attr('transform', `translate(${x},${y}) scale(${newScale})`);
-      }
-    }
-  }, [scale]);
-
-  const handleZoomOut = useCallback(() => {
-    const newScale = Math.max(scale - 0.2, 0.3);
-    setScale(newScale);
-    // Apply zoom using markmap's transform
-    if (markmapRef.current) {
-      const svg = markmapRef.current.svg;
-      const g = svg.select('g');
-      const currentTransform = g.attr('transform') || '';
-      const translateMatch = currentTransform.match(/translate\(([^,]+),\s*([^)]+)\)/);
-      if (translateMatch) {
-        const x = parseFloat(translateMatch[1]);
-        const y = parseFloat(translateMatch[2]);
-        g.attr('transform', `translate(${x},${y}) scale(${newScale})`);
-      }
-    }
-    if (fullscreenMarkmapRef.current) {
-      const svg = fullscreenMarkmapRef.current.svg;
-      const g = svg.select('g');
-      const currentTransform = g.attr('transform') || '';
-      const translateMatch = currentTransform.match(/translate\(([^,]+),\s*([^)]+)\)/);
-      if (translateMatch) {
-        const x = parseFloat(translateMatch[1]);
-        const y = parseFloat(translateMatch[2]);
-        g.attr('transform', `translate(${x},${y}) scale(${newScale})`);
-      }
-    }
-  }, [scale]);
-
-  const handleResetZoom = useCallback(() => {
-    setScale(1);
-    // Reset transform to scale 1 without changing position
-    if (markmapRef.current) {
-      const svg = markmapRef.current.svg;
-      const g = svg.select('g');
-      const currentTransform = g.attr('transform') || '';
-      const translateMatch = currentTransform.match(/translate\(([^,]+),\s*([^)]+)\)/);
-      if (translateMatch) {
-        const x = parseFloat(translateMatch[1]);
-        const y = parseFloat(translateMatch[2]);
-        g.attr('transform', `translate(${x},${y}) scale(1)`);
-      }
-    }
-    if (fullscreenMarkmapRef.current) {
-      const svg = fullscreenMarkmapRef.current.svg;
-      const g = svg.select('g');
-      const currentTransform = g.attr('transform') || '';
-      const translateMatch = currentTransform.match(/translate\(([^,]+),\s*([^)]+)\)/);
-      if (translateMatch) {
-        const x = parseFloat(translateMatch[1]);
-        const y = parseFloat(translateMatch[2]);
-        g.attr('transform', `translate(${x},${y}) scale(1)`);
-      }
-    }
-  }, []);
 
   const displayTitle = title && title.length > 20 ? title.slice(0, 20) + "..." : title;
 
@@ -365,29 +232,13 @@ export function MindmapView({ markdown, title }: MindmapViewProps) {
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={handleZoomOut}
+                  onClick={handleReset}
                   className="rounded p-1.5 hover:bg-muted transition-colors"
-                  title={t("common.zoomOut", "缩小")}
+                  title={t("common.reset", "复原")}
                 >
-                  <ZoomOut className="h-5 w-5 text-muted-foreground" />
+                  <RotateCcw className="h-5 w-5 text-muted-foreground" />
                 </button>
-                <button
-                  type="button"
-                  onClick={handleResetZoom}
-                  className="text-xs text-muted-foreground min-w-[3rem] hover:text-foreground transition-colors"
-                  title={t("common.resetZoom", "重置缩放")}
-                >
-                  {Math.round(scale * 100)}%
-                </button>
-                <button
-                  type="button"
-                  onClick={handleZoomIn}
-                  className="rounded p-1.5 hover:bg-muted transition-colors"
-                  title={t("common.zoomIn", "放大")}
-                >
-                  <ZoomIn className="h-5 w-5 text-muted-foreground" />
-                </button>
-                <div className="w-px h-5 bg-border mx-1" />
+                <div className="w-px h-5 bg-border" />
                 <button
                   type="button"
                   onClick={handleDownload}
@@ -406,11 +257,16 @@ export function MindmapView({ markdown, title }: MindmapViewProps) {
                 </button>
               </div>
             </div>
-            <div className="flex-1 overflow-auto" data-fullscreen="true">
+            <div className="flex-1 overflow-hidden" data-fullscreen="true">
               <svg
                 ref={fullscreenSvgRef}
                 className="w-full h-full"
               />
+            </div>
+            <div className="border-t border-border px-4 py-2">
+              <span className="text-xs text-muted-foreground">
+                {t("mindmap.hint", "双击放大 · 拖动移动 · 点击节点展开/收起")}
+              </span>
             </div>
           </div>
         </div>,
@@ -431,29 +287,12 @@ export function MindmapView({ markdown, title }: MindmapViewProps) {
           <div className="flex items-center gap-1">
             <button
               type="button"
-              onClick={handleZoomOut}
+              onClick={handleReset}
               className="rounded p-1 hover:bg-muted transition-colors"
-              title={t("common.zoomOut", "缩小")}
+              title={t("common.reset", "复原")}
             >
-              <ZoomOut className="h-4 w-4 text-muted-foreground" />
+              <RotateCcw className="h-4 w-4 text-muted-foreground" />
             </button>
-            <button
-              type="button"
-              onClick={handleResetZoom}
-              className="text-xs text-muted-foreground min-w-[3rem] text-center hover:text-foreground transition-colors"
-              title={t("common.resetZoom", "重置缩放")}
-            >
-              {Math.round(scale * 100)}%
-            </button>
-            <button
-              type="button"
-              onClick={handleZoomIn}
-              className="rounded p-1 hover:bg-muted transition-colors"
-              title={t("common.zoomIn", "放大")}
-            >
-              <ZoomIn className="h-4 w-4 text-muted-foreground" />
-            </button>
-            <div className="w-px h-4 bg-border mx-1" />
             <button
               type="button"
               onClick={handleDownload}
@@ -473,11 +312,16 @@ export function MindmapView({ markdown, title }: MindmapViewProps) {
           </div>
         </div>
 
-        <div className="overflow-auto" style={{ height: 400 }} data-mindmap="true">
+        <div className="overflow-hidden" style={{ height: 400 }} data-mindmap="true">
           <svg
             ref={svgRef}
             className="w-full h-full"
           />
+        </div>
+        <div className="border-t border-border px-3 py-1.5">
+          <span className="text-xs text-muted-foreground">
+            {t("mindmap.hint", "双击放大 · 拖动移动 · 点击节点展开/收起")}
+          </span>
         </div>
       </div>
 

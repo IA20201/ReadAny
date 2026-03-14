@@ -555,3 +555,54 @@ export const LibraryIcon = icon(() => (
     <Path d="M4 4v16" />
   </>
 ));
+
+// Mindmap/Mermaid view icons
+export const ZoomIn = icon(() => (
+  <>
+    <Circle cx="11" cy="11" r="8" />
+    <Path d="m21 21-4.3-4.3" />
+    <Path d="M11 8v6" />
+    <Path d="M8 11h6" />
+  </>
+));
+
+export const ZoomOut = icon(() => (
+  <>
+    <Circle cx="11" cy="11" r="8" />
+    <Path d="m21 21-4.3-4.3" />
+    <Path d="M8 11h6" />
+  </>
+));
+
+export const Download = icon(() => (
+  <>
+    <Path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+    <Polyline points="7 10 12 15 17 10" />
+    <Line x1="12" x2="12" y1="15" y2="3" />
+  </>
+));
+
+export const RotateCcw = icon(() => (
+  <>
+    <Path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+    <Path d="M3 3v5h5" />
+  </>
+));
+
+export const Maximize2 = icon(() => (
+  <>
+    <Polyline points="15 3 21 3 21 9" />
+    <Polyline points="9 21 3 21 3 15" />
+    <Line x1="21" x2="14" y1="3" y2="10" />
+    <Line x1="3" x2="10" y1="21" y2="14" />
+  </>
+));
+
+export const Minimize2 = icon(() => (
+  <>
+    <Polyline points="4 14 10 14 10 20" />
+    <Polyline points="20 10 14 10 14 4" />
+    <Line x1="14" x2="21" y1="10" y2="3" />
+    <Line x1="3" x2="10" y1="21" y2="14" />
+  </>
+));

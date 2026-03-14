@@ -61,13 +61,20 @@ export interface MindmapPart extends BasePart {
   markdown: string;
 }
 
+/** A mermaid diagram generated from content */
+export interface MermaidPart extends BasePart {
+  type: "mermaid";
+  title: string;
+  chart: string;
+}
+
 /** A system message indicating generation was aborted by user */
 export interface AbortedPart extends BasePart {
   type: "aborted";
   reason: string;
 }
 
-export type Part = TextPart | ReasoningPart | ToolCallPart | CitationPart | QuotePart | MindmapPart | AbortedPart;
+export type Part = TextPart | ReasoningPart | ToolCallPart | CitationPart | QuotePart | MindmapPart | MermaidPart | AbortedPart;
 
 export interface MessageV2 {
   id: string;
@@ -185,6 +192,10 @@ export function isMindmapPart(part: Part): part is MindmapPart {
   return part.type === "mindmap";
 }
 
+export function isMermaidPart(part: Part): part is MermaidPart {
+  return part.type === "mermaid";
+}
+
 export function createQuotePart(text: string, source?: string): QuotePart {
   return {
     id: `quote-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -202,6 +213,17 @@ export function createMindmapPart(title: string, markdown: string): MindmapPart 
     type: "mindmap",
     title,
     markdown,
+    status: "completed",
+    createdAt: Date.now(),
+  };
+}
+
+export function createMermaidPart(title: string, chart: string): MermaidPart {
+  return {
+    id: `mermaid-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    type: "mermaid",
+    title,
+    chart,
     status: "completed",
     createdAt: Date.now(),
   };

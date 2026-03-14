@@ -5,8 +5,8 @@
  * - Mermaid diagrams via beautiful-mermaid (synchronous SVG rendering)
  */
 import { renderMermaidSVG } from "beautiful-mermaid";
-import { Check, Copy, ArrowUpRight, Download, Maximize2, Minimize2, ZoomIn, ZoomOut } from "lucide-react";
-import React, { useMemo, useState, useRef, useCallback, memo, useEffect, createContext, useContext } from "react";
+import { Check, Copy, ArrowUpRight, Download, Maximize2, Minimize2, RotateCcw } from "lucide-react";
+import React, { useMemo, useState, useRef, useCallback, memo, createContext, useContext, useEffect } from "react";
 import Markdown from "react-markdown";
 import rehypeHighlight from "rehype-highlight";
 import remarkGfm from "remark-gfm";
@@ -14,26 +14,21 @@ import type { CitationPart } from "@readany/core/types/message";
 import { useTranslation } from "react-i18next";
 import { createPortal } from "react-dom";
 import { toast } from "sonner";
+import * as d3 from "d3";
 
-// Context for citations
 const CitationContext = createContext<{
   citations?: CitationPart[];
   onCitationClick?: (citation: CitationPart) => void;
 }>({});
 
-/** Mermaid code block — renders synchronously, zero-flash */
 const MermaidBlock = memo(function MermaidBlock({ code }: { code: string }) {
   const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
-  const [scale, setScale] = useState(1);
-  const [position, setPosition] = useState({ x: 0, y: 0 });
-  const [isDragging, setIsDragging] = useState(false);
-  const dragStartRef = useRef({ x: 0, y: 0, posX: 0, posY: 0 });
   const svgRef = useRef<HTMLDivElement>(null);
   const fullscreenSvgRef = useRef<HTMLDivElement>(null);
-  const instanceId = useRef(Math.random().toString(36).slice(2, 8));
+  const zoomRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
+  const fullscreenZoomRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
   
-  // Memoize SVG rendering - only re-render when code changes
   const svg = useMemo(() => {
     try {
       const rendered = renderMermaidSVG(code, {
@@ -41,8 +36,6 @@ const MermaidBlock = memo(function MermaidBlock({ code }: { code: string }) {
         fg: "var(--foreground)",
         transparent: true,
       });
-      // Add style override to ensure all text and edges are visible in all themes
-      // Insert style after the opening svg tag, preserving existing attributes
       return rendered?.replace(
         /(<svg[^>]*>)/,
         `$1<style>
@@ -79,14 +72,95 @@ const MermaidBlock = memo(function MermaidBlock({ code }: { code: string }) {
     }
   }, [code]);
 
+  const setupZoom = useCallback((container: HTMLDivElement | null, zoomBehavior: React.MutableRefObject<d3.ZoomBehavior<SVGSVGElement, unknown> | null>) => {
+    if (!container) return;
+    
+    const svgElement = container.querySelector("svg");
+    if (!svgElement) return;
+
+    const viewBox = svgElement.getAttribute("viewBox");
+    const width = svgElement.getAttribute("width");
+    const height = svgElement.getAttribute("height");
+    
+    svgElement.style.width = "100%";
+    svgElement.style.height = "100%";
+    svgElement.style.cursor = "grab";
+    svgElement.removeAttribute("width");
+    svgElement.removeAttribute("height");
+    
+    if (!viewBox && width && height) {
+      svgElement.setAttribute("viewBox", `0 0 ${width} ${height}`);
+    }
+    
+    let contentG = svgElement.querySelector(".mermaid-content") as SVGGElement | null;
+    if (!contentG) {
+      const newG = document.createElementNS("http://www.w3.org/2000/svg", "g") as SVGGElement;
+      newG.classList.add("mermaid-content");
+      
+      const children = Array.from(svgElement.childNodes);
+      for (const child of children) {
+        if (child.nodeName !== "style" && child !== newG) {
+          newG.appendChild(child);
+        }
+      }
+      svgElement.appendChild(newG);
+      contentG = newG;
+    }
+
+    d3.select(svgElement).on(".zoom", null);
+
+    const zoom = d3.zoom<SVGSVGElement, unknown>()
+      .scaleExtent([0.1, 10])
+      .on("zoom", (event) => {
+        contentG!.setAttribute("transform", String(event.transform));
+      });
+    
+    d3.select(svgElement).call(zoom);
+    zoomBehavior.current = zoom;
+  }, []);
+
+  useEffect(() => {
+    if (svg && svgRef.current) {
+      const timer = setTimeout(() => setupZoom(svgRef.current, zoomRef), 50);
+      return () => clearTimeout(timer);
+    }
+  }, [svg, setupZoom]);
+
+  useEffect(() => {
+    if (expanded && svg && fullscreenSvgRef.current) {
+      const timer = setTimeout(() => setupZoom(fullscreenSvgRef.current, fullscreenZoomRef), 50);
+      return () => clearTimeout(timer);
+    }
+  }, [expanded, svg, setupZoom]);
+
+  useEffect(() => {
+    if (!expanded && svg && svgRef.current) {
+      const timer = setTimeout(() => setupZoom(svgRef.current, zoomRef), 50);
+      return () => clearTimeout(timer);
+    }
+  }, [expanded, svg, setupZoom]);
+
+  const handleReset = useCallback(() => {
+    const container = expanded ? fullscreenSvgRef.current : svgRef.current;
+    const zoomBehavior = expanded ? fullscreenZoomRef.current : zoomRef.current;
+    const svgElement = container?.querySelector("svg");
+    
+    if (svgElement && zoomBehavior) {
+      d3.select(svgElement).transition().duration(300).call(zoomBehavior.transform, d3.zoomIdentity);
+    }
+  }, [expanded]);
+
   const handleDownload = useCallback(() => {
     const svgElement = (expanded ? fullscreenSvgRef.current : svgRef.current)?.querySelector("svg");
     if (!svgElement) return;
 
-    // Clone the SVG to modify it
     const clonedSvg = svgElement.cloneNode(true) as SVGSVGElement;
     
-    // Get all elements to calculate full content bounds
+    const g = clonedSvg.querySelector("g");
+    if (g) {
+      g.setAttribute("transform", "translate(0,0) scale(1)");
+    }
+    
     const allElements = clonedSvg.querySelectorAll('*');
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
     
@@ -100,13 +174,10 @@ const MermaidBlock = memo(function MermaidBlock({ code }: { code: string }) {
             maxX = Math.max(maxX, bbox.x + bbox.width);
             maxY = Math.max(maxY, bbox.y + bbox.height);
           }
-        } catch (e) {
-          // Ignore elements that don't support getBBox
-        }
+        } catch (e) {}
       }
     });
     
-    // Fallback to original viewBox if no elements found
     if (minX === Infinity) {
       const originalViewBox = svgElement.getAttribute('viewBox')?.split(/\s+/).map(Number) || [0, 0, 800, 600];
       minX = originalViewBox[0];
@@ -115,28 +186,23 @@ const MermaidBlock = memo(function MermaidBlock({ code }: { code: string }) {
       maxY = originalViewBox[1] + originalViewBox[3];
     }
     
-    // Tight padding - just enough to not cut off content
     const padding = 10;
     const contentX = minX - padding;
     const contentY = minY - padding;
     const contentWidth = maxX - minX + padding * 2;
     const contentHeight = maxY - minY + padding * 2;
     
-    // Set viewBox to tightly fit all content
     clonedSvg.setAttribute('viewBox', `${contentX} ${contentY} ${contentWidth} ${contentHeight}`);
     clonedSvg.setAttribute('width', String(contentWidth));
     clonedSvg.setAttribute('height', String(contentHeight));
     
-    // Remove any existing width/height styles that might cause issues
     clonedSvg.style.width = '';
     clonedSvg.style.height = '';
     
-    // Get computed styles and replace CSS variables with actual values
     const computedStyle = window.getComputedStyle(svgElement);
     const bgColor = computedStyle.getPropertyValue('--background') || 'white';
     const fgColor = computedStyle.getPropertyValue('--foreground') || '#333';
     
-    // Add background rectangle with computed color
     const bgRect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
     bgRect.setAttribute("x", String(contentX));
     bgRect.setAttribute("y", String(contentY));
@@ -145,7 +211,6 @@ const MermaidBlock = memo(function MermaidBlock({ code }: { code: string }) {
     bgRect.setAttribute("fill", bgColor.trim() || 'white');
     clonedSvg.insertBefore(bgRect, clonedSvg.firstChild);
     
-    // Replace CSS variables in the SVG with actual values
     let svgData = new XMLSerializer().serializeToString(clonedSvg);
     svgData = svgData.replace(/var\(--background\)/g, bgColor.trim() || 'white');
     svgData = svgData.replace(/var\(--foreground\)/g, fgColor.trim() || '#333');
@@ -162,61 +227,8 @@ const MermaidBlock = memo(function MermaidBlock({ code }: { code: string }) {
     document.body.removeChild(downloadLink);
     URL.revokeObjectURL(svgUrl);
     
-    // Show success message
     toast.success(t("common.downloadSuccess", "图表已下载"));
   }, [expanded, t]);
-
-  const handleZoomIn = useCallback(() => {
-    setScale((prev) => Math.min(prev + 0.2, 3));
-  }, []);
-
-  const handleZoomOut = useCallback(() => {
-    setScale((prev) => Math.max(prev - 0.2, 0.3));
-  }, []);
-
-  const handleResetZoom = useCallback(() => {
-    setScale(1);
-    setPosition({ x: 0, y: 0 });
-  }, []);
-
-  // Drag handlers
-  const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    if (e.button !== 0) return;
-    e.preventDefault();
-    setIsDragging(true);
-    dragStartRef.current = {
-      x: e.clientX,
-      y: e.clientY,
-      posX: position.x,
-      posY: position.y,
-    };
-  }, [position]);
-
-  const handleMouseMove = useCallback((e: MouseEvent) => {
-    if (!isDragging) return;
-    const dx = e.clientX - dragStartRef.current.x;
-    const dy = e.clientY - dragStartRef.current.y;
-    setPosition({
-      x: dragStartRef.current.posX + dx,
-      y: dragStartRef.current.posY + dy,
-    });
-  }, [isDragging]);
-
-  const handleMouseUp = useCallback(() => {
-    setIsDragging(false);
-  }, []);
-
-  // Add global mouse event listeners when dragging
-  useEffect(() => {
-    if (isDragging) {
-      window.addEventListener("mousemove", handleMouseMove);
-      window.addEventListener("mouseup", handleMouseUp);
-      return () => {
-        window.removeEventListener("mousemove", handleMouseMove);
-        window.removeEventListener("mouseup", handleMouseUp);
-      };
-    }
-  }, [isDragging, handleMouseMove, handleMouseUp]);
 
   if (error) {
     return (
@@ -226,37 +238,6 @@ const MermaidBlock = memo(function MermaidBlock({ code }: { code: string }) {
     );
   }
 
-  const renderControls = (showPercentage: boolean = true) => (
-    <>
-      <button
-        type="button"
-        onClick={handleZoomOut}
-        className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-        title={t("common.zoomOut", "缩小")}
-      >
-        <ZoomOut className="size-4" />
-      </button>
-      {showPercentage && (
-        <button
-          type="button"
-          onClick={handleResetZoom}
-          className="text-xs text-muted-foreground min-w-[3rem] justify-center hover:text-foreground transition-colors"
-          title={t("common.resetZoom", "重置缩放")}
-        >
-          {Math.round(scale * 100)}%
-        </button>
-      )}
-      <button
-        type="button"
-        onClick={handleZoomIn}
-        className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-        title={t("common.zoomIn", "放大")}
-      >
-        <ZoomIn className="size-4" />
-      </button>
-    </>
-  );
-
   const fullscreenOverlay = expanded
     ? createPortal(
         <div className="fixed inset-0 z-[9999] flex items-center justify-center">
@@ -265,37 +246,47 @@ const MermaidBlock = memo(function MermaidBlock({ code }: { code: string }) {
             onClick={() => setExpanded(false)}
           />
           <div className="relative z-10 m-4 flex h-[90vh] w-[90vw] max-w-6xl flex-col rounded-lg border bg-background shadow-lg">
-            <div className="absolute right-2 top-2 z-10 flex gap-1 rounded-md bg-background/90 p-1 shadow-sm">
-              {renderControls()}
-              <div className="w-px h-4 bg-border mx-1 self-center" />
-              <button
-                type="button"
-                onClick={handleDownload}
-                className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                title={t("mindmap.download", "下载")}
-              >
-                <Download className="size-4" />
-              </button>
-              <button
-                type="button"
-                onClick={() => setExpanded(false)}
-                className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                title={t("common.collapse", "收起")}
-              >
-                <Minimize2 className="size-4" />
-              </button>
+            <div className="flex items-center justify-between border-b px-4 py-3">
+              <span className="text-sm font-medium">{t("mermaid.title", "Mermaid 图表")}</span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleReset}
+                  className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                  title={t("common.reset", "复原")}
+                >
+                  <RotateCcw className="size-4" />
+                </button>
+                <div className="w-px h-4 bg-border" />
+                <button
+                  type="button"
+                  onClick={handleDownload}
+                  className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                  title={t("mindmap.download", "下载")}
+                >
+                  <Download className="size-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setExpanded(false)}
+                  className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                  title={t("common.collapse", "收起")}
+                >
+                  <Minimize2 className="size-4" />
+                </button>
+              </div>
             </div>
             <div className="flex-1 overflow-hidden p-4">
               <div
                 ref={fullscreenSvgRef}
-                style={{
-                  transform: `translate(${position.x}px, ${position.y}px) scale(${scale})`,
-                  transformOrigin: "center center",
-                  cursor: isDragging ? "grabbing" : "grab",
-                }}
-                onMouseDown={handleMouseDown}
+                className="w-full h-full"
                 dangerouslySetInnerHTML={{ __html: svg || "" }}
               />
+            </div>
+            <div className="border-t px-4 py-2">
+              <span className="text-xs text-muted-foreground">
+                {t("mermaid.hint", "双击放大 · 滚轮缩放 · 拖动移动")}
+              </span>
             </div>
           </div>
         </div>,
@@ -305,41 +296,46 @@ const MermaidBlock = memo(function MermaidBlock({ code }: { code: string }) {
 
   return (
     <>
-      <div className="group relative">
+      <div className="group relative overflow-hidden">
+        <div className="flex items-center justify-between px-1 py-1">
+          <span className="text-xs text-muted-foreground">{t("mermaid.title", "Mermaid 图表")}</span>
+          <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+            <button
+              type="button"
+              onClick={handleReset}
+              className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              title={t("common.reset", "复原")}
+            >
+              <RotateCcw className="size-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={handleDownload}
+              className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              title={t("mindmap.download", "下载")}
+            >
+              <Download className="size-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setExpanded(true)}
+              className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              title={t("common.expand", "放大")}
+            >
+              <Maximize2 className="size-3.5" />
+            </button>
+          </div>
+        </div>
         <div
           ref={svgRef}
-          className="my-3 overflow-hidden rounded-lg border bg-muted/30 p-4"
-          style={{ maxHeight: 400 }}
-        >
-          <div
-            style={{
-              transform: `translate(${position.x}px, ${position.y}px) scale(${scale})`,
-              transformOrigin: "center center",
-              cursor: isDragging ? "grabbing" : "grab",
-            }}
-            onMouseDown={handleMouseDown}
-            dangerouslySetInnerHTML={{ __html: svg || "" }}
-          />
-        </div>
-        <div className="absolute right-2 top-2 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-          {renderControls()}
-          <div className="w-px h-4 bg-border mx-1 self-center" />
-          <button
-            type="button"
-            onClick={handleDownload}
-            className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-            title={t("mindmap.download", "下载")}
-          >
-            <Download className="size-4" />
-          </button>
-          <button
-            type="button"
-            onClick={() => setExpanded(true)}
-            className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-            title={t("common.expand", "放大")}
-          >
-            <Maximize2 className="size-4" />
-          </button>
+          className="overflow-hidden"
+          style={{ height: 350 }}
+          dangerouslySetInnerHTML={{ __html: svg || "" }}
+        />
+        <div className="px-1 py-1">
+          <span className="text-xs text-muted-foreground">
+            {t("mermaid.hint", "双击放大 · 滚轮缩放 · 拖动移动")}
+          </span>
         </div>
       </div>
       {fullscreenOverlay}

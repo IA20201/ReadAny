@@ -4,6 +4,8 @@ import { fontSize as fs, fontWeight as fw, radius, useColors, withOpacity } from
 import type { ThemeColors } from "@/styles/theme";
 import type {
   AbortedPart,
+  MermaidPart,
+  MindmapPart,
   Part,
   ReasoningPart,
   TextPart,
@@ -13,7 +15,9 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { MarkdownRenderer } from "./MarkdownRenderer";
-import { MindmapPartView } from "./MindmapPartView";
+import { MindmapPartView as LegacyMindmapPartView } from "./MindmapPartView";
+import { MindmapView } from "@/components/common/MindmapView";
+import { MermaidView } from "@/components/common/MermaidView";
 
 interface PartProps {
   part: Part;
@@ -31,11 +35,21 @@ export function PartRenderer({ part }: PartProps) {
       return null;
     case "mindmap":
       return <MindmapPartView part={part} />;
+    case "mermaid":
+      return <MermaidPartView part={part} />;
     case "aborted":
       return <AbortedPartView part={part} />;
     default:
       return null;
   }
+}
+
+function MindmapPartView({ part }: { part: MindmapPart }) {
+  return <MindmapView markdown={part.markdown} title={part.title} />;
+}
+
+function MermaidPartView({ part }: { part: MermaidPart }) {
+  return <MermaidView chart={part.chart} title={part.title} />;
 }
 
 function TextPartView({ part }: { part: TextPart }) {
@@ -100,7 +114,12 @@ function ReasoningPartView({ part }: { part: ReasoningPart }) {
       </TouchableOpacity>
       {isOpen && (
         <View style={s.body}>
-          <ScrollView style={s.bodyScroll} nestedScrollEnabled>
+          <ScrollView 
+            style={s.bodyScroll} 
+            nestedScrollEnabled
+            showsVerticalScrollIndicator={true}
+            scrollEventThrottle={16}
+          >
             <Text style={s.bodyText}>{throttledText}</Text>
           </ScrollView>
         </View>
@@ -284,7 +303,7 @@ const makeReasoningStyles = (colors: ThemeColors) =>
       paddingVertical: 8,
     },
     bodyScroll: {
-      maxHeight: 200,
+      maxHeight: 300,
     },
     bodyText: {
       fontSize: fs.sm,
