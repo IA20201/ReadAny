@@ -1,6 +1,6 @@
 import type { AttachedQuote, Book, SemanticContext } from "@readany/core/types";
-import type { MessageV2, Part, TextPart, ToolCallPart } from "@readany/core/types/message";
-import { createTextPart, createAbortedPart } from "@readany/core/types/message";
+import type { MessageV2, Part, TextPart, ToolCallPart, ReasoningPart } from "@readany/core/types/message";
+import { createTextPart, createAbortedPart, createReasoningPart } from "@readany/core/types/message";
 import { useCallback, useRef, useState } from "react";
 import { useChatStore } from "@/stores/chat-store";
 import { useSettingsStore } from "@/stores/settings-store";
@@ -37,12 +37,14 @@ export function useStreamingChat(_options?: StreamingChatOptions) {
     fullText: string;
     currentParts: Part[];
     currentTextPart: TextPart | null;
+    currentReasoningPart: ReasoningPart | null;
   }>({
     messageId: "",
     thread: null,
     fullText: "",
     currentParts: [],
     currentTextPart: null,
+    currentReasoningPart: null,
   });
 
   const { createThread, addMessage, updateThreadTitle, setStreaming } = useChatStore();
@@ -140,6 +142,7 @@ export function useStreamingChat(_options?: StreamingChatOptions) {
         fullText: "",
         currentParts: [],
         currentTextPart: null,
+        currentReasoningPart: null,
       };
 
       try {
@@ -261,7 +264,31 @@ export function useStreamingChat(_options?: StreamingChatOptions) {
 
               try {
                 const parsed = JSON.parse(data);
-                const token = parsed.choices?.[0]?.delta?.content;
+                const delta = parsed.choices?.[0]?.delta;
+                
+                // Handle reasoning_content (DeepSeek)
+                const reasoningContent = delta?.reasoning_content;
+                if (reasoningContent) {
+                  if (!streamingStateRef.current.currentReasoningPart) {
+                    streamingStateRef.current.currentReasoningPart = createReasoningPart("");
+                    streamingStateRef.current.currentParts.push(
+                      streamingStateRef.current.currentReasoningPart,
+                    );
+                  }
+                  streamingStateRef.current.currentReasoningPart.text += reasoningContent;
+                  streamingStateRef.current.currentReasoningPart.status = "running";
+                  streamingStateRef.current.currentReasoningPart.updatedAt = Date.now();
+
+                  setState((prev) => ({
+                    ...prev,
+                    currentMessage: prev.currentMessage
+                      ? { ...prev.currentMessage, parts: [...streamingStateRef.current.currentParts] }
+                      : null,
+                  }));
+                }
+                
+                // Handle regular content
+                const token = delta?.content;
                 if (token) {
                   streamingStateRef.current.fullText += token;
                   if (!streamingStateRef.current.currentTextPart) {
@@ -287,6 +314,11 @@ export function useStreamingChat(_options?: StreamingChatOptions) {
               }
             }
           }
+        }
+
+        if (streamingStateRef.current.currentReasoningPart) {
+          streamingStateRef.current.currentReasoningPart.status = "completed";
+          streamingStateRef.current.currentReasoningPart.updatedAt = Date.now();
         }
 
         if (streamingStateRef.current.currentTextPart) {
