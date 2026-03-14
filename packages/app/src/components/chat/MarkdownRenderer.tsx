@@ -41,7 +41,7 @@ const MermaidBlock = memo(function MermaidBlock({ code }: { code: string }) {
         fg: "var(--foreground)",
         transparent: true,
       });
-      // Add style override to ensure all text is visible in all themes
+      // Add style override to ensure all text and edges are visible in all themes
       // Insert style after the opening svg tag, preserving existing attributes
       return rendered?.replace(
         /(<svg[^>]*>)/,
@@ -49,11 +49,15 @@ const MermaidBlock = memo(function MermaidBlock({ code }: { code: string }) {
           text, .label, .nodeLabel, .edgeLabel, .cluster-label, .labelText, .titleText {
             fill: var(--foreground) !important;
           }
-          .edgePath .path {
+          .edgePath .path, .edge-thickness-normal, .edge-pattern-solid {
             stroke: var(--foreground) !important;
           }
-          .arrowheadPath {
+          .arrowheadPath, marker polygon, .arrow {
             fill: var(--foreground) !important;
+            stroke: var(--foreground) !important;
+          }
+          line, path:not(.node):not(.cluster) {
+            stroke: var(--foreground) !important;
           }
         </style>`
       );
