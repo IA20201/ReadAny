@@ -53,26 +53,11 @@ function MermaidPartView({ part }: { part: MermaidPart }) {
 }
 
 function TextPartView({ part }: { part: TextPart }) {
-  const colors = useColors();
   const throttledText = useThrottledValue(part.text, 100);
   const isStreaming = part.status === "running";
 
+  // 不显示光标，直接返回 null 或渲染内容
   if (!throttledText.trim()) {
-    if (isStreaming) {
-      return (
-        <View style={{ flexDirection: "row", paddingVertical: 4 }}>
-          <View
-            style={{
-              width: 3,
-              height: 16,
-              borderRadius: 1,
-              backgroundColor: colors.foreground,
-              opacity: 0.7,
-            }}
-          />
-        </View>
-      );
-    }
     return null;
   }
 

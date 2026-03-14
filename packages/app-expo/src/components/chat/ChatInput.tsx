@@ -105,7 +105,7 @@ export function ChatInput({
             onPress={() => setDeepThinking(!deepThinking)}
             activeOpacity={0.7}
           >
-            <BrainIcon size={13} color={deepThinking ? colors.violet : colors.mutedForeground} />
+            <BrainIcon size={13} color={deepThinking ? colors.primary : colors.mutedForeground} />
             <Text style={[s.deepThinkText, deepThinking && s.deepThinkTextActive]}>
               {t("chat.deepThinking", "深度思考")}
             </Text>
@@ -204,15 +204,15 @@ const makeStyles = (colors: ThemeColors) =>
       paddingVertical: 4,
     },
     deepThinkBtnActive: {
-      borderColor: withOpacity(colors.violet, 0.3),
-      backgroundColor: withOpacity(colors.violet, 0.06),
+      borderColor: withOpacity(colors.primary, 0.5),
+      backgroundColor: withOpacity(colors.primary, 0.1),
     },
     deepThinkText: {
       fontSize: fs.xs,
       color: colors.mutedForeground,
     },
     deepThinkTextActive: {
-      color: colors.violet,
+      color: colors.primary,
     },
     sendBtn: {
       width: 28,

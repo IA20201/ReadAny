@@ -54,8 +54,8 @@ export default function AISettingsScreen() {
 
   const activeEndpoint = aiConfig.endpoints.find((ep) => ep.id === aiConfig.activeEndpointId);
 
-  const handleAddEndpoint = useCallback(() => {
-    addEndpoint({
+  const handleAddEndpoint = useCallback(async () => {
+    await addEndpoint({
       id: `${Date.now()}`,
       name: t("settings.ai_newEndpoint", "新端点"),
       provider: "openai",
@@ -68,7 +68,7 @@ export default function AISettingsScreen() {
 
   const handleFetchModels = useCallback(
     async (ep: AIEndpoint) => {
-      updateEndpoint(ep.id, { modelsFetching: true });
+      await updateEndpoint(ep.id, { modelsFetching: true });
       try {
         const models = await fetchModels(ep.id);
         // 自动选中第一个模型（如果当前没有选中任何模型）
@@ -84,10 +84,10 @@ export default function AISettingsScreen() {
   );
 
   const handleAddManualModel = useCallback(
-    (endpointId: string, models: string[]) => {
+    async (endpointId: string, models: string[]) => {
       const trimmed = newModelInput.trim();
       if (!trimmed || models.includes(trimmed)) return;
-      updateEndpoint(endpointId, { models: [...models, trimmed] });
+      await updateEndpoint(endpointId, { models: [...models, trimmed] });
       setNewModelInput("");
     },
     [newModelInput, updateEndpoint],
@@ -166,7 +166,7 @@ export default function AISettingsScreen() {
                       <TextInput
                         style={styles.input}
                         value={ep.name}
-                        onChangeText={(v) => updateEndpoint(ep.id, { name: v })}
+                        onChangeText={(v) => updateEndpoint(ep.id, { name: v }).catch(console.error)}
                         placeholderTextColor={colors.mutedForeground}
                       />
                     </View>
@@ -184,7 +184,7 @@ export default function AISettingsScreen() {
                               styles.providerBtn,
                               ep.provider === p.id && styles.providerBtnActive,
                             ]}
-                            onPress={() => updateEndpoint(ep.id, { provider: p.id })}
+                            onPress={() => updateEndpoint(ep.id, { provider: p.id }).catch(console.error)}
                             activeOpacity={0.7}
                           >
                             <Text
@@ -206,7 +206,7 @@ export default function AISettingsScreen() {
                       <PasswordInput
                         style={styles.input}
                         value={ep.apiKey}
-                        onChangeText={(v) => updateEndpoint(ep.id, { apiKey: v })}
+                        onChangeText={(v) => updateEndpoint(ep.id, { apiKey: v }).catch(console.error)}
                         placeholder="sk-..."
                         placeholderTextColor={colors.mutedForeground}
                       />
@@ -218,7 +218,7 @@ export default function AISettingsScreen() {
                       <TextInput
                         style={styles.input}
                         value={ep.baseUrl}
-                        onChangeText={(v) => updateEndpoint(ep.id, { baseUrl: v })}
+                        onChangeText={(v) => updateEndpoint(ep.id, { baseUrl: v }).catch(console.error)}
                         placeholderTextColor={colors.mutedForeground}
                         autoCapitalize="none"
                       />
@@ -274,7 +274,7 @@ export default function AISettingsScreen() {
                                 onPress={() =>
                                   updateEndpoint(ep.id, {
                                     models: ep.models.filter((x) => x !== m),
-                                  })
+                                  }).catch(console.error)
                                 }
                                 hitSlop={{
                                   top: 4,
@@ -314,7 +314,7 @@ export default function AISettingsScreen() {
                     {aiConfig.endpoints.length > 1 && (
                       <TouchableOpacity
                         style={styles.deleteBtn}
-                        onPress={() => removeEndpoint(ep.id)}
+                        onPress={() => removeEndpoint(ep.id).catch(console.error)}
                         activeOpacity={0.7}
                       >
                         <Trash2Icon size={16} color={colors.destructive} />

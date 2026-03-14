@@ -2,14 +2,13 @@
  * ChatInput — sageread-style rounded card input with deep thinking option
  * Supports attached context quotes that display as chips above the textarea.
  */
-import { Button } from "@/components/ui/button";
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { ArrowUp, Brain, Paperclip, Quote, Square, X } from "lucide-react";
+import { Send, Brain, Quote, Square, X } from "lucide-react";
 import { useCallback, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { AttachedQuote } from "@readany/core/types";
@@ -135,12 +134,6 @@ export function ChatInput({
         />
         <div className="flex items-center justify-between px-3 pb-2">
           <div className="flex items-center gap-1">
-            <button
-              type="button"
-              className="rounded-full border p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-            >
-              <Paperclip className="size-3.5" />
-            </button>
             {showDeepThinking && (
               <button
                 type="button"
@@ -157,23 +150,26 @@ export function ChatInput({
             )}
           </div>
           {isStreaming ? (
-            <Button
-              size="icon"
-              variant="destructive"
+            <button
+              type="button"
               onClick={onStop}
-              className="size-7 rounded-full"
+              className="flex size-7 items-center justify-center rounded-full bg-destructive text-destructive-foreground transition-colors hover:bg-destructive/90"
             >
               <Square className="size-3" />
-            </Button>
+            </button>
           ) : (
-            <Button
-              size="icon"
+            <button
+              type="button"
               disabled={disabled || (!value.trim() && quotes.length === 0)}
               onClick={() => handleSend()}
-              className="size-7 rounded-full"
+              className={`flex size-7 items-center justify-center rounded-full transition-colors ${
+                value.trim() || quotes.length > 0
+                  ? "bg-primary text-primary-foreground hover:bg-primary/90"
+                  : "bg-muted text-muted-foreground"
+              } disabled:cursor-not-allowed disabled:opacity-50`}
             >
-              <ArrowUp className="size-3.5" />
-            </Button>
+              <Send className="size-3.5" />
+            </button>
           )}
         </div>
       </div>

@@ -1,5 +1,5 @@
 import { useColors } from "@/styles/theme";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { View, StyleSheet, TouchableOpacity, Text, ActivityIndicator } from "react-native";
 import WebView from "react-native-webview";
 import { Download, RotateCcw } from "@/components/ui/Icon";
@@ -11,12 +11,7 @@ interface MermaidViewProps {
   title?: string;
 }
 
-const generateHtml = (chart: string, colors: any) => {
-  const escapedChart = chart
-    .replace(/\\/g, '\\\\')
-    .replace(/`/g, '\\`')
-    .replace(/\$/g, '\\$');
-  
+const generateHtml = (colors: any) => {
   return `<!DOCTYPE html>
 <html>
 <head>
@@ -38,8 +33,15 @@ const generateHtml = (chart: string, colors: any) => {
       align-items: center;
       justify-content: center;
     }
-    svg { max-width: 100%; max-height: 100%; cursor: grab; }
-    svg:active { cursor: grabbing; }
+    #container svg { 
+      width: 100% !important; 
+      height: 100% !important; 
+      max-width: 100% !important; 
+      max-height: 100% !important;
+      cursor: grab; 
+    }
+    #container svg:active { cursor: grabbing; }
+    .error { color: #e53935; padding: 20px; font-size: 14px; }
   </style>
 </head>
 <body>
@@ -48,8 +50,8 @@ const generateHtml = (chart: string, colors: any) => {
   <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
   <script>
     (function() {
-      var chart = \`${escapedChart}\`;
       var zoom = null;
+      var currentChart = '';
       
       function init() {
         if (!window.mermaid || !window.d3) {
@@ -69,17 +71,40 @@ const generateHtml = (chart: string, colors: any) => {
             tertiaryColor: '${colors.background}',
             fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif',
           },
-          flowchart: { useMaxWidth: true, htmlLabels: true, curve: 'basis' },
-          sequence: { useMaxWidth: true },
-          gantt: { useMaxWidth: true },
+          flowchart: { useMaxWidth: false, htmlLabels: true, curve: 'basis' },
+          sequence: { useMaxWidth: false },
+          gantt: { useMaxWidth: false },
         });
         
-        mermaid.render('mermaid-svg', chart).then(function(result) {
-          document.getElementById('container').innerHTML = result.svg;
+        window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'loaded' }));
+      }
+      
+      window.renderChart = function(chart) {
+        if (!chart) return;
+        currentChart = chart;
+        
+        mermaid.render('mermaid-svg-' + Date.now(), chart).then(function(result) {
+          var container = document.getElementById('container');
+          container.innerHTML = result.svg;
           
-          var svg = document.querySelector('#container svg');
+          var svg = container.querySelector('svg');
           if (svg) {
+            // 保存原始 viewBox 或计算新的
+            var viewBox = svg.getAttribute('viewBox');
+            var width = svg.getAttribute('width');
+            var height = svg.getAttribute('height');
+            
+            // 设置 SVG 填满容器
+            svg.style.width = '100%';
+            svg.style.height = '100%';
             svg.style.cursor = 'grab';
+            svg.removeAttribute('width');
+            svg.removeAttribute('height');
+            
+            // 如果没有 viewBox，根据 width/height 创建
+            if (!viewBox && width && height) {
+              svg.setAttribute('viewBox', '0 0 ' + width + ' ' + height);
+            }
             
             var contentG = svg.querySelector('.mermaid-content');
             if (!contentG) {
@@ -100,15 +125,20 @@ const generateHtml = (chart: string, colors: any) => {
               .on('zoom', function(event) {
                 contentG.setAttribute('transform', String(event.transform));
               });
+            
             d3.select(svg).call(zoom);
           }
-          
-          window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'loaded' }));
         }).catch(function(err) {
-          document.getElementById('container').innerHTML = '<p style="color:red">Error: ' + err.message + '</p>';
-          window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'loaded' }));
+          console.error('Mermaid render error:', err);
         });
-      }
+      };
+      
+      window.resetView = function() {
+        var svg = document.querySelector('#container svg');
+        if (svg && zoom) {
+          d3.select(svg).transition().duration(300).call(zoom.transform, d3.zoomIdentity);
+        }
+      };
       
       window.getSvgContent = function() {
         var svg = document.querySelector('#container svg');
@@ -134,13 +164,6 @@ const generateHtml = (chart: string, colors: any) => {
         return cloned.outerHTML;
       };
       
-      window.resetView = function() {
-        var svg = document.querySelector('#container svg');
-        if (svg && zoom) {
-          d3.select(svg).transition().duration(300).call(zoom.transform, d3.zoomIdentity);
-        }
-      };
-      
       if (document.readyState === 'complete') {
         init();
       } else {
@@ -156,8 +179,48 @@ export function MermaidView({ chart, title }: MermaidViewProps) {
   const colors = useColors();
   const webviewRef = useRef<WebView>(null);
   const [loading, setLoading] = useState(true);
+  const [isReady, setIsReady] = useState(false);
+  const chartRef = useRef(chart);
 
-  const html = useMemo(() => generateHtml(chart, colors), [chart, colors]);
+  // 同步 chart 到 ref
+  useEffect(() => {
+    chartRef.current = chart;
+  }, [chart]);
+
+  const html = useMemo(() => generateHtml(colors), [colors]);
+
+  // 渲染图表的函数
+  const renderChart = useCallback((chartToRender: string) => {
+    if (!webviewRef.current || !chartToRender) return;
+    
+    const escapedChart = chartToRender
+      .replace(/\\/g, '\\\\')
+      .replace(/`/g, '\\`')
+      .replace(/\$/g, '\\$');
+    
+    webviewRef.current.injectJavaScript(`
+      (function() {
+        if (window.renderChart) {
+          window.renderChart(\`${escapedChart}\`);
+        }
+      })();
+      true;
+    `);
+  }, []);
+
+  // 当 isReady 变为 true 时，渲染当前 chart
+  useEffect(() => {
+    if (isReady && chartRef.current) {
+      renderChart(chartRef.current);
+    }
+  }, [isReady, renderChart]);
+
+  // 当 chart 变化时渲染
+  useEffect(() => {
+    if (isReady && chart) {
+      renderChart(chart);
+    }
+  }, [chart, isReady, renderChart]);
 
   const handleReset = useCallback(() => {
     webviewRef.current?.injectJavaScript(`
@@ -185,11 +248,14 @@ export function MermaidView({ chart, title }: MermaidViewProps) {
       const data = JSON.parse(event.nativeEvent.data);
       if (data.type === 'loaded') {
         setLoading(false);
+        setIsReady(true);
       } else if (data.type === 'svg') {
         const filename = `${title || 'mermaid'}.svg`;
         const filepath = `${FileSystem.documentDirectory}${filename}`;
         await FileSystem.writeAsStringAsync(filepath, data.content);
         await Sharing.shareAsync(filepath, { mimeType: 'image/svg+xml' });
+      } else if (data.type === 'debug') {
+        console.log('[Mermaid Debug]', data.message);
       }
     } catch (e) {
       console.error('WebView message error:', e);
@@ -224,7 +290,6 @@ export function MermaidView({ chart, title }: MermaidViewProps) {
           ref={webviewRef}
           source={{ html }}
           style={styles.webview}
-          onLoadEnd={() => setLoading(false)}
           onMessage={onMessage}
           scrollEnabled={false}
           bounces={false}
@@ -235,7 +300,7 @@ export function MermaidView({ chart, title }: MermaidViewProps) {
         />
       </View>
       
-      <View style={styles.footer}>
+      <View style={[styles.footer, { borderColor: colors.border }]}>
         <Text style={[styles.hint, { color: colors.mutedForeground }]}>
           双击放大 · 双指缩放 · 拖动移动
         </Text>
@@ -247,6 +312,7 @@ export function MermaidView({ chart, title }: MermaidViewProps) {
 const styles = StyleSheet.create({
   container: {
     overflow: 'hidden',
+    marginVertical: 8,
   },
   header: {
     flexDirection: 'row',
@@ -280,11 +346,12 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     justifyContent: 'center',
     alignItems: 'center',
+    zIndex: 1,
   },
   footer: {
     paddingHorizontal: 12,
     paddingVertical: 8,
-    borderTopWidth: 1,
+    borderTopWidth: StyleSheet.hairlineWidth,
   },
   hint: {
     fontSize: 11,

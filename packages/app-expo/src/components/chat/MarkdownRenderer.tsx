@@ -117,19 +117,9 @@ export function MarkdownRenderer({ content, isStreaming, styleOverrides }: Markd
       <Markdown style={styles} rules={rules} mergeStyle>
         {content}
       </Markdown>
-      {isStreaming && (
-        <View style={cursorStyles.cursorWrap}>
-          <View style={[cursorStyles.cursor, { backgroundColor: colors.foreground }]} />
-        </View>
-      )}
     </View>
   );
 }
-
-const cursorStyles = StyleSheet.create({
-  cursorWrap: { flexDirection: "row", marginTop: 2 },
-  cursor: { width: 2, height: 16, borderRadius: 1, opacity: 0.7 },
-});
 
 const makeMarkdownStyles = (colors: ThemeColors) =>
   ({

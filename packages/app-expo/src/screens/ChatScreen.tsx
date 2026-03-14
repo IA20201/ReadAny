@@ -130,18 +130,22 @@ export function ChatScreen() {
     async (text: string, deepThinking: boolean, quotes?: AttachedQuote[]) => {
       // Validate AI config before sending
       const state = useSettingsStore.getState();
-      const { aiConfig } = state;
-      let endpoint = aiConfig.endpoints.find((e) => e.id === aiConfig.activeEndpointId);
+      const { aiConfig, getActiveEndpoint, getEndpointById } = state;
+      let endpoint = await getActiveEndpoint();
       let model = aiConfig.activeModel;
 
       // 如果当前端点无 apiKey 或无 activeModel，尝试自动选择一个可用的
       if (!endpoint?.apiKey || !model) {
-        const usable = aiConfig.endpoints.find((e) => e.apiKey && e.models.length > 0);
-        if (usable) {
-          state.setActiveEndpoint(usable.id);
-          state.setActiveModel(usable.models[0]);
-          endpoint = usable;
-          model = usable.models[0];
+        // 遍历所有端点，找到第一个有 apiKey 的
+        for (const ep of aiConfig.endpoints) {
+          const epWithKey = await getEndpointById(ep.id);
+          if (epWithKey?.apiKey && ep.models.length > 0) {
+            state.setActiveEndpoint(ep.id);
+            state.setActiveModel(ep.models[0]);
+            endpoint = epWithKey;
+            model = ep.models[0];
+            break;
+          }
         }
       }
 

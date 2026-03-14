@@ -198,8 +198,8 @@ export function useStreamingChat(_options?: StreamingChatOptions) {
         });
         setStreaming(true);
 
-        const { aiConfig } = useSettingsStore.getState();
-        const endpoint = aiConfig.endpoints.find((e) => e.id === aiConfig.activeEndpointId);
+        const { getActiveEndpoint, aiConfig } = useSettingsStore.getState();
+        const endpoint = await getActiveEndpoint();
         const model = aiConfig.activeModel;
 
         if (!endpoint?.apiKey || !model) {
