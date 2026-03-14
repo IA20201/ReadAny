@@ -133,15 +133,44 @@ export function MindmapView({ markdown, title }: MindmapViewProps) {
     // Clone the SVG to modify it
     const clonedSvg = svgElement.cloneNode(true) as SVGSVGElement;
     
-    // Get the SVG dimensions
-    const bbox = svgElement.getBBox();
-    const width = bbox.width + bbox.x + 40;
-    const height = bbox.height + bbox.y + 40;
+    // Get all elements to calculate full content bounds
+    const allElements = clonedSvg.querySelectorAll('*');
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    
+    allElements.forEach((el) => {
+      if (el instanceof SVGGraphicsElement) {
+        try {
+          const bbox = el.getBBox();
+          if (bbox.width > 0 && bbox.height > 0) {
+            minX = Math.min(minX, bbox.x);
+            minY = Math.min(minY, bbox.y);
+            maxX = Math.max(maxX, bbox.x + bbox.width);
+            maxY = Math.max(maxY, bbox.y + bbox.height);
+          }
+        } catch (e) {
+          // Ignore elements that don't support getBBox
+        }
+      }
+    });
+    
+    // Add padding
+    const padding = 40;
+    const contentX = minX === Infinity ? 0 : minX - padding;
+    const contentY = minY === Infinity ? 0 : minY - padding;
+    const contentWidth = minX === Infinity ? 800 : maxX - minX + padding * 2;
+    const contentHeight = minY === Infinity ? 600 : maxY - minY + padding * 2;
+    
+    // Set viewBox to include all content
+    clonedSvg.setAttribute('viewBox', `${contentX} ${contentY} ${contentWidth} ${contentHeight}`);
+    clonedSvg.setAttribute('width', String(contentWidth));
+    clonedSvg.setAttribute('height', String(contentHeight));
     
     // Add white background
     const bgRect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
-    bgRect.setAttribute("width", "100%");
-    bgRect.setAttribute("height", "100%");
+    bgRect.setAttribute("x", String(contentX));
+    bgRect.setAttribute("y", String(contentY));
+    bgRect.setAttribute("width", String(contentWidth));
+    bgRect.setAttribute("height", String(contentHeight));
     bgRect.setAttribute("fill", "white");
     clonedSvg.insertBefore(bgRect, clonedSvg.firstChild);
     
