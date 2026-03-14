@@ -28,12 +28,19 @@ export default defineConfig({
       social: [
         { icon: 'github', label: 'GitHub', href: 'https://github.com/codedogQBY/ReadAny' },
       ],
+      components: {
+        Header: './src/components/starlight/Header.astro',
+        ThemeProvider: './src/components/starlight/ThemeProvider.astro',
+        ThemeSelect: './src/components/starlight/ThemeSelect.astro',
+        LanguageSelect: './src/components/starlight/LanguageSelect.astro',
+        MobileTableOfContents: './src/components/starlight/MobileTableOfContents.astro',
+        MobileMenuFooter: './src/components/starlight/MobileMenuFooter.astro',
+      },
+      tableOfContents: {
+        minHeadingLevel: 2,
+        maxHeadingLevel: 4,
+      },
       sidebar: [
-        {
-          label: 'Support Center',
-          translations: { 'zh-CN': '帮助中心' },
-          autogenerate: { directory: 'support' },
-        },
         {
           label: 'Getting Started',
           translations: { 'zh-CN': '快速开始' },

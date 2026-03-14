@@ -1,0 +1,98 @@
+---
+import Search from '@astrojs/starlight/components/Search.astro';
+import SocialIcons from '@astrojs/starlight/components/SocialIcons.astro';
+import ThemeSelect from './ThemeSelect.astro';
+import LanguageSelect from './LanguageSelect.astro';
+
+const locale = Astro.locals.starlightRoute?.locale;
+const homeHref = locale ? `/ReadAny/${locale}/` : '/ReadAny/';
+---
+
+<header class="sl-header">
+  <div class="header-container">
+    <div class="header-left">
+      <a href={homeHref} class="site-title-link">
+        <img src="/ReadAny/logo.svg" alt="ReadAny" class="site-logo" />
+        <span class="site-name">ReadAny</span>
+      </a>
+    </div>
+
+    <div class="header-right">
+      <Search />
+      <SocialIcons />
+      <ThemeSelect />
+      <LanguageSelect />
+    </div>
+  </div>
+</header>
+
+<style>
+  .sl-header {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    border-bottom: 1px solid var(--sl-color-border);
+    background: var(--sl-color-bg-nav);
+    backdrop-filter: blur(12px);
+  }
+
+  .header-container {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    max-width: 80rem;
+    margin: 0 auto;
+    padding: 0 1.5rem;
+    height: 3.5rem;
+  }
+
+  .header-left {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+  }
+
+  .site-title-link {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    text-decoration: none;
+    color: var(--sl-color-text);
+  }
+
+  .site-title-link:hover {
+    color: var(--sl-color-text-accent);
+  }
+
+  .site-logo {
+    width: 1.75rem;
+    height: 1.75rem;
+  }
+
+  .site-name {
+    font-size: 1.05rem;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+
+  .header-right {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  @media (max-width: 50rem) {
+    .header-container {
+      padding: 0 1rem;
+    }
+
+    .header-right {
+      gap: 0.375rem;
+    }
+
+    /* Hide GitHub icon on mobile to save space */
+    .header-right :global(.social-icons) {
+      display: none;
+    }
+  }
+</style>

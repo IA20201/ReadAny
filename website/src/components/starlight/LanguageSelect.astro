@@ -1,0 +1,147 @@
+---
+import { languages, defaultLang } from '../../i18n/ui'
+
+const locale = Astro.locals.starlightRoute?.locale;
+const currentLang = locale || 'en';
+
+// Compute localized URL for each language
+function getLocalizedHref(targetCode: string): string {
+  const pathname = Astro.url.pathname;
+  if (targetCode === 'en') {
+    // Remove locale prefix: /ReadAny/zh/support/foo/ -> /ReadAny/support/foo/
+    return pathname.replace(/^\/ReadAny\/[a-z]{2}\//, '/ReadAny/');
+  } else {
+    // Add locale prefix: /ReadAny/support/foo/ -> /ReadAny/zh/support/foo/
+    // If already has a locale prefix, replace it
+    if (/^\/ReadAny\/[a-z]{2}\//.test(pathname)) {
+      return pathname.replace(/^\/ReadAny\/[a-z]{2}\//, `/ReadAny/${targetCode}/`);
+    }
+    return pathname.replace(/^\/ReadAny\//, `/ReadAny/${targetCode}/`);
+  }
+}
+---
+
+<div class="lang-select-container">
+  <button
+    class="lang-toggle-trigger"
+    aria-label="Switch language"
+    title="Switch language"
+  >
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="10"></circle>
+      <line x1="2" y1="12" x2="22" y2="12"></line>
+      <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+    </svg>
+    <span class="lang-label">{currentLang === 'zh' ? '中文' : 'EN'}</span>
+  </button>
+  <div class="lang-menu">
+    {Object.entries(languages).map(([code, name]) => (
+      <a
+        href={getLocalizedHref(code)}
+        class:list={['lang-item', { active: currentLang === code }]}
+      >
+        <span>{name}</span>
+        {currentLang === code && (
+          <svg class="check-icon" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="20 6 9 17 4 12"></polyline>
+          </svg>
+        )}
+      </a>
+    ))}
+  </div>
+</div>
+
+<style>
+  .lang-select-container {
+    position: relative;
+    display: inline-flex;
+    flex-shrink: 0;
+  }
+
+  .lang-toggle-trigger {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    height: 32px;
+    padding: 0 10px;
+    border: 1px solid var(--sl-color-border);
+    background: var(--sl-color-bg);
+    color: var(--sl-color-text);
+    cursor: pointer;
+    border-radius: 8px;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+    font-size: 13px;
+    font-weight: 500;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .lang-toggle-trigger:hover {
+    border-color: var(--sl-color-accent);
+    background: var(--sl-color-bg-inline-code);
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  }
+
+  .lang-label {
+    font-size: 12px;
+    font-weight: 600;
+  }
+
+  .lang-menu {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    width: 120px;
+    background: var(--sl-color-bg-sidebar);
+    border: 1px solid var(--sl-color-border);
+    border-radius: 10px;
+    padding: 6px;
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-10px) scale(0.95);
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    z-index: 100;
+  }
+
+  .lang-select-container:hover .lang-menu,
+  .lang-select-container:focus-within .lang-menu {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0) scale(1);
+  }
+
+  .lang-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    padding: 8px 10px;
+    border: none;
+    background: transparent;
+    color: var(--sl-color-text);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    border-radius: 6px;
+    transition: all 0.15s ease;
+    text-decoration: none;
+  }
+
+  .lang-item:hover {
+    background: var(--sl-color-bg-inline-code);
+    color: var(--sl-color-text-accent);
+  }
+
+  .lang-item.active {
+    background: color-mix(in srgb, var(--sl-color-accent) 10%, transparent);
+    color: var(--sl-color-text-accent);
+  }
+
+  .check-icon {
+    color: var(--sl-color-text-accent);
+  }
+</style>
