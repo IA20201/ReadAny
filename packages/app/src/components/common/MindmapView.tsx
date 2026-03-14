@@ -37,6 +37,27 @@ export function MindmapView({ markdown, title }: MindmapViewProps) {
         duration: 300,
         maxWidth: 300,
         paddingX: 16,
+        style: (id: string) => `
+          .${id} {
+            --markmap-text-color: var(--foreground);
+            --markmap-code-bg: var(--muted);
+            --markmap-code-color: var(--foreground);
+            --markmap-circle-open-bg: var(--background);
+          }
+          .${id} .markmap-foreign {
+            color: var(--foreground);
+          }
+          .${id} .markmap-foreign a {
+            color: var(--foreground);
+          }
+          .${id} .markmap-foreign a:hover {
+            color: var(--foreground);
+          }
+          .${id} .markmap-foreign code {
+            color: var(--foreground);
+            background-color: var(--muted);
+          }
+        `,
       }, root);
     }
   }, [markdown]);
@@ -55,6 +76,27 @@ export function MindmapView({ markdown, title }: MindmapViewProps) {
         duration: 300,
         maxWidth: 400,
         paddingX: 24,
+        style: (id: string) => `
+          .${id} {
+            --markmap-text-color: var(--foreground);
+            --markmap-code-bg: var(--muted);
+            --markmap-code-color: var(--foreground);
+            --markmap-circle-open-bg: var(--background);
+          }
+          .${id} .markmap-foreign {
+            color: var(--foreground);
+          }
+          .${id} .markmap-foreign a {
+            color: var(--foreground);
+          }
+          .${id} .markmap-foreign a:hover {
+            color: var(--foreground);
+          }
+          .${id} .markmap-foreign code {
+            color: var(--foreground);
+            background-color: var(--muted);
+          }
+        `,
       }, root);
     }
   }, [markdown, expanded]);
