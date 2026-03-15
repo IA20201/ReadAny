@@ -3,8 +3,11 @@ import type { TOCItem } from "./FoliateViewer";
 import { useAppStore } from "@/stores/app-store";
 import { useReaderStore } from "@/stores/reader-store";
 import { useNotebookStore } from "@/stores/notebook-store";
-import { ArrowLeft, List, MessageSquare, NotebookPen, Search, Settings, Volume2, Undo } from "lucide-react";
+import { useAnnotationStore } from "@/stores/annotation-store";
+import { ArrowLeft, Bookmark, List, MessageSquare, NotebookPen, Search, Settings, Volume2, Undo } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { toast } from "sonner";
+import { generateId } from "@readany/core/utils";
 import {
   Tooltip,
   TooltipContent,
@@ -29,6 +32,7 @@ interface ReaderToolbarProps {
   isFixedLayout?: boolean;
   onMouseEnter?: () => void;
   onMouseLeave?: () => void;
+  getPageSnippet?: () => string;
 }
 
 export function ReaderToolbar({
@@ -48,6 +52,7 @@ export function ReaderToolbar({
   isFixedLayout = false,
   onMouseEnter,
   onMouseLeave,
+  getPageSnippet,
 }: ReaderToolbarProps) {
   const { t } = useTranslation();
   const setActiveTab = useAppStore((s) => s.setActiveTab);
@@ -55,6 +60,37 @@ export function ReaderToolbar({
   const canGoBack = useReaderStore((s) => s.canGoBack(tabId));
   const goBack = useReaderStore((s) => s.goBack);
   const { isOpen: isNotebookOpen, toggleNotebook } = useNotebookStore();
+
+  const bookmarks = useAnnotationStore((s) => s.bookmarks);
+  const addBookmark = useAnnotationStore((s) => s.addBookmark);
+  const removeBookmark = useAnnotationStore((s) => s.removeBookmark);
+
+  const currentCfi = tab?.currentCfi || "";
+  const bookId = tab?.bookId || "";
+  const existingBookmark = bookmarks.find(
+    (b) => b.bookId === bookId && b.cfi === currentCfi,
+  );
+  const isBookmarked = !!existingBookmark;
+
+  const handleToggleBookmark = () => {
+    if (!currentCfi || !bookId) return;
+    if (isBookmarked && existingBookmark) {
+      removeBookmark(existingBookmark.id);
+      toast.success(t("bookmarks.removed"));
+    } else {
+      const snippet = getPageSnippet?.() || "";
+      const label = snippet ? snippet.slice(0, 80) : undefined;
+      addBookmark({
+        id: generateId(),
+        bookId,
+        cfi: currentCfi,
+        label,
+        chapterTitle: tab?.chapterTitle || undefined,
+        createdAt: Date.now(),
+      });
+      toast.success(t("bookmarks.added"));
+    }
+  };
 
   if (!tab) return null;
 
@@ -120,6 +156,16 @@ export function ReaderToolbar({
           title={t("notebook.title")}
         >
           <NotebookPen className="h-3.5 w-3.5" />
+        </Button>
+
+        <Button
+          variant="ghost"
+          size="icon"
+          className={`h-7 w-7 ${isBookmarked ? "text-primary" : ""}`}
+          onClick={handleToggleBookmark}
+          title={isBookmarked ? t("bookmarks.remove") : t("bookmarks.add")}
+        >
+          <Bookmark className={`h-3.5 w-3.5 ${isBookmarked ? "fill-current" : ""}`} />
         </Button>
       </div>
 

@@ -606,3 +606,25 @@ export const Minimize2 = icon(() => (
     <Line x1="3" x2="10" y1="21" y2="14" />
   </>
 ));
+
+export const BookmarkIcon = icon(() => (
+  <Path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z" />
+));
+
+// Filled variant for bookmark (active state)
+export function BookmarkFilledIcon({ size = 24, color = "#8e8e93" }: { size?: number; color?: string }) {
+  return (
+    <Svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill={color}
+      stroke={color}
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <Path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z" />
+    </Svg>
+  );
+}

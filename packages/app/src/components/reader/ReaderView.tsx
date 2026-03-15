@@ -1178,6 +1178,7 @@ export function ReaderView({ bookId, tabId }: ReaderViewProps) {
             isFixedLayout={isFixedLayoutFormat(bookFormat)}
             onMouseEnter={handleMouseEnter}
             onMouseLeave={handleMouseLeave}
+            getPageSnippet={() => foliateRef.current?.getVisibleText() || ""}
           />
 
           {/* Floating Footer bar — overlays content area */}
@@ -1219,8 +1220,13 @@ export function ReaderView({ bookId, tabId }: ReaderViewProps) {
                   handleGoToChapter(index);
                   setShowToc(false);
                 }}
+                onGoToCfi={(cfi) => {
+                  foliateRef.current?.goToCFI(cfi);
+                  setShowToc(false);
+                }}
                 onClose={() => setShowToc(false)}
                 tabId={tabId}
+                bookId={bookId}
               />
             </div>
           </>

@@ -13,6 +13,7 @@ export interface RelocateEvent {
   tocItem?: { label?: string; href?: string; id?: number };
   pageItem?: { label?: string };
   cfi?: string;
+  textSnippet?: string;
 }
 
 export interface SelectionEvent {
@@ -47,6 +48,8 @@ export interface ReaderBridgeCallbacks {
     note: string;
     position: { x: number; y: number; selectionTop: number; selectionBottom: number };
   }) => void;
+  onPageSnippet?: (text: string) => void;
+  onBookmarkSnippet?: (text: string) => void;
 }
 
 export function useReaderBridge(callbacks: ReaderBridgeCallbacks) {
@@ -99,8 +102,7 @@ export function useReaderBridge(callbacks: ReaderBridgeCallbacks) {
 
   const goToCFI = useCallback(
     (cfi: string) => {
-      const msg = JSON.stringify({ type: "goToCFI", cfi });
-      inject(`handleCommand(${msg})`);
+      inject(`window.goToCFI(${JSON.stringify(cfi)})`);
     },
     [inject],
   );
@@ -177,6 +179,10 @@ export function useReaderBridge(callbacks: ReaderBridgeCallbacks) {
     [inject],
   );
 
+  const requestPageSnippet = useCallback(() => {
+    inject("window.requestPageSnippet()");
+  }, [inject]);
+
   // ─── Handle messages from WebView ───
 
   const handleMessage = useCallback((event: { nativeEvent: { data: string } }) => {
@@ -236,6 +242,12 @@ export function useReaderBridge(callbacks: ReaderBridgeCallbacks) {
             });
           }
           break;
+        case "pageSnippet":
+          cb.onPageSnippet?.(msg.textSnippet || "");
+          break;
+        case "bookmarkSnippet":
+          cb.onBookmarkSnippet?.(msg.textSnippet || "");
+          break;
         default:
           break;
       }
@@ -263,6 +275,7 @@ export function useReaderBridge(callbacks: ReaderBridgeCallbacks) {
     applySettings,
     setThemeColors,
     setNavigationLocked,
+    requestPageSnippet,
   }), [
     handleMessage,
     openBook,
@@ -280,5 +293,6 @@ export function useReaderBridge(callbacks: ReaderBridgeCallbacks) {
     applySettings,
     setThemeColors,
     setNavigationLocked,
+    requestPageSnippet,
   ]);
 }

@@ -312,6 +312,7 @@
           postToRN('loaded', {});
         });
 
+        var snippetTimer = null;
         el.addEventListener('relocate', (e) => {
           const detail = e.detail;
           postToRN('relocate', {
@@ -322,6 +323,12 @@
             pageItem: detail.pageItem,
             cfi: detail.cfi,
           });
+          // Extract text after page render settles
+          if (snippetTimer) clearTimeout(snippetTimer);
+          snippetTimer = setTimeout(() => {
+            var snippet = getVisibleTextSnippet(80);
+            if (snippet) postToRN('pageSnippet', { textSnippet: snippet });
+          }, 300);
         });
 
         el.addEventListener('draw-annotation', (e) => {
@@ -664,10 +671,72 @@
       return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     }
 
+    function getVisibleTextSnippet(maxLen) {
+      maxLen = maxLen || 80;
+      try {
+        if (!view || !view.renderer) return '';
+        var renderer = view.renderer;
+        var contents = renderer.getContents && renderer.getContents();
+        if (!contents || !contents[0] || !contents[0].doc) return '';
+        var doc = contents[0].doc;
+        var win = doc.defaultView;
+        if (!win) return '';
+
+        var texts = [];
+        var totalLen = 0;
+
+        // Check if we're in paginated mode (CSS columns)
+        var isPaginated = !renderer.scrolled;
+        var pSize = renderer.size;   // container visible width (one page)
+        var pStart = renderer.start; // abs(scrollLeft)
+
+        var walker = doc.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT, {
+          acceptNode: function(node) {
+            if (!node.nodeValue || !node.nodeValue.trim()) return NodeFilter.FILTER_SKIP;
+            var tag = node.parentElement && node.parentElement.tagName && node.parentElement.tagName.toLowerCase();
+            if (tag === 'script' || tag === 'style') return NodeFilter.FILTER_REJECT;
+            return NodeFilter.FILTER_ACCEPT;
+          }
+        });
+
+        var textNode = walker.nextNode();
+        while (textNode && totalLen < maxLen) {
+          var range = doc.createRange();
+          range.selectNodeContents(textNode);
+          var rect = range.getBoundingClientRect();
+          
+          var isVisible = false;
+          if (isPaginated && pSize > 0) {
+            // In paginated mode, first page starts at scroll offset = pSize
+            // So visible range in iframe coords is [start - size, end - size]
+            var visibleLeft = pStart - pSize;
+            var visibleRight = pStart;
+            isVisible = rect.right > visibleLeft && rect.left < visibleRight && rect.width > 0;
+          } else {
+            // Scrolled mode: use iframe viewport dimensions
+            var vw = win.innerWidth;
+            var vh = win.innerHeight;
+            isVisible = rect.width > 0 && rect.height > 0 &&
+                rect.right > 0 && rect.left < vw &&
+                rect.bottom > 0 && rect.top < vh;
+          }
+          
+          if (isVisible) {
+            var t = textNode.nodeValue.trim();
+            if (t) { texts.push(t); totalLen += t.length; }
+          }
+          textNode = walker.nextNode();
+        }
+        var result = texts.join(' ').trim();
+        return result.length > maxLen ? result.slice(0, maxLen) : result;
+      } catch (e) { return ''; }
+    }
+
     // ─── Expose global functions for injectJavaScript ───
     window.goNext = function () { if (view) view.next(); };
     window.goPrev = function () { if (view) view.prev(); };
     window.goToHref = function (href) { if (view) view.goTo(href); };
+    window.goToCFI = function (cfi) { if (view) view.goTo(cfi); };
     window.goToProgress = function (p) { if (view) view.goToFraction(p); };
     window.search = function (q) { handleSearch(q); };
     window.navigateSearch = function (idx) { navigateToSearchResult(idx); };
@@ -684,6 +753,10 @@
       if (view && view.renderer && 'navigationLocked' in view.renderer) {
         view.renderer.navigationLocked = locked;
       }
+    };
+    window.requestPageSnippet = function () {
+      var snippet = getVisibleTextSnippet(80);
+      postToRN('bookmarkSnippet', { textSnippet: snippet || '' });
     };
 
     // ─── Polyfills ───

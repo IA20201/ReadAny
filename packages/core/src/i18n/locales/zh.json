@@ -317,6 +317,15 @@
     "addNoteBtn": "添加笔记",
     "deleteHighlightBtn": "删除高亮"
   },
+  "bookmarks": {
+    "title": "书签",
+    "add": "添加书签",
+    "remove": "移除书签",
+    "added": "已添加书签",
+    "removed": "已移除书签",
+    "empty": "暂无书签",
+    "emptyHint": "使用工具栏的书签按钮来标记页面"
+  },
   "editor": {
     "enterLink": "输入链接地址",
     "undo": "撤销 (Ctrl+Z)",

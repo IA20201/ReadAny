@@ -319,6 +319,15 @@
     "addNoteBtn": "Add note",
     "deleteHighlightBtn": "Delete highlight"
   },
+  "bookmarks": {
+    "title": "Bookmarks",
+    "add": "Bookmark this page",
+    "remove": "Remove bookmark",
+    "added": "Bookmark added",
+    "removed": "Bookmark removed",
+    "empty": "No bookmarks yet",
+    "emptyHint": "Use the bookmark button in the toolbar to mark pages"
+  },
   "editor": {
     "enterLink": "Enter link URL",
     "undo": "Undo (Ctrl+Z)",

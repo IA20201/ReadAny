@@ -13,6 +13,9 @@ import {
   Undo2Icon,
   Volume2Icon,
   XIcon,
+  BookmarkIcon,
+  BookmarkFilledIcon,
+  Trash2Icon,
 } from "@/components/ui/Icon";
 import { useReaderBridge } from "@/hooks/use-reader-bridge";
 import { MarkdownRenderer } from "@/components/chat/MarkdownRenderer";
@@ -33,6 +36,7 @@ import { readingContextService } from "@readany/core/ai/reading-context-service"
 import { getPlatformService } from "@readany/core/services";
 import type { TOCItem } from "@readany/core/types";
 import { useReadingSession } from "@readany/core/hooks/use-reading-session";
+import { generateId } from "@readany/core/utils";
 import { Asset } from "expo-asset";
 import * as FileSystem from "expo-file-system/legacy";
 /**
@@ -193,7 +197,7 @@ const makeTocStyles = (colors: ThemeColors) =>
       paddingRight: 12,
       borderRadius: radius.lg,
     },
-    itemActive: { backgroundColor: "rgba(99,102,241,0.1)" },
+    itemActive: { backgroundColor: `${colors.primary}18` },
     expandBtn: { width: 20, height: 20, alignItems: "center", justifyContent: "center" },
     expandPlaceholder: { width: 20 },
     itemText: { fontSize: fontSize.sm, color: colors.foreground, flex: 1 },
@@ -206,7 +210,7 @@ export function ReaderScreen({ route, navigation }: Props) {
   const { mode: themeMode } = useTheme();
   const s = makeStyles(colors);
   const { bookId, cfi } = route.params;
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const insets = useSafeAreaInsets();
 
   // State
@@ -214,6 +218,7 @@ export function ReaderScreen({ route, navigation }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [showControls, setShowControls] = useState(false);
   const [showTOC, setShowTOC] = useState(false);
+  const [tocActiveTab, setTocActiveTab] = useState<"toc" | "bookmarks">("toc");
   const [showSettings, setShowSettings] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
   const [showNotebook, setShowNotebook] = useState(false);
@@ -233,6 +238,7 @@ export function ReaderScreen({ route, navigation }: Props) {
   const [webViewReady, setWebViewReady] = useState(false);
   const [readerHtmlUri, setReaderHtmlUri] = useState<string | null>(null);
   const [currentCfi, setCurrentCfi] = useState("");
+  const [pageSnippet, setPageSnippet] = useState("");
   const [selection, setSelection] = useState<SelectionEvent | null>(null);
   const [noteViewHighlight, setNoteViewHighlight] = useState<{
     id: string;
@@ -250,6 +256,8 @@ export function ReaderScreen({ route, navigation }: Props) {
   } | null>(null);
   const noteTooltipTimer = useRef<NodeJS.Timeout | null>(null);
   const assetLoadedRef = useRef(false);
+  const pendingBookmarkRef = useRef(false);
+  const bridgeRef = useRef<{ requestPageSnippet: () => void } | null>(null);
 
   const readSettings = useSettingsStore((s) => s.readSettings);
   const updateReadSettings = useSettingsStore((s) => s.updateReadSettings);
@@ -273,12 +281,48 @@ export function ReaderScreen({ route, navigation }: Props) {
   const { } = useReadingSessionStore(); // Removed startSession and stopSession
   const { sendEvent } = useReadingSession(bookId); // Added useReadingSession hook
   const { books, updateBook } = useLibraryStore();
-  const { addHighlight, removeHighlight, loadAnnotations, highlights } = useAnnotationStore();
+  const { addHighlight, removeHighlight, loadAnnotations, highlights, bookmarks, addBookmark, removeBookmark } = useAnnotationStore();
   const ttsPlay = useTTSStore((s) => s.play);
   const ttsStop = useTTSStore((s) => s.stop);
   const ttsSetOnEnd = useTTSStore((s) => s.setOnEnd);
 
   const book = useMemo(() => books.find((b) => b.id === bookId), [books, bookId]);
+
+  // Bookmark state
+  const existingBookmark = useMemo(
+    () => bookmarks.find((b) => b.bookId === bookId && b.cfi === currentCfi),
+    [bookmarks, bookId, currentCfi],
+  );
+  const isBookmarked = !!existingBookmark;
+  const bookBookmarks = useMemo(
+    () => bookmarks.filter((b) => b.bookId === bookId),
+    [bookmarks, bookId],
+  );
+
+  const handleToggleBookmark = useCallback(() => {
+    if (!currentCfi || !bookId) return;
+    if (isBookmarked && existingBookmark) {
+      removeBookmark(existingBookmark.id);
+    } else {
+      // Request fresh snippet from WebView — bookmark will be created in onPageSnippet callback
+      pendingBookmarkRef.current = true;
+      bridgeRef.current?.requestPageSnippet();
+      // Safety fallback: create bookmark without snippet if WebView doesn't respond in 500ms
+      setTimeout(() => {
+        if (pendingBookmarkRef.current) {
+          pendingBookmarkRef.current = false;
+          addBookmark({
+            id: generateId(),
+            bookId,
+            cfi: currentCfi,
+            label: undefined,
+            chapterTitle: currentChapter || undefined,
+            createdAt: Date.now(),
+          });
+        }
+      }, 500);
+    }
+  }, [currentCfi, bookId, isBookmarked, existingBookmark, currentChapter, removeBookmark, addBookmark]);
 
   // Load reader HTML asset
   useEffect(() => {
@@ -429,7 +473,28 @@ export function ReaderScreen({ route, navigation }: Props) {
         noteTooltipTimer.current = null;
       }, 4000);
     },
+    onPageSnippet: (text: string) => {
+      setPageSnippet(text);
+    },
+    onBookmarkSnippet: (text: string) => {
+      if (pendingBookmarkRef.current) {
+        pendingBookmarkRef.current = false;
+        const cfi = currentCfi;
+        if (cfi && bookId) {
+          addBookmark({
+            id: generateId(),
+            bookId,
+            cfi,
+            label: text || undefined,
+            chapterTitle: currentChapter || undefined,
+            createdAt: Date.now(),
+          });
+        }
+      }
+    },
   });
+
+  bridgeRef.current = bridge;
 
   // Load book
   useEffect(() => {
@@ -896,6 +961,16 @@ export function ReaderScreen({ route, navigation }: Props) {
                 <NotebookPenIcon size={18} color="#fff" />
               </TouchableOpacity>
               <TouchableOpacity
+                style={[s.toolbarBtn, isBookmarked && s.toolbarBtnActive]}
+                onPress={handleToggleBookmark}
+              >
+                {isBookmarked ? (
+                  <BookmarkFilledIcon size={18} color={colors.primary} />
+                ) : (
+                  <BookmarkIcon size={18} color="#fff" />
+                )}
+              </TouchableOpacity>
+              <TouchableOpacity
                 style={s.toolbarBtn}
                 onPress={() => navigation.navigate("BookChat", { bookId })}
               >
@@ -1051,7 +1126,7 @@ export function ReaderScreen({ route, navigation }: Props) {
         </View>
       )}
 
-      {/* ─── TOC Panel ─── */}
+      {/* ─── TOC & Bookmarks Panel ─── */}
       <Modal
         visible={showTOC}
         transparent
@@ -1065,27 +1140,123 @@ export function ReaderScreen({ route, navigation }: Props) {
             { maxHeight: SCREEN_HEIGHT * 0.7, paddingBottom: insets.bottom || 16 },
           ]}
         >
+          {/* Tab Header */}
           <View style={s.sheetHeader}>
-            <Text style={s.sheetTitle}>{t("reader.toc", "目录")}</Text>
+            <View style={s.tocTabBar}>
+              <TouchableOpacity
+                style={[
+                  s.tocTab,
+                  tocActiveTab === "toc" && { backgroundColor: `${colors.primary}14` },
+                ]}
+                onPress={() => setTocActiveTab("toc")}
+              >
+                <ListIcon size={14} color={tocActiveTab === "toc" ? colors.primary : colors.mutedForeground} />
+                <Text
+                  style={[
+                    s.tocTabText,
+                    { color: tocActiveTab === "toc" ? colors.primary : colors.mutedForeground },
+                  ]}
+                >
+                  {t("reader.toc", "目录")}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  s.tocTab,
+                  tocActiveTab === "bookmarks" && { backgroundColor: `${colors.primary}14` },
+                ]}
+                onPress={() => setTocActiveTab("bookmarks")}
+              >
+                {tocActiveTab === "bookmarks" ? (
+                  <BookmarkFilledIcon size={14} color={colors.primary} />
+                ) : (
+                  <BookmarkIcon size={14} color={colors.mutedForeground} />
+                )}
+                <Text
+                  style={[
+                    s.tocTabText,
+                    { color: tocActiveTab === "bookmarks" ? colors.primary : colors.mutedForeground },
+                  ]}
+                >
+                  {t("bookmarks.title", "书签")}
+                  {bookBookmarks.length > 0 ? ` (${bookBookmarks.length})` : ""}
+                </Text>
+              </TouchableOpacity>
+            </View>
             <TouchableOpacity onPress={() => setShowTOC(false)}>
               <XIcon size={18} color={colors.mutedForeground} />
             </TouchableOpacity>
           </View>
-          <ScrollView showsVerticalScrollIndicator={false} style={s.sheetScroll}>
-            {toc.length > 0 ? (
-              toc.map((item) => (
-                <TOCTreeItem
-                  key={item.id || item.href}
-                  item={item}
-                  level={0}
-                  currentChapter={currentChapter}
-                  onSelect={goToTocItem}
-                />
-              ))
-            ) : (
-              <Text style={s.sheetEmpty}>{t("reader.noToc", "暂无目录信息")}</Text>
-            )}
-          </ScrollView>
+
+          {/* Tab Content */}
+          {tocActiveTab === "toc" ? (
+            <ScrollView showsVerticalScrollIndicator={false} style={s.sheetScroll}>
+              {toc.length > 0 ? (
+                toc.map((item) => (
+                  <TOCTreeItem
+                    key={item.id || item.href}
+                    item={item}
+                    level={0}
+                    currentChapter={currentChapter}
+                    onSelect={goToTocItem}
+                  />
+                ))
+              ) : (
+                <Text style={s.sheetEmpty}>{t("reader.noToc", "暂无目录信息")}</Text>
+              )}
+            </ScrollView>
+          ) : bookBookmarks.length > 0 ? (
+            <ScrollView showsVerticalScrollIndicator={false} style={s.sheetScroll}>
+              {bookBookmarks.map((bm) => (
+                <TouchableOpacity
+                  key={bm.id}
+                  style={s.bookmarkItem}
+                  onPress={() => {
+                    bridge.goToCFI(bm.cfi);
+                    setShowTOC(false);
+                  }}
+                  activeOpacity={0.6}
+                >
+                  <BookmarkFilledIcon size={14} color={colors.primary} />
+                  <View style={s.bookmarkContent}>
+                    <Text style={[s.bookmarkLabel, { color: colors.foreground }]} numberOfLines={1}>
+                      {bm.chapterTitle || t("common.unnamed")}
+                    </Text>
+                    {bm.label ? (
+                      <Text style={[s.bookmarkSnippet, { color: colors.mutedForeground }]} numberOfLines={2}>
+                        {bm.label}
+                      </Text>
+                    ) : null}
+                    <Text style={[s.bookmarkDate, { color: colors.mutedForeground }]}>
+                      {new Date(bm.createdAt).toLocaleDateString(i18n.language, {
+                        month: "short",
+                        day: "numeric",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    style={s.bookmarkDeleteBtn}
+                    onPress={() => removeBookmark(bm.id)}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <Trash2Icon size={14} color={colors.mutedForeground} />
+                  </TouchableOpacity>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          ) : (
+            <View style={s.notebookPlaceholder}>
+              <BookmarkIcon size={32} color={`${colors.mutedForeground}60`} />
+              <Text style={s.notebookPlaceholderText}>
+                {t("bookmarks.empty", "暂无书签")}
+              </Text>
+              <Text style={[s.notebookPlaceholderText, { fontSize: fontSize.xs, opacity: 0.6 }]}>
+                {t("bookmarks.emptyHint", "使用工具栏的书签按钮来标记页面")}
+              </Text>
+            </View>
+          )}
         </View>
       </Modal>
 
@@ -1531,7 +1702,7 @@ const makeStyles = (colors: ThemeColors) =>
       alignItems: "center",
       justifyContent: "center",
     },
-    toolbarBtnActive: { backgroundColor: "rgba(99,102,241,0.3)" },
+    toolbarBtnActive: { backgroundColor: `${colors.primary}30` },
     toolbarBtnDisabled: { opacity: 0.4 },
     toolbarCenter: { flex: 1, paddingHorizontal: 8, alignItems: "center" },
     toolbarTitle: {
@@ -1654,6 +1825,24 @@ const makeStyles = (colors: ThemeColors) =>
       paddingVertical: 32,
     },
 
+    tocTabBar: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      gap: 4,
+    },
+    tocTab: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      gap: 4,
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      borderRadius: radius.md,
+    },
+    tocTabText: {
+      fontSize: fontSize.sm,
+      fontWeight: fontWeight.medium,
+    },
+
     settingRow: {
       flexDirection: "row",
       alignItems: "center",
@@ -1735,6 +1924,41 @@ const makeStyles = (colors: ThemeColors) =>
     highlightContent: { flex: 1 },
     highlightText: { fontSize: fontSize.sm, color: colors.foreground, lineHeight: 18 },
     highlightNote: { fontSize: fontSize.xs, color: colors.mutedForeground, marginTop: 4 },
+
+    bookmarkItem: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      gap: 10,
+      paddingVertical: 12,
+      paddingHorizontal: 12,
+      borderBottomWidth: 0.5,
+      borderBottomColor: colors.border,
+    },
+    bookmarkContent: {
+      flex: 1,
+      minWidth: 0,
+    },
+    bookmarkLabel: {
+      fontSize: fontSize.sm,
+      fontWeight: fontWeight.medium,
+      lineHeight: 20,
+    },
+    bookmarkSnippet: {
+      fontSize: fontSize.xs,
+      lineHeight: 16,
+      marginTop: 2,
+      opacity: 0.7,
+    },
+    bookmarkDate: {
+      fontSize: fontSize.xs,
+      marginTop: 3,
+      opacity: 0.6,
+    },
+    bookmarkDeleteBtn: {
+      padding: 6,
+      borderRadius: radius.md,
+      opacity: 0.5,
+    },
 
     noteViewOverlay: {
       flex: 1,
