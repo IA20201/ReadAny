@@ -564,6 +564,21 @@ export async function updateBook(id: string, updates: Partial<Book>): Promise<vo
 
 export async function deleteBook(id: string): Promise<void> {
   const database = await getDB();
+
+  // Delete all related data first to maintain referential integrity
+  // Delete highlights
+  await database.execute("DELETE FROM highlights WHERE book_id = ?", [id]);
+
+  // Delete bookmarks
+  await database.execute("DELETE FROM bookmarks WHERE book_id = ?", [id]);
+
+  // Delete reading sessions
+  await database.execute("DELETE FROM reading_sessions WHERE book_id = ?", [id]);
+
+  // Delete chunks (for RAG/vectorization)
+  await database.execute("DELETE FROM chunks WHERE book_id = ?", [id]);
+
+  // Finally, delete the book itself
   await insertTombstone(database, id, "books");
   await database.execute("DELETE FROM books WHERE id = ?", [id]);
 }

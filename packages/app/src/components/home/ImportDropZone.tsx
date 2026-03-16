@@ -66,7 +66,7 @@ export function ImportDropZone() {
           onDrop={handleDrop}
         >
           <div className="mx-auto mb-6">
-            <img src="/book.svg" alt="" className="h-40 w-40 mx-auto" />
+            <img src="/book.svg" alt="" className="h-40 w-40 mx-auto dark:invert" />
           </div>
           <p className="mb-1 text-base font-medium text-foreground">{t("home.emptyLibrary")}</p>
           <p className="mb-4 text-sm text-muted-foreground">{t("home.dropToUpload")}</p>

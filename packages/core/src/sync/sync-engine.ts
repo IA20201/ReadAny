@@ -113,7 +113,20 @@ export async function determineSyncDirection(
 /**
  * Execute the upload phase: snapshot local DB → upload to WebDAV.
  */
-async function executeUpload(client: WebDavClient): Promise<void> {
+async function executeUpload(
+  client: WebDavClient,
+  onProgress?: (progress: import("./sync-types").SyncProgress) => void,
+): Promise<void> {
+  const startTime = Date.now();
+  console.log('[Sync] 📤 Starting database upload...');
+
+  onProgress?.({
+    phase: 'database',
+    operation: 'upload',
+    completedFiles: 0,
+    totalFiles: 1,
+    message: 'Uploading database...',
+  });
   const adapter = getSyncAdapter();
   const tempDir = await adapter.getTempDir();
   const snapshotPath = adapter.joinPath(
@@ -123,13 +136,22 @@ async function executeUpload(client: WebDavClient): Promise<void> {
 
   try {
     // 1. Create clean snapshot via VACUUM INTO
+    console.log('[Sync] Creating database snapshot...');
+    const vacuumStart = Date.now();
     await adapter.vacuumInto(snapshotPath);
+    console.log(`[Sync] ✓ Snapshot created in ${Date.now() - vacuumStart}ms`);
 
     // 2. Read snapshot into memory
+    const readStart = Date.now();
     const data = await adapter.readFileBytes(snapshotPath);
+    const sizeKB = (data.length / 1024).toFixed(2);
+    console.log(`[Sync] ✓ Read snapshot (${sizeKB} KB) in ${Date.now() - readStart}ms`);
 
     // 3. Upload to WebDAV
+    console.log(`[Sync] Uploading database (${sizeKB} KB) to WebDAV...`);
+    const uploadStart = Date.now();
     await client.put(REMOTE_DB_FILE, data);
+    console.log(`[Sync] ✓ Database uploaded in ${Date.now() - uploadStart}ms`);
 
     // 4. Upload manifest
     const manifest: RemoteSyncManifest = {
@@ -152,6 +174,8 @@ async function executeUpload(client: WebDavClient): Promise<void> {
       SYNC_META_KEYS.LAST_SYNC_AT,
       String(Date.now()),
     );
+
+    console.log(`[Sync] ✅ Database upload completed in ${Date.now() - startTime}ms`);
   } finally {
     // Clean up snapshot
     try {
@@ -167,7 +191,20 @@ async function executeUpload(client: WebDavClient): Promise<void> {
 /**
  * Execute the download phase: download remote DB → validate → backup → replace.
  */
-async function executeDownload(client: WebDavClient): Promise<void> {
+async function executeDownload(
+  client: WebDavClient,
+  onProgress?: (progress: import("./sync-types").SyncProgress) => void,
+): Promise<void> {
+  const startTime = Date.now();
+  console.log('[Sync] 📥 Starting database download...');
+
+  onProgress?.({
+    phase: 'database',
+    operation: 'download',
+    completedFiles: 0,
+    totalFiles: 1,
+    message: 'Downloading database...',
+  });
   const adapter = getSyncAdapter();
   const tempDir = await adapter.getTempDir();
   const dbPath = await adapter.getDatabasePath();
@@ -182,29 +219,41 @@ async function executeDownload(client: WebDavClient): Promise<void> {
 
   try {
     // 1. Download remote DB to temp file
+    console.log('[Sync] Downloading database from WebDAV...');
+    const downloadStart = Date.now();
     const data = await client.get(REMOTE_DB_FILE);
+    const sizeKB = (data.length / 1024).toFixed(2);
+    console.log(`[Sync] ✓ Downloaded database (${sizeKB} KB) in ${Date.now() - downloadStart}ms`);
+
     await adapter.writeFileBytes(tempDbPath, data);
 
     // 2. Validate integrity
+    console.log('[Sync] Validating database integrity...');
+    const validateStart = Date.now();
     const isValid = await adapter.integrityCheck(tempDbPath);
     if (!isValid) {
       throw new Error(
         "Downloaded database failed integrity check. Sync aborted.",
       );
     }
+    console.log(`[Sync] ✓ Integrity check passed in ${Date.now() - validateStart}ms`);
 
     // 3. Backup current DB
     if (await adapter.fileExists(dbPath)) {
+      console.log('[Sync] Backing up current database...');
       await adapter.copyFile(dbPath, backupPath);
     }
 
     // 4. Close active connection
+    console.log('[Sync] Closing database connection...');
     await adapter.closeDatabase();
 
     // 5. Replace DB file
+    console.log('[Sync] Replacing database file...');
     await adapter.copyFile(tempDbPath, dbPath);
 
     // 6. Reopen database
+    console.log('[Sync] Reopening database...');
     await adapter.reopenDatabase();
 
     // 7. Verify reopened DB works
@@ -226,10 +275,13 @@ async function executeDownload(client: WebDavClient): Promise<void> {
       SYNC_META_KEYS.LAST_SYNC_AT,
       String(Date.now()),
     );
+
+    console.log(`[Sync] ✅ Database download completed in ${Date.now() - startTime}ms`);
   } catch (e) {
     // If we have a backup and the error occurred after closing DB, try to recover
     if (await adapter.fileExists(backupPath)) {
       try {
+        console.log('[Sync] ⚠️ Error occurred, restoring from backup...');
         await adapter.copyFile(backupPath, dbPath);
         await adapter.reopenDatabase();
       } catch {
@@ -252,12 +304,45 @@ async function executeDownload(client: WebDavClient): Promise<void> {
 }
 
 /**
- * Sync book files and covers between local and remote.
+ * Helper: Run tasks in parallel with concurrency limit
  */
-async function syncFiles(client: WebDavClient): Promise<{
+async function parallelLimit<T>(
+  tasks: (() => Promise<T>)[],
+  limit: number,
+): Promise<T[]> {
+  const results: T[] = [];
+  const executing: Promise<void>[] = [];
+
+  for (const task of tasks) {
+    const p = task().then((result) => {
+      results.push(result);
+      executing.splice(executing.indexOf(p), 1);
+    });
+    executing.push(p);
+
+    if (executing.length >= limit) {
+      await Promise.race(executing);
+    }
+  }
+
+  await Promise.all(executing);
+  return results;
+}
+
+/**
+ * Sync book files and covers between local and remote.
+ * Files are downloaded in parallel (up to 8 concurrent downloads) for better performance.
+ */
+async function syncFiles(
+  client: WebDavClient,
+  onProgress?: (progress: import("./sync-types").SyncProgress) => void,
+): Promise<{
   filesUploaded: number;
   filesDownloaded: number;
 }> {
+  const syncFilesStart = Date.now();
+  console.log('[Sync] 📁 Starting file sync...');
+
   const adapter = getSyncAdapter();
   const db = await getDB();
   let filesUploaded = 0;
@@ -279,6 +364,10 @@ async function syncFiles(client: WebDavClient): Promise<{
     remoteFiles.filter((f) => !f.isCollection).map((f) => f.name),
   );
 
+  // Collect upload and download tasks
+  const uploadTasks: (() => Promise<boolean>)[] = [];
+  const downloadTasks: (() => Promise<boolean>)[] = [];
+
   for (const book of books) {
     if (!book.file_path) continue;
 
@@ -293,27 +382,41 @@ async function syncFiles(client: WebDavClient): Promise<{
 
     // Upload if not on remote and exists locally
     if (!remoteFileNames.has(remoteName) && await adapter.fileExists(localPath)) {
-      try {
-        const data = await adapter.readFileBytes(localPath);
-        await client.put(`${REMOTE_FILES}/${remoteName}`, data);
-        filesUploaded++;
-      } catch {
-        // Skip files that fail to upload
-      }
+      uploadTasks.push(async () => {
+        const taskStart = Date.now();
+        try {
+          console.log(`[Sync] 📤 Uploading book: ${remoteName}`);
+          const data = await adapter.readFileBytes(localPath);
+          const sizeMB = (data.length / 1024 / 1024).toFixed(2);
+          await client.put(`${REMOTE_FILES}/${remoteName}`, data);
+          console.log(`[Sync] ✓ Uploaded ${remoteName} (${sizeMB} MB) in ${Date.now() - taskStart}ms`);
+          return true;
+        } catch (e) {
+          console.log(`[Sync] ✗ Failed to upload ${remoteName}: ${e}`);
+          return false;
+        }
+      });
     }
 
     // Download if not local but exists on remote
     if (!await adapter.fileExists(localPath) && remoteFileNames.has(remoteName)) {
-      try {
-        const data = await client.get(`${REMOTE_FILES}/${remoteName}`);
-        // Ensure directory exists
-        const dir = localPath.substring(0, localPath.lastIndexOf("/"));
-        if (dir) await adapter.ensureDir(dir);
-        await adapter.writeFileBytes(localPath, data);
-        filesDownloaded++;
-      } catch {
-        // Skip files that fail to download
-      }
+      downloadTasks.push(async () => {
+        const taskStart = Date.now();
+        try {
+          console.log(`[Sync] 📥 Downloading book: ${remoteName}`);
+          const data = await client.get(`${REMOTE_FILES}/${remoteName}`);
+          const sizeMB = (data.length / 1024 / 1024).toFixed(2);
+          // Ensure directory exists
+          const dir = localPath.substring(0, localPath.lastIndexOf("/"));
+          if (dir) await adapter.ensureDir(dir);
+          await adapter.writeFileBytes(localPath, data);
+          console.log(`[Sync] ✓ Downloaded ${remoteName} (${sizeMB} MB) in ${Date.now() - taskStart}ms`);
+          return true;
+        } catch (e) {
+          console.log(`[Sync] ✗ Failed to download ${remoteName}: ${e}`);
+          return false;
+        }
+      });
     }
   }
 
@@ -337,13 +440,20 @@ async function syncFiles(client: WebDavClient): Promise<{
       !remoteCoverNames.has(coverRemoteName) &&
       await adapter.fileExists(coverLocalPath)
     ) {
-      try {
-        const data = await adapter.readFileBytes(coverLocalPath);
-        await client.put(`${REMOTE_COVERS}/${coverRemoteName}`, data);
-        filesUploaded++;
-      } catch {
-        // Skip
-      }
+      uploadTasks.push(async () => {
+        const taskStart = Date.now();
+        try {
+          console.log(`[Sync] 📤 Uploading cover: ${coverRemoteName}`);
+          const data = await adapter.readFileBytes(coverLocalPath);
+          const sizeKB = (data.length / 1024).toFixed(2);
+          await client.put(`${REMOTE_COVERS}/${coverRemoteName}`, data);
+          console.log(`[Sync] ✓ Uploaded ${coverRemoteName} (${sizeKB} KB) in ${Date.now() - taskStart}ms`);
+          return true;
+        } catch (e) {
+          console.log(`[Sync] ✗ Failed to upload ${coverRemoteName}: ${e}`);
+          return false;
+        }
+      });
     }
 
     // Download cover if not local
@@ -351,23 +461,81 @@ async function syncFiles(client: WebDavClient): Promise<{
       !await adapter.fileExists(coverLocalPath) &&
       remoteCoverNames.has(coverRemoteName)
     ) {
-      try {
-        const data = await client.get(
-          `${REMOTE_COVERS}/${coverRemoteName}`,
-        );
-        const dir = coverLocalPath.substring(
-          0,
-          coverLocalPath.lastIndexOf("/"),
-        );
-        if (dir) await adapter.ensureDir(dir);
-        await adapter.writeFileBytes(coverLocalPath, data);
-        filesDownloaded++;
-      } catch {
-        // Skip
-      }
+      downloadTasks.push(async () => {
+        const taskStart = Date.now();
+        try {
+          console.log(`[Sync] 📥 Downloading cover: ${coverRemoteName}`);
+          const data = await client.get(
+            `${REMOTE_COVERS}/${coverRemoteName}`,
+          );
+          const sizeKB = (data.length / 1024).toFixed(2);
+          const dir = coverLocalPath.substring(
+            0,
+            coverLocalPath.lastIndexOf("/"),
+          );
+          if (dir) await adapter.ensureDir(dir);
+          await adapter.writeFileBytes(coverLocalPath, data);
+          console.log(`[Sync] ✓ Downloaded ${coverRemoteName} (${sizeKB} KB) in ${Date.now() - taskStart}ms`);
+          return true;
+        } catch (e) {
+          console.log(`[Sync] ✗ Failed to download ${coverRemoteName}: ${e}`);
+          return false;
+        }
+      });
     }
   }
 
+  // Execute uploads in parallel (limit: 5 concurrent)
+  if (uploadTasks.length > 0) {
+    console.log(`[Sync] 📤 Starting upload of ${uploadTasks.length} files (5 concurrent)...`);
+    const uploadStart = Date.now();
+    let completed = 0;
+    const total = uploadTasks.length;
+    const tasksWithProgress = uploadTasks.map((task, index) => async () => {
+      onProgress?.({
+        phase: 'files',
+        operation: 'upload',
+        currentFile: `File ${index + 1}`,
+        completedFiles: completed,
+        totalFiles: total,
+        message: `Uploading file ${completed + 1}/${total}...`,
+      });
+      const result = await task();
+      completed++;
+      return result;
+    });
+    const uploadResults = await parallelLimit(tasksWithProgress, 5);
+    filesUploaded = uploadResults.filter((r) => r).length;
+    const uploadFailed = uploadResults.length - filesUploaded;
+    console.log(`[Sync] ✅ Upload completed: ${filesUploaded} succeeded, ${uploadFailed} failed in ${Date.now() - uploadStart}ms`);
+  }
+
+  // Execute downloads in parallel (limit: 8 concurrent)
+  if (downloadTasks.length > 0) {
+    console.log(`[Sync] 📥 Starting download of ${downloadTasks.length} files (8 concurrent)...`);
+    const downloadStart = Date.now();
+    let completed = 0;
+    const total = downloadTasks.length;
+    const tasksWithProgress = downloadTasks.map((task, index) => async () => {
+      onProgress?.({
+        phase: 'files',
+        operation: 'download',
+        currentFile: `File ${index + 1}`,
+        completedFiles: completed,
+        totalFiles: total,
+        message: `Downloading file ${completed + 1}/${total}...`,
+      });
+      const result = await task();
+      completed++;
+      return result;
+    });
+    const downloadResults = await parallelLimit(tasksWithProgress, 8);
+    filesDownloaded = downloadResults.filter((r) => r).length;
+    const downloadFailed = downloadResults.length - filesDownloaded;
+    console.log(`[Sync] ✅ Download completed: ${filesDownloaded} succeeded, ${downloadFailed} failed in ${Date.now() - downloadStart}ms`);
+  }
+
+  console.log(`[Sync] ✅ File sync completed in ${Date.now() - syncFilesStart}ms`);
   return { filesUploaded, filesDownloaded };
 }
 
@@ -376,30 +544,41 @@ async function syncFiles(client: WebDavClient): Promise<{
  *
  * @param client WebDAV client instance
  * @param direction The sync direction (if "conflict", caller must resolve first)
+ * @param onProgress Optional callback to report sync progress
  * @returns SyncResult
  */
 export async function runSync(
   client: WebDavClient,
   direction: "upload" | "download",
+  onProgress?: (progress: import("./sync-types").SyncProgress) => void,
 ): Promise<SyncResult> {
   const startTime = Date.now();
+  console.log(`[Sync] 🚀 Starting sync: direction=${direction}`);
 
   try {
-    // 1. Ensure remote directory structure
-    await client.ensureDirectory(REMOTE_ROOT);
-    await client.ensureDirectory(REMOTE_DATA);
-    await client.ensureDirectory(REMOTE_FILES);
-    await client.ensureDirectory(REMOTE_COVERS);
+    // 1. Ensure remote directory structure (non-blocking - continue if fails)
+    console.log('[Sync] Creating remote directory structure...');
+    const dirStart = Date.now();
+    try {
+      await client.ensureDirectory(REMOTE_ROOT);
+      await client.ensureDirectory(REMOTE_DATA);
+      await client.ensureDirectory(REMOTE_FILES);
+      await client.ensureDirectory(REMOTE_COVERS);
+      console.log(`[Sync] ✓ Directories ready in ${Date.now() - dirStart}ms`);
+    } catch (error) {
+      console.warn('[Sync] ⚠️ Failed to create directories (they might already exist):', error);
+      console.log('[Sync] Continuing with sync anyway...');
+    }
 
     // 2. Execute database sync
     if (direction === "upload") {
-      await executeUpload(client);
+      await executeUpload(client, onProgress);
     } else {
-      await executeDownload(client);
+      await executeDownload(client, onProgress);
     }
 
     // 3. Sync files
-    const { filesUploaded, filesDownloaded } = await syncFiles(client);
+    const { filesUploaded, filesDownloaded } = await syncFiles(client, onProgress);
 
     return {
       success: true,

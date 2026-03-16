@@ -45,10 +45,11 @@ import {
   Trash2Icon,
   XIcon,
 } from "@/components/ui/Icon";
-import { fontSize as fs, fontWeight as fw, radius, useColors, withOpacity } from "@/styles/theme";
+import { fontSize as fs, fontWeight as fw, radius, useColors, withOpacity, useTheme } from "@/styles/theme";
 import type { ThemeColors } from "@/styles/theme";
 
 const THINK_PNG = require("../../assets/think.png");
+const THINK_DARK_PNG = require("../../assets/think-dark.png");
 
 const SCREEN_WIDTH = Dimensions.get("window").width;
 const SIDEBAR_WIDTH = Math.min(SCREEN_WIDTH * 0.75, 300);
@@ -348,6 +349,7 @@ function EmptyState({
   onSuggestionPress: (text: string, deepThinking: boolean) => void;
 }) {
   const { t } = useTranslation();
+  const { isDark } = useTheme();
   const s = useMemo(() => makeStyles(colors), [colors]);
 
   const suggestions = useMemo(
@@ -375,7 +377,10 @@ function EmptyState({
   return (
     <View style={s.emptyContainer}>
       <View style={s.emptyInner}>
-        <Image source={THINK_PNG} style={{ width: 140, height: 140 }} />
+        <Image
+          source={isDark ? THINK_DARK_PNG : THINK_PNG}
+          style={{ width: 140, height: 140 }}
+        />
         <Text style={s.emptyTitle}>{t("chat.howCanIHelp", "有什么我可以帮你的？")}</Text>
         <Text style={s.emptySubtitle}>
           {t("chat.askAboutBooks", "关于书籍的任何问题都可以问我")}

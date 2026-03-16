@@ -43,6 +43,7 @@ export default function SyncSettingsScreen() {
     lastSyncAt,
     lastResult,
     error,
+    progress,
     pendingDirection,
     loadConfig,
     testConnection,
@@ -253,14 +254,14 @@ export default function SyncSettingsScreen() {
                     onPress={() => handleConflict("upload")}
                     activeOpacity={0.7}
                   >
-                    <Text style={styles.conflictBtnText}>{t("settings.syncConflictUpload")}</Text>
+                    <Text style={styles.uploadBtnText}>{t("settings.syncConflictUpload")}</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={styles.downloadBtn}
                     onPress={() => handleConflict("download")}
                     activeOpacity={0.7}
                   >
-                    <Text style={styles.conflictBtnText}>{t("settings.syncConflictDownload")}</Text>
+                    <Text style={styles.downloadBtnText}>{t("settings.syncConflictDownload")}</Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -418,21 +419,28 @@ const makeStyles = (colors: ThemeColors) =>
     uploadBtn: {
       flex: 1,
       borderRadius: radius.lg,
-      backgroundColor: "#2563eb",
+      backgroundColor: colors.primary,
       paddingVertical: 8,
       alignItems: "center",
+    },
+    uploadBtnText: {
+      fontSize: fontSize.sm,
+      fontWeight: fontWeight.medium,
+      color: colors.primaryForeground,
     },
     downloadBtn: {
       flex: 1,
       borderRadius: radius.lg,
-      backgroundColor: "#16a34a",
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.background,
       paddingVertical: 8,
       alignItems: "center",
     },
-    conflictBtnText: {
+    downloadBtnText: {
       fontSize: fontSize.sm,
       fontWeight: fontWeight.medium,
-      color: "#ffffff",
+      color: colors.foreground,
     },
     fieldGroup: { gap: 4 },
     fieldLabel: { fontSize: fontSize.sm, color: colors.mutedForeground },

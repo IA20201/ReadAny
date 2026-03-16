@@ -432,6 +432,13 @@
       0 8px 16px rgba(0, 0, 0, 0.1),
       0 0 0 0.5px rgba(0, 0, 0, 0.06);
   }
+
+  /* Invert empty state illustrations in dark mode */
+  [data-theme="dark"] img[src="/book.svg"],
+  [data-theme="dark"] img[src="/think.svg"],
+  [data-theme="dark"] img[src="/note.svg"] {
+    filter: invert(1);
+  }
 }
 
 /* pdfjs-dist official TextLayer styles (extracted from pdf_viewer.css) */

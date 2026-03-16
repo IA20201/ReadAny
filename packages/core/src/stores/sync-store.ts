@@ -12,6 +12,7 @@ import type {
   SyncDirection,
   SyncResult,
   SyncStatusType,
+  SyncProgress,
 } from "../sync/sync-types";
 import { DEFAULT_SYNC_CONFIG } from "../sync/sync-types";
 
@@ -28,6 +29,7 @@ export interface SyncState {
   lastSyncAt: number | null;
   lastResult: SyncResult | null;
   error: string | null;
+  progress: SyncProgress | null;
 
   // Conflict resolution
   pendingDirection: SyncDirection | null;
@@ -60,6 +62,7 @@ export const useSyncStore = create<SyncState>((set, get) => ({
   lastSyncAt: null,
   lastResult: null,
   error: null,
+  progress: null,
   pendingDirection: null,
 
   loadConfig: async () => {
@@ -163,9 +166,15 @@ export const useSyncStore = create<SyncState>((set, get) => ({
       // Execute sync
       set({
         status: direction === "upload" ? "uploading" : "downloading",
+        progress: null,
       });
 
-      const syncResult = await runSync(client, direction);
+      // Progress callback to update store
+      const onProgress = (progress: SyncProgress) => {
+        set({ progress });
+      };
+
+      const syncResult = await runSync(client, direction, onProgress);
 
       set({
         status: "idle",
@@ -173,12 +182,13 @@ export const useSyncStore = create<SyncState>((set, get) => ({
         lastResult: syncResult,
         error: syncResult.error || null,
         pendingDirection: null,
+        progress: null,
       });
 
       return syncResult;
     } catch (e) {
       const error = e instanceof Error ? e.message : String(e);
-      set({ status: "error", error, pendingDirection: null });
+      set({ status: "error", error, pendingDirection: null, progress: null });
       return {
         success: false,
         direction: "none",
@@ -228,6 +238,7 @@ export const useSyncStore = create<SyncState>((set, get) => ({
       lastSyncAt: null,
       lastResult: null,
       error: null,
+      progress: null,
       pendingDirection: null,
     });
   },

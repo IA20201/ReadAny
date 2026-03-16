@@ -40,7 +40,7 @@
     {
       "identifier": "http:allow-fetch",
       "allow": [
-        { "url": "https://dashscope.aliyuncs.com/**" }
+        { "url": "https://**" }
       ]
     },
     "websocket:default"

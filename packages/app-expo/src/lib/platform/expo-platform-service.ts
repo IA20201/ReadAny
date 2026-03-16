@@ -154,8 +154,75 @@ export class ExpoPlatformService implements IPlatformService {
   // ---- Network ----
 
   async fetch(url: string, options?: RequestInit): Promise<Response> {
-    // React Native has built-in fetch
+    const method = options?.method?.toUpperCase() || 'GET';
+    const standardMethods = ['GET', 'POST', 'PUT', 'DELETE', 'HEAD', 'OPTIONS', 'PATCH'];
+
+    // Use XMLHttpRequest for custom WebDAV methods (MKCOL, PROPFIND, etc.)
+    // React Native's fetch doesn't properly support custom HTTP methods
+    if (!standardMethods.includes(method)) {
+      return this._fetchWithXHR(url, options);
+    }
+
+    // Use standard fetch for standard HTTP methods
     return globalThis.fetch(url, options);
+  }
+
+  private _fetchWithXHR(url: string, options?: RequestInit): Promise<Response> {
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      const method = options?.method || 'GET';
+
+      xhr.open(method, url, true);
+
+      // Set headers
+      if (options?.headers) {
+        const headers = options.headers as Record<string, string>;
+        for (const [key, value] of Object.entries(headers)) {
+          xhr.setRequestHeader(key, value);
+        }
+      }
+
+      xhr.onload = () => {
+        // Create a Response-like object
+        const response = {
+          status: xhr.status,
+          statusText: xhr.statusText,
+          ok: xhr.status >= 200 && xhr.status < 300,
+          headers: new Headers(),
+          text: async () => xhr.responseText,
+          json: async () => JSON.parse(xhr.responseText),
+          arrayBuffer: async () => {
+            const encoder = new TextEncoder();
+            return encoder.encode(xhr.responseText).buffer;
+          },
+        } as Response;
+
+        resolve(response);
+      };
+
+      xhr.onerror = () => {
+        reject(new Error(`XHR request failed: ${method} ${url}`));
+      };
+
+      xhr.ontimeout = () => {
+        reject(new Error(`XHR request timeout: ${method} ${url}`));
+      };
+
+      // Send request
+      if (options?.body) {
+        if (typeof options.body === 'string') {
+          xhr.send(options.body);
+        } else if (options.body instanceof ArrayBuffer) {
+          xhr.send(options.body);
+        } else if (options.body instanceof Uint8Array) {
+          xhr.send(options.body);
+        } else {
+          xhr.send(options.body as any);
+        }
+      } else {
+        xhr.send();
+      }
+    });
   }
 
   async createWebSocket(url: string, _options?: WebSocketOptions): Promise<IWebSocket> {

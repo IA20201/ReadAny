@@ -19,6 +19,7 @@ import {
   radius,
   useColors,
   withOpacity,
+  useTheme,
 } from "@/styles/theme";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -56,6 +57,7 @@ import { RichTextEditor } from "@/components/ui/RichTextEditor";
 import { MarkdownRenderer } from "@/components/chat/MarkdownRenderer";
 
 const NOTE_PNG = require("../../assets/note.png");
+const NOTE_DARK_PNG = require("../../assets/note-dark.png");
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 type DetailTab = "notes" | "highlights";
@@ -63,6 +65,7 @@ type Props = BottomTabScreenProps<TabParamList, "Notes">;
 
 export function NotesView({ initialBookId, showBackButton, edges = ["top"], hideDetailHeader }: { initialBookId?: string | null; showBackButton?: boolean; edges?: ("top" | "bottom" | "left" | "right")[]; hideDetailHeader?: boolean }) {
   const colors = useColors();
+  const { isDark } = useTheme();
   const s = makeStyles(colors);
   const { t } = useTranslation();
   const nav = useNavigation<Nav>();
@@ -365,7 +368,10 @@ export function NotesView({ initialBookId, showBackButton, edges = ["top"], hide
           </View>
         )}
         <View style={s.emptyWrap}>
-          <Image source={NOTE_PNG} style={{ width: 160, height: 160 }} />
+          <Image
+            source={isDark ? NOTE_DARK_PNG : NOTE_PNG}
+            style={{ width: 160, height: 160 }}
+          />
           <Text style={s.emptyTitle}>{t("notes.empty", "暂无笔记")}</Text>
           <Text style={s.emptyHint}>{t("notes.emptyHint", "阅读时长按文字添加高亮和笔记")}</Text>
         </View>

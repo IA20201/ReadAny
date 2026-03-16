@@ -12,6 +12,7 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  GestureResponderEvent,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LoaderIcon, PlusIcon, Trash2Icon, XIcon } from "../../components/ui/Icon";
@@ -304,9 +305,23 @@ export default function AISettingsScreen() {
   } = useSettingsStore();
 
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [manualModelInput, setManualModelInput] = useState("");
+  const sliderTrackRef = useRef<View>(null);
 
   const activeEndpoint = aiConfig.endpoints.find((ep) => ep.id === aiConfig.activeEndpointId);
+
+  const handleSliderTouch = useCallback(
+    (event: GestureResponderEvent) => {
+      sliderTrackRef.current?.measure((x, y, width, height, pageX, pageY) => {
+        const touchX = event.nativeEvent.pageX;
+        const relativeX = touchX - pageX;
+        const ratio = Math.max(0, Math.min(1, relativeX / width));
+        // Round to nearest 0.1
+        const value = Math.round(ratio * 10) / 10;
+        updateAIConfig({ temperature: value });
+      });
+    },
+    [updateAIConfig],
+  );
 
   const handleAddEndpoint = useCallback(async () => {
     await addEndpoint({
@@ -419,29 +434,38 @@ export default function AISettingsScreen() {
 
             <View style={styles.paramRow}>
               <Text style={styles.paramLabel}>Temperature</Text>
-              <Text style={styles.paramValue}>{aiConfig.temperature}</Text>
+              <Text style={styles.paramValue}>{aiConfig.temperature.toFixed(1)}</Text>
             </View>
-            <View style={styles.sliderTrack}>
+            <View style={styles.sliderContainer}>
               <View
-                style={[
-                  styles.sliderFill,
-                  { width: `${(aiConfig.temperature / 2) * 100}%` },
-                ]}
-              />
-              <View style={styles.sliderRow}>
-                {[0, 0.5, 1, 1.5, 2].map((v) => (
+                ref={sliderTrackRef}
+                style={styles.sliderTrack}
+                onStartShouldSetResponder={() => true}
+                onResponderGrant={handleSliderTouch}
+                onResponderMove={handleSliderTouch}
+              >
+                <View
+                  style={[
+                    styles.sliderRange,
+                    { width: `${aiConfig.temperature * 100}%` },
+                  ]}
+                />
+              </View>
+              <View style={styles.sliderMarks}>
+                {[0, 0.5, 1].map((v) => (
                   <TouchableOpacity
                     key={v}
-                    style={styles.sliderTick}
+                    style={styles.sliderMark}
                     onPress={() => updateAIConfig({ temperature: v })}
-                    hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+                    hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
                   >
                     <View
                       style={[
                         styles.sliderDot,
-                        Math.abs(aiConfig.temperature - v) < 0.1 && styles.sliderDotActive,
+                        Math.abs(aiConfig.temperature - v) < 0.05 && styles.sliderDotActive,
                       ]}
                     />
+                    <Text style={styles.sliderLabel}>{v}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
@@ -475,38 +499,6 @@ export default function AISettingsScreen() {
                 }}
                 keyboardType="number-pad"
               />
-            </View>
-          </View>
-
-          {/* Manual model add (for providers that don't support listing) */}
-          <View style={styles.sectionCard}>
-            <Text style={styles.sectionTitle}>{t("settings.ai_manualModel", "手动添加模型")}</Text>
-            <Text style={styles.sectionDesc}>
-              {t("settings.ai_manualModelDesc", "如果提供商不支持获取模型列表，可以手动添加")}
-            </Text>
-            <View style={styles.addModelRow}>
-              <TextInput
-                style={[styles.input, { flex: 1 }]}
-                placeholder={t("settings.ai_modelNamePlaceholder", "模型名称")}
-                placeholderTextColor={colors.mutedForeground}
-                value={manualModelInput}
-                onChangeText={setManualModelInput}
-              />
-              <TouchableOpacity
-                style={styles.addModelBtn}
-                onPress={() => {
-                  const trimmed = manualModelInput.trim();
-                  if (!trimmed || !activeEndpoint) return;
-                  if (activeEndpoint.models.includes(trimmed)) return;
-                  updateEndpoint(activeEndpoint.id, {
-                    models: [...activeEndpoint.models, trimmed],
-                  }).catch(console.error);
-                  setManualModelInput("");
-                }}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.addModelBtnText}>{t("common.add", "添加")}</Text>
-              </TouchableOpacity>
             </View>
           </View>
         </ScrollView>
@@ -791,31 +783,34 @@ const makeStyles = (colors: ThemeColors) =>
       textAlign: "right",
     },
 
+    sliderContainer: {
+      marginTop: spacing.md,
+      paddingBottom: spacing.lg,
+    },
     sliderTrack: {
-      height: 24,
-      justifyContent: "center",
-      marginTop: spacing.xs,
-    },
-    sliderFill: {
-      position: "absolute",
-      left: 0,
-      top: 10,
       height: 4,
-      borderRadius: 2,
-      backgroundColor: colors.primary,
+      backgroundColor: colors.muted,
+      borderRadius: radius.full,
+      overflow: "hidden",
     },
-    sliderRow: {
+    sliderRange: {
+      height: 4,
+      backgroundColor: colors.primary,
+      borderRadius: radius.full,
+    },
+    sliderMarks: {
       flexDirection: "row",
       justifyContent: "space-between",
-      alignItems: "center",
+      marginTop: spacing.sm,
     },
-    sliderTick: {
-      padding: 4,
+    sliderMark: {
+      alignItems: "center",
+      gap: 4,
     },
     sliderDot: {
-      width: 16,
-      height: 16,
-      borderRadius: 8,
+      width: 12,
+      height: 12,
+      borderRadius: 6,
       borderWidth: 2,
       borderColor: colors.border,
       backgroundColor: colors.background,
@@ -823,5 +818,9 @@ const makeStyles = (colors: ThemeColors) =>
     sliderDotActive: {
       borderColor: colors.primary,
       backgroundColor: colors.primary,
+    },
+    sliderLabel: {
+      fontSize: fontSize.xs,
+      color: colors.mutedForeground,
     },
   });

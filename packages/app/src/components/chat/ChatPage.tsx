@@ -153,7 +153,7 @@ function EmptyState({ onSuggestionClick }: { onSuggestionClick: (text: string) =
   return (
     <div className="flex h-full w-full select-none items-center justify-center overflow-y-auto p-6">
       <div className="flex items-center gap-12">
-        <img src="/think.svg" alt="" className="h-52 w-52 shrink-0" />
+        <img src="/think.svg" alt="" className="h-52 w-52 shrink-0 dark:invert" />
         <div className="flex flex-col gap-6">
           <div>
             <h1 className="text-2xl font-semibold text-foreground">{t("chat.howCanIHelp")}</h1>

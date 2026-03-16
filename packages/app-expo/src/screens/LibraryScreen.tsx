@@ -24,6 +24,7 @@ import {
   radius,
   useColors,
   withOpacity,
+  useTheme,
 } from "@/styles/theme";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -59,6 +60,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 const BOOK_PNG = require("../../assets/book.png");
+const BOOK_DARK_PNG = require("../../assets/book-dark.png");
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -77,6 +79,7 @@ const SORT_OPTIONS: { field: SortField; labelKey: string }[] = [
 
 export function LibraryScreen() {
   const colors = useColors();
+  const { isDark } = useTheme();
   const s = makeStyles(colors);
   const { t } = useTranslation();
   const nav = useNavigation<Nav>();
@@ -552,7 +555,10 @@ export function LibraryScreen() {
         {/* Empty state */}
         {isLoaded && books.length === 0 && (
           <View style={s.emptyWrap}>
-            <Image source={BOOK_PNG} style={{ width: 160, height: 160 }} />
+            <Image
+              source={isDark ? BOOK_DARK_PNG : BOOK_PNG}
+              style={{ width: 160, height: 160 }}
+            />
             <Text style={s.emptyTitle}>{t("library.empty", "暂无书籍")}</Text>
             <Text style={s.emptyHint}>{t("library.emptyHint", "导入电子书开始阅读之旅")}</Text>
             <TouchableOpacity style={s.emptyImportBtn} onPress={handleImport} activeOpacity={0.8}>

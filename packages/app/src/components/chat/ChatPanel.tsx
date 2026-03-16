@@ -310,7 +310,7 @@ export function ChatPanel({ book, onNavigateToCitation }: ChatPanelProps) {
         ) : (
           <div className="flex h-full flex-col items-start justify-end gap-3 overflow-y-auto p-4 pb-6">
             <div className="flex flex-col items-start gap-3 pl-1">
-              <img src="/think.svg" alt="" className="h-28 w-28 shrink-0" />
+              <img src="/think.svg" alt="" className="h-28 w-28 shrink-0 dark:invert" />
               <div className="space-y-1">
                 <h3 className="text-lg font-semibold text-neutral-900">
                   {t("chat.aiAssistant")}

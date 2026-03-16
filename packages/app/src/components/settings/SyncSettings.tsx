@@ -18,6 +18,7 @@ export function SyncSettings() {
     lastSyncAt,
     lastResult,
     error,
+    progress,
     pendingDirection,
     loadConfig,
     testConnection,
@@ -200,13 +201,13 @@ export function SyncSettings() {
           <div className="flex items-center gap-2">
             <button
               onClick={() => handleConflict("upload")}
-              className="rounded-md bg-blue-600 px-3 py-1.5 text-sm text-white transition-colors hover:bg-blue-700"
+              className="rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground transition-colors hover:bg-primary/90"
             >
               {t("settings.syncConflictUpload")}
             </button>
             <button
               onClick={() => handleConflict("download")}
-              className="rounded-md bg-green-600 px-3 py-1.5 text-sm text-white transition-colors hover:bg-green-700"
+              className="rounded-md border border-input bg-background px-3 py-1.5 text-sm text-foreground transition-colors hover:bg-muted"
             >
               {t("settings.syncConflictDownload")}
             </button>

@@ -47,11 +47,24 @@ export class WebDavClient {
     if (options.contentType) {
       headers["Content-Type"] = options.contentType;
     }
-    return platform.fetch(url, {
-      method,
-      headers,
-      body: options.body,
-    });
+
+    console.log(`[WebDAV] ${method} ${url}`);
+    const startTime = Date.now();
+
+    try {
+      const response = await platform.fetch(url, {
+        method,
+        headers,
+        body: options.body,
+      });
+      const elapsed = Date.now() - startTime;
+      console.log(`[WebDAV] ${method} ${url} completed in ${elapsed}ms (status: ${response.status})`);
+      return response;
+    } catch (error) {
+      const elapsed = Date.now() - startTime;
+      console.error(`[WebDAV] ${method} ${url} failed after ${elapsed}ms:`, error);
+      throw error;
+    }
   }
 
   /** Test if the server is reachable and credentials are valid */
@@ -95,7 +108,19 @@ export class WebDavClient {
     let current = "";
     for (const segment of segments) {
       current += `/${segment}`;
+      console.log(`[WebDAV] Ensuring directory: ${current}`);
+
+      // Check if directory exists first
+      const exists = await this.exists(current);
+      if (exists) {
+        console.log(`[WebDAV] ✓ Directory ${current} already exists`);
+        continue;
+      }
+
+      console.log(`[WebDAV] Creating directory: ${current}`);
+      const start = Date.now();
       await this.mkcol(current);
+      console.log(`[WebDAV] ✓ Directory ${current} created in ${Date.now() - start}ms`);
     }
   }
 

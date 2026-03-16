@@ -59,8 +59,18 @@ export interface DavResource {
   etag?: string;
 }
 
+/** Detailed progress information for sync operations */
+export interface SyncProgress {
+  phase: 'database' | 'files';
+  operation: 'upload' | 'download';
+  currentFile?: string;
+  completedFiles: number;
+  totalFiles: number;
+  message: string;
+}
+
 /** Progress callback for upload/download */
-export type SyncProgressCallback = (current: number, total: number) => void;
+export type SyncProgressCallback = (progress: SyncProgress) => void;
 
 /** Remote directory structure constants */
 export const REMOTE_ROOT = "/readany";

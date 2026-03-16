@@ -42,7 +42,7 @@ interface CoverImageProps extends React.ImgHTMLAttributes<HTMLImageElement> {
 }
 
 function CoverImage({ url, fallback, ...imgProps }: CoverImageProps) {
-  const resolvedSrc = useResolvedSrc(url);
+  const resolvedSrc = useResolvedSrc(url ?? undefined);
 
   if (!resolvedSrc) {
     return <>{fallback}</>;
@@ -263,7 +263,7 @@ export function NotesPage() {
   if (bookNotebooks.length === 0) {
     return (
       <div className="flex h-full flex-col items-center justify-center p-6 text-center">
-        <img src="/note.svg" alt="" className="mb-6 h-48 w-48" />
+        <img src="/note.svg" alt="" className="mb-6 h-48 w-48 dark:invert" />
         <p className="text-base font-medium text-foreground">{t("notes.empty")}</p>
         <p className="mt-2 text-sm text-muted-foreground">{t("notes.emptyHint")}</p>
       </div>
