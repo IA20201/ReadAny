@@ -17,6 +17,8 @@ import {
 import { insertChunks, deleteChunks } from "../db/database";
 import { chunkContent } from "./chunker";
 import { invalidateChunkCache } from "./search";
+import { hasVectorDB, getVectorDB } from "./vector-db";
+import type { VectorRecord } from "./vector-db";
 import type { ChapterData } from "./rag-types";
 
 export type VectorizeStatusCallback = (
@@ -167,6 +169,34 @@ export async function triggerVectorizeBook(
     const insertBatchSize = 50;
     for (let i = 0; i < allChunks.length; i += insertBatchSize) {
       await insertChunks(allChunks.slice(i, i + insertBatchSize));
+    }
+
+    // Store embeddings in vector database (sqlite-vec)
+    if (hasVectorDB()) {
+      try {
+        const vectorDB = getVectorDB();
+        if (vectorDB && await vectorDB.isReady()) {
+          await vectorDB.deleteByBookId(bookId);
+
+          const vectorRecords: VectorRecord[] = allChunks
+            .filter((c) => c.embedding && c.embedding.length > 0)
+            .map((c) => ({
+              id: c.id,
+              bookId: c.bookId,
+              embedding: c.embedding!,
+            }));
+
+          if (vectorRecords.length > 0) {
+            await vectorDB.insert(vectorRecords);
+          }
+
+          console.log(`[Vectorize] Stored ${vectorRecords.length} vectors in sqlite-vec`);
+        } else {
+          console.warn("[Vectorize] Vector database not ready, skipping vector storage");
+        }
+      } catch (err) {
+        console.error("[Vectorize] Failed to store vectors:", err);
+      }
     }
 
     // Invalidate search cache so next query picks up new embeddings

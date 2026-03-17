@@ -9,6 +9,7 @@ import type { Chunk, SearchQuery, SearchResult } from "../types";
 import { cosineSimilarity } from "./embedding";
 import type { EmbeddingService } from "./embedding-service";
 import { getChunks } from "../db/database";
+import { hasVectorDB, getVectorDB } from "./vector-db";
 
 let embeddingService: EmbeddingService | null = null;
 
@@ -69,7 +70,34 @@ async function vectorSearch(query: SearchQuery): Promise<SearchResult[]> {
   // Get query embedding
   const queryEmbedding = await embeddingService.embed(query.query);
 
-  // Get all chunks for this book (cached)
+  // Try vector database first (sqlite-vec)
+  if (hasVectorDB()) {
+    try {
+      const vectorDB = getVectorDB();
+      if (vectorDB && await vectorDB.isReady()) {
+        const results = await vectorDB.search(queryEmbedding, query.bookId, query.topK);
+
+        if (results.length > 0) {
+          // Get chunks for the matched IDs
+          const chunks = await getCachedChunks(query.bookId);
+          const chunkMap = new Map(chunks.map((c) => [c.id, c]));
+
+          return results
+            .filter((r) => r.score >= (query.threshold || 0.3))
+            .map((r) => ({
+              chunk: chunkMap.get(r.id)!,
+              score: r.score,
+              matchType: "vector" as const,
+            }))
+            .filter((r) => r.chunk);
+        }
+      }
+    } catch (err) {
+      console.error("[Search] Vector DB search failed, falling back to in-memory:", err);
+    }
+  }
+
+  // Fallback: in-memory vector search
   const chunks = await getCachedChunks(query.bookId);
 
   // Compute cosine similarity against each chunk with an embedding

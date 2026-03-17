@@ -8,9 +8,13 @@ export interface EmbeddingConfig {
   apiKey: string;
   baseUrl?: string;
   batchSize: number;
+  maxRetries?: number;
+  retryDelay?: number;
 }
 
 const DEFAULT_BATCH_SIZE = 20;
+const DEFAULT_MAX_RETRIES = 3;
+const DEFAULT_RETRY_DELAY = 1000;
 
 export class EmbeddingService {
   private config: EmbeddingConfig;
@@ -18,17 +22,17 @@ export class EmbeddingService {
   constructor(config: Partial<EmbeddingConfig> & { model: EmbeddingModel; apiKey: string }) {
     this.config = {
       batchSize: DEFAULT_BATCH_SIZE,
+      maxRetries: DEFAULT_MAX_RETRIES,
+      retryDelay: DEFAULT_RETRY_DELAY,
       ...config,
     };
   }
 
-  /** Generate embedding for a single text */
   async embed(text: string): Promise<number[]> {
     const results = await this.embedBatch([text]);
     return results[0];
   }
 
-  /** Generate embeddings for multiple texts with batching */
   async embedBatch(texts: string[]): Promise<number[][]> {
     const allEmbeddings: number[][] = [];
 
@@ -48,11 +52,48 @@ export class EmbeddingService {
     throw new Error(`Unsupported embedding provider: ${this.config.model.provider}`);
   }
 
+  private async sleep(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  private async fetchWithRetry(
+    url: string,
+    options: RequestInit,
+    retries: number = this.config.maxRetries || DEFAULT_MAX_RETRIES,
+  ): Promise<Response> {
+    let lastError: Error | null = null;
+
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      try {
+        const response = await fetch(url, options);
+        return response;
+      } catch (err) {
+        lastError = err instanceof Error ? err : new Error(String(err));
+        const isNetworkError =
+          lastError.message.includes("network") ||
+          lastError.message.includes("Load failed") ||
+          lastError.message.includes("connection");
+
+        if (attempt < retries && isNetworkError) {
+          const delay = (this.config.retryDelay || DEFAULT_RETRY_DELAY) * (attempt + 1);
+          console.log(
+            `[Embedding] Network error, retrying in ${delay}ms (attempt ${attempt + 1}/${retries})...`,
+          );
+          await this.sleep(delay);
+          continue;
+        }
+        throw lastError;
+      }
+    }
+
+    throw lastError || new Error("Fetch failed");
+  }
+
   private async callOpenAI(texts: string[]): Promise<number[][]> {
     const baseUrl = this.config.baseUrl || "https://api.openai.com/v1";
     const url = `${baseUrl}/embeddings`;
 
-    const response = await fetch(url, {
+    const response = await this.fetchWithRetry(url, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

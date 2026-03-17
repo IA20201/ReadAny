@@ -74,6 +74,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
+ "sqlite-vec",
  "tauri",
  "tauri-build",
  "tauri-plugin-dialog",
@@ -85,6 +86,7 @@ dependencies = [
  "tauri-plugin-updater",
  "tauri-plugin-websocket",
  "tokio",
+ "zerocopy",
 ]
 
 [[package]]
@@ -4273,6 +4275,15 @@ checksum = "7bba3a93db0cc4f7bdece8bb09e77e2e785c20bfebf79eb8340ed80708048790"
 dependencies = [
  "nom",
  "unicode_categories",
+]
+
+[[package]]
+name = "sqlite-vec"
+version = "0.1.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "76b546e18bc6c1ee5154218bd9a7a8a6807b7cbe7d377923ff76a0b6b399c4d5"
+dependencies = [
+ "cc",
 ]
 
 [[package]]

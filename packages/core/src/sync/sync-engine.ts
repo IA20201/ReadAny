@@ -583,18 +583,16 @@ export async function runSync(
   direction: "upload" | "download",
   onProgress?: (progress: import("./sync-types").SyncProgress) => void,
   remoteManifest?: RemoteSyncManifest | null,
+  onDatabaseReplaced?: () => Promise<void>,
 ): Promise<SyncResult> {
   const startTime = Date.now();
   console.log(`[Sync] 🚀 Starting sync: direction=${direction}`);
 
   try {
-    // 1. Ensure remote directory structure (non-blocking - continue if fails)
     console.log('[Sync] Creating remote directory structure...');
     const dirStart = Date.now();
     try {
-      // Create parent dirs sequentially (they depend on each other)
       await client.ensureDirectory(REMOTE_DATA);
-      // Create sibling dirs in parallel (FILES and COVERS are independent)
       await Promise.all([
         client.mkcol(REMOTE_FILES),
         client.mkcol(REMOTE_COVERS),
@@ -605,14 +603,16 @@ export async function runSync(
       console.log('[Sync] Continuing with sync anyway...');
     }
 
-    // 2. Execute database sync
     if (direction === "upload") {
       await executeUpload(client, onProgress);
     } else {
       await executeDownload(client, remoteManifest ?? null, onProgress);
+      if (onDatabaseReplaced) {
+        console.log('[Sync] Running post-download callback...');
+        await onDatabaseReplaced();
+      }
     }
 
-    // 3. Sync files
     const { filesUploaded, filesDownloaded } = await syncFiles(client, onProgress);
 
     return {

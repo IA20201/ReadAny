@@ -30,3 +30,14 @@ export type {
   VectorizeTriggerConfig,
   VectorizeTriggerCallbacks,
 } from "./vectorize-trigger";
+
+export {
+  setVectorDB,
+  getVectorDB,
+  hasVectorDB,
+} from "./vector-db";
+export type {
+  IVectorDB,
+  VectorRecord,
+  VectorSearchResult,
+} from "./vector-db";

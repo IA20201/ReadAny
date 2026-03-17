@@ -15,6 +15,7 @@ import type {
   SyncProgress,
 } from "../sync/sync-types";
 import { DEFAULT_SYNC_CONFIG } from "../sync/sync-types";
+import { getVectorDB, hasVectorDB } from "../rag/vector-db";
 
 const SYNC_CONFIG_KEY = "sync_config";
 const SYNC_PASSWORD_KEY = "sync_password";
@@ -176,7 +177,22 @@ export const useSyncStore = create<SyncState>((set, get) => ({
         set({ progress });
       };
 
-      const syncResult = await runSync(client, direction, onProgress, remoteManifest);
+      const onDatabaseReplaced = async () => {
+        if (hasVectorDB()) {
+          const vectorDB = getVectorDB();
+          if (vectorDB?.rebuild && await vectorDB.isReady()) {
+            console.log("[Sync] Rebuilding vector index after download...");
+            try {
+              const count = await vectorDB.rebuild();
+              console.log(`[Sync] Rebuilt ${count} vectors`);
+            } catch (e) {
+              console.error("[Sync] Failed to rebuild vector index:", e);
+            }
+          }
+        }
+      };
+
+      const syncResult = await runSync(client, direction, onProgress, remoteManifest, onDatabaseReplaced);
 
       set({
         status: "idle",

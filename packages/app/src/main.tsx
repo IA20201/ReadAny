@@ -12,11 +12,17 @@ import { flushAllWrites } from "./stores/persist";
 import { setPlatformService } from "@readany/core/services";
 import { TauriPlatformService } from "./lib/platform/tauri-platform-service";
 import { onLibraryChanged } from "@readany/core/events/library-events";
+import { setVectorDB } from "@readany/core/rag";
+import { TauriVectorDB } from "./lib/tauri-vector-db";
 
 // Register platform service before any database/core operations
 const tauriPlatform = new TauriPlatformService();
 tauriPlatform.initSync().catch(console.error);
 setPlatformService(tauriPlatform);
+
+// Set vector database reference (initialized in Rust setup)
+setVectorDB(new TauriVectorDB());
+console.log("[VectorDB] TauriVectorDB reference set");
 
 // Ensure i18n is fully initialized before rendering
 i18nReady.then(() => {
