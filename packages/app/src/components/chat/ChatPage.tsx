@@ -1,12 +1,19 @@
+import { ConfigGuideDialog, type ConfigGuideType } from "@/components/shared/ConfigGuideDialog";
 /**
  * ChatPage — standalone full-page chat for general conversations.
  */
 import { useStreamingChat } from "@/hooks/use-streaming-chat";
-import { convertToMessageV2, mergeMessagesWithStreaming, groupThreadsByTime, getMonthLabel, formatRelativeTimeShort } from "@readany/core/utils";
 import { useChatReaderStore } from "@/stores/chat-reader-store";
 import { useChatStore } from "@/stores/chat-store";
 import { useSettingsStore } from "@/stores/settings-store";
 import type { CitationPart } from "@readany/core/types";
+import {
+  convertToMessageV2,
+  formatRelativeTimeShort,
+  getMonthLabel,
+  groupThreadsByTime,
+  mergeMessagesWithStreaming,
+} from "@readany/core/utils";
 import {
   BookOpen,
   History,
@@ -19,7 +26,6 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ConfigGuideDialog, type ConfigGuideType } from "@/components/shared/ConfigGuideDialog";
 import { ChatInput } from "./ChatInput";
 import { ContextPopover } from "./ContextPopover";
 import { MessageList } from "./MessageList";
@@ -40,7 +46,9 @@ function ThreadsSidebar({
   const activeThreadId = getActiveThreadId();
 
   return (
-    <div className={`absolute inset-0 z-50 ${open ? "pointer-events-auto" : "pointer-events-none"}`}>
+    <div
+      className={`absolute inset-0 z-50 ${open ? "pointer-events-auto" : "pointer-events-none"}`}
+    >
       <div
         className={`absolute inset-0 transition-opacity duration-300 ${open ? "bg-black/5 opacity-100" : "opacity-0"}`}
         onClick={onClose}
@@ -90,9 +98,10 @@ function ThreadsSidebar({
                     {label}
                   </div>
                   {threads.map((thread) => {
-                    const lastMsg = thread.messages.length > 0
-                      ? thread.messages[thread.messages.length - 1]
-                      : null;
+                    const lastMsg =
+                      thread.messages.length > 0
+                        ? thread.messages[thread.messages.length - 1]
+                        : null;
                     const preview = lastMsg?.content?.slice(0, 80) || "";
                     return (
                       <div
@@ -160,7 +169,9 @@ function EmptyState({ onSuggestionClick }: { onSuggestionClick: (text: string) =
             <p className="mt-1 text-sm text-muted-foreground">{t("chat.askAboutBooks")}</p>
           </div>
           <div>
-            <h2 className="mb-2 text-sm font-medium text-muted-foreground">{t("chat.getStarted")}</h2>
+            <h2 className="mb-2 text-sm font-medium text-muted-foreground">
+              {t("chat.getStarted")}
+            </h2>
             <div className="grid grid-cols-2 gap-3">
               {SUGGESTIONS.map(({ key, icon: Icon }) => (
                 <div
@@ -190,18 +201,11 @@ export function ChatPage() {
     setGeneralActiveThread,
     getActiveThreadId,
   } = useChatStore();
-  const { bookId: contextBookId, bookTitle } = useChatReaderStore();
-  
-  const {
-    isStreaming,
-    currentMessage,
-    currentStep,
-    sendMessage,
-    stopStream,
-  } = useStreamingChat({
-    bookId: contextBookId || undefined,
-  });
-  
+  const { bookTitle } = useChatReaderStore();
+
+  // /chats page should only use general threads - always pass undefined for bookId
+  const { isStreaming, currentMessage, currentStep, sendMessage, stopStream } = useStreamingChat();
+
   const [showThreads, setShowThreads] = useState(false);
   const [configGuide, setConfigGuide] = useState<ConfigGuideType>(null);
 
@@ -215,7 +219,7 @@ export function ChatPage() {
   const activeThread = threads.find((t) => t.id === activeThreadId);
 
   const handleSend = useCallback(
-    async (content: string, deepThinking: boolean = false, spoilerFree: boolean = false) => {
+    async (content: string, deepThinking = false, spoilerFree = false) => {
       const { aiConfig } = useSettingsStore.getState();
       const endpoint = aiConfig.endpoints.find((e) => e.id === aiConfig.activeEndpointId);
       if (!endpoint?.apiKey || !aiConfig.activeModel) {
@@ -223,14 +227,15 @@ export function ChatPage() {
         return;
       }
 
+      // /chats page should only use general threads (no bookId)
       if (!activeThreadId) {
         await createThread(undefined, content.slice(0, 50));
-        setTimeout(() => sendMessage(content, contextBookId || undefined, deepThinking, spoilerFree), 50);
+        setTimeout(() => sendMessage(content, undefined, deepThinking, spoilerFree), 50);
       } else {
-        sendMessage(content, contextBookId || undefined, deepThinking, spoilerFree);
+        sendMessage(content, undefined, deepThinking, spoilerFree);
       }
     },
-    [activeThreadId, createThread, sendMessage, contextBookId],
+    [activeThreadId, createThread, sendMessage],
   );
 
   const handleNewThread = useCallback(() => {
@@ -240,7 +245,7 @@ export function ChatPage() {
   const handleCitationClick = useCallback((citation: CitationPart) => {
     // TODO: Navigate to reader page with this citation
     // For now, log to console. Future enhancement: use router to navigate to /reader/${citation.bookId}?cfi=${citation.cfi}
-    console.log('Citation clicked:', citation);
+    console.log("Citation clicked:", citation);
   }, []);
 
   const displayMessages = convertToMessageV2(activeThread?.messages || []);
@@ -264,8 +269,7 @@ export function ChatPage() {
           </button>
           {bookTitle && (
             <span className="text-xs text-muted-foreground">
-              {t("chat.context")}:{" "}
-              <span className="font-medium text-neutral-700">{bookTitle}</span>
+              {t("chat.context")}: <span className="font-medium text-neutral-700">{bookTitle}</span>
             </span>
           )}
         </div>
@@ -299,11 +303,7 @@ export function ChatPage() {
 
         {/* Input always at bottom with consistent position */}
         <div className="shrink-0 px-4 pb-3 pt-2">
-          <ChatInput
-            onSend={handleSend}
-            onStop={stopStream}
-            isStreaming={isStreaming}
-          />
+          <ChatInput onSend={handleSend} onStop={stopStream} isStreaming={isStreaming} />
         </div>
       </div>
 

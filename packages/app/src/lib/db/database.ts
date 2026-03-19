@@ -29,6 +29,7 @@ export {
   insertThread,
   updateThreadTitle,
   deleteThread,
+  deleteThreadsByBookId,
   getMessages,
   insertMessage,
   getReadingSessions,

@@ -1,12 +1,12 @@
-import type { Book, LibraryFilter, SortField, SortOrder } from "@readany/core/types";
 import * as db from "@/lib/db/database";
+import { debouncedSave, loadFromFS } from "@readany/core/stores/persist";
+import type { Book, LibraryFilter, SortField, SortOrder } from "@readany/core/types";
 /**
  * Library store — book collection CRUD, import, filtering
  * Connected to SQLite for persistence.
  * Uses FS-level JSON cache for fast startup (avoids re-querying SQLite every launch).
  */
 import { create } from "zustand";
-import { debouncedSave, loadFromFS } from "@readany/core/stores/persist";
 
 interface EpubMeta {
   title: string;
@@ -149,8 +149,7 @@ async function generatePdfCover(fileBytes: Uint8Array): Promise<Blob | null> {
     const pdfjsLib = await import("pdfjs-dist");
 
     // Always set worker to match the API version
-    pdfjsLib.GlobalWorkerOptions.workerSrc =
-      `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
+    pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
 
     const pdfDoc = await pdfjsLib.getDocument({
       data: new Uint8Array(fileBytes),
@@ -195,7 +194,12 @@ async function resolveAppPath(relativePath: string): Promise<string> {
 
 /** Check if a path is relative (not absolute or a protocol URL) */
 function isRelativePath(p: string): boolean {
-  return !p.startsWith("/") && !p.startsWith("file://") && !p.startsWith("asset://") && !p.startsWith("http");
+  return (
+    !p.startsWith("/") &&
+    !p.startsWith("file://") &&
+    !p.startsWith("asset://") &&
+    !p.startsWith("http")
+  );
 }
 
 /**
@@ -215,13 +219,21 @@ export async function resolveFileSrc(path: string): Promise<string> {
 }
 
 /** Copy book file into appDataDir/books/{id}.{ext} and return relative path */
-async function copyBookToAppData(bookId: string, ext: string, srcPath: string): Promise<{ relativePath: string; fileBytes: Uint8Array }> {
+async function copyBookToAppData(
+  bookId: string,
+  ext: string,
+  srcPath: string,
+): Promise<{ relativePath: string; fileBytes: Uint8Array }> {
   const { readFile, writeFile, mkdir } = await import("@tauri-apps/plugin-fs");
   const { appDataDir, join } = await import("@tauri-apps/api/path");
 
   const appData = await appDataDir();
   const booksDir = await join(appData, "books");
-  try { await mkdir(booksDir, { recursive: true }); } catch { /* exists */ }
+  try {
+    await mkdir(booksDir, { recursive: true });
+  } catch {
+    /* exists */
+  }
 
   const relativePath = `books/${bookId}.${ext}`;
   const destPath = await join(appData, relativePath);
@@ -398,7 +410,9 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
       try {
         const loaded = await loadFromFS<string[]>("library-tags");
         if (loaded) savedTags = loaded;
-      } catch { /* no saved tags */ }
+      } catch {
+        /* no saved tags */
+      }
 
       // Remove deleted tags from savedTags
       const deletedSet = new Set(deletedTags || []);
@@ -424,9 +438,7 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
   addBook: (book) => {
     set((state) => ({ books: [...state.books, book] }));
     // Persist to DB (fire and forget)
-    db.insertBook(book).catch((err) =>
-      console.error("Failed to insert book into database:", err),
-    );
+    db.insertBook(book).catch((err) => console.error("Failed to insert book into database:", err));
     // Update FS cache
     debouncedSave("library-books", get().books);
   },
@@ -438,6 +450,10 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
     set((state) => ({ books: state.books.filter((b) => b.id !== bookId) }));
     db.deleteBook(bookId).catch((err) =>
       console.error("Failed to delete book from database:", err),
+    );
+    // Delete associated chat threads
+    db.deleteThreadsByBookId(bookId).catch((err) =>
+      console.error("Failed to delete associated chat threads:", err),
     );
     // Update FS cache
     debouncedSave("library-books", get().books);
@@ -502,11 +518,22 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
         try {
           const ext = filePath.split(".").pop()?.toLowerCase() || "epub";
           const formatMap: Record<string, Book["format"]> = {
-            epub: "epub", pdf: "pdf", mobi: "mobi", azw: "azw", azw3: "azw3",
-            cbz: "cbz", cbr: "cbz", fb2: "fb2", fbz: "fbz",
+            epub: "epub",
+            pdf: "pdf",
+            mobi: "mobi",
+            azw: "azw",
+            azw3: "azw3",
+            cbz: "cbz",
+            cbr: "cbz",
+            fb2: "fb2",
+            fbz: "fbz",
           };
           const format: Book["format"] = formatMap[ext] || "epub";
-          let title = filePath.split("/").pop()?.replace(/\.\w+$/i, "") || "Untitled";
+          let title =
+            filePath
+              .split("/")
+              .pop()
+              ?.replace(/\.\w+$/i, "") || "Untitled";
           let author = "";
           let coverUrl: string | undefined;
           const bookId = crypto.randomUUID();
@@ -526,7 +553,9 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
 
           const fileName = filePath.split("/").pop() || "book";
           const blob = new Blob([fileBytes]);
-          const file = new File([blob], fileName, { type: blob.type || "application/octet-stream" });
+          const file = new File([blob], fileName, {
+            type: blob.type || "application/octet-stream",
+          });
 
           try {
             const loader = new DocumentLoader(file);
@@ -535,21 +564,28 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
             // Extract metadata
             const meta = bookDoc.metadata;
             if (meta) {
-              const rawTitle = typeof meta.title === "string"
-                ? meta.title
-                : meta.title ? Object.values(meta.title)[0] : "";
+              const rawTitle =
+                typeof meta.title === "string"
+                  ? meta.title
+                  : meta.title
+                    ? Object.values(meta.title)[0]
+                    : "";
               if (rawTitle) title = rawTitle;
 
-              const rawAuthor = typeof meta.author === "string"
-                ? meta.author
-                : meta.author?.name || "";
+              const rawAuthor =
+                typeof meta.author === "string" ? meta.author : meta.author?.name || "";
               if (rawAuthor) author = rawAuthor;
             }
 
             // Extract cover via foliate-js getCover() — works for EPUB, MOBI, CBZ, FB2, PDF
             try {
               const coverBlob = await bookDoc.getCover();
-              console.log("[importBooks] getCover result:", !!coverBlob, coverBlob?.size, coverBlob?.type);
+              console.log(
+                "[importBooks] getCover result:",
+                !!coverBlob,
+                coverBlob?.size,
+                coverBlob?.type,
+              );
               if (coverBlob) {
                 coverUrl = await saveCoverToAppData(bookId, coverBlob);
               }

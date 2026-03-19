@@ -1,3 +1,5 @@
+import type { IDatabase } from "../services/platform";
+import { getPlatformService } from "../services/platform";
 /**
  * Database access layer — platform-agnostic via IDatabase interface
  * Uses getPlatformService().loadDatabase() to obtain a database connection.
@@ -5,8 +7,6 @@
  */
 import type { Book, Bookmark, Chunk, Highlight, Message, Note, Skill, Thread } from "../types";
 import type { ReadingSession } from "../types/reading";
-import type { IDatabase } from "../services/platform";
-import { getPlatformService } from "../services/platform";
 import { generateId } from "../utils/generate-id";
 
 // Lazy-loaded database instance
@@ -53,7 +53,7 @@ export async function getDeviceId(): Promise<string> {
   const database = await getDB();
   try {
     const rows = await database.select<{ value: string }>(
-      "SELECT value FROM sync_metadata WHERE key = 'device_id'"
+      "SELECT value FROM sync_metadata WHERE key = 'device_id'",
     );
     if (rows.length > 0) {
       cachedDeviceId = rows[0].value;
@@ -67,7 +67,7 @@ export async function getDeviceId(): Promise<string> {
   try {
     await database.execute(
       "INSERT OR REPLACE INTO sync_metadata (key, value) VALUES ('device_id', ?)",
-      [id]
+      [id],
     );
   } catch {
     // Table might not exist yet during init
@@ -79,7 +79,7 @@ export async function getDeviceId(): Promise<string> {
 /** Get next sync version for a table */
 async function nextSyncVersion(database: IDatabase, table: string): Promise<number> {
   const rows = await database.select<{ max_v: number | null }>(
-    `SELECT MAX(sync_version) as max_v FROM ${table}`
+    `SELECT MAX(sync_version) as max_v FROM ${table}`,
   );
   return (rows[0]?.max_v || 0) + 1;
 }
@@ -90,7 +90,7 @@ async function insertTombstone(database: IDatabase, id: string, tableName: strin
   try {
     await database.execute(
       "INSERT OR REPLACE INTO sync_tombstones (id, table_name, deleted_at, device_id) VALUES (?, ?, ?, ?)",
-      [id, tableName, Date.now(), deviceId]
+      [id, tableName, Date.now(), deviceId],
     );
   } catch {
     // sync_tombstones table might not exist on older schema
@@ -307,7 +307,7 @@ export async function initDatabase(): Promise<void> {
     )
   `);
   await database.execute(
-    "CREATE INDEX IF NOT EXISTS idx_tombstones_deleted_at ON sync_tombstones(deleted_at)"
+    "CREATE INDEX IF NOT EXISTS idx_tombstones_deleted_at ON sync_tombstones(deleted_at)",
   );
 
   // Migration 6: Sync metadata table
@@ -319,7 +319,16 @@ export async function initDatabase(): Promise<void> {
   `);
 
   // Migration 7: Add sync_version and last_modified_by to all synced tables
-  const syncTables = ["books", "highlights", "notes", "bookmarks", "threads", "messages", "reading_sessions", "skills"];
+  const syncTables = [
+    "books",
+    "highlights",
+    "notes",
+    "bookmarks",
+    "threads",
+    "messages",
+    "reading_sessions",
+    "skills",
+  ];
   for (const table of syncTables) {
     try {
       await database.execute(`ALTER TABLE ${table} ADD COLUMN sync_version INTEGER DEFAULT 0`);
@@ -694,31 +703,31 @@ export async function getHighlightStats(): Promise<{
   recentCount: number; // last 7 days
 }> {
   const database = await getDB();
-  
+
   const totalRows = await database.select<{ count: number }>(
-    "SELECT COUNT(*) as count FROM highlights"
+    "SELECT COUNT(*) as count FROM highlights",
   );
   const notesRows = await database.select<{ count: number }>(
-    "SELECT COUNT(*) as count FROM highlights WHERE note IS NOT NULL AND note != ''"
+    "SELECT COUNT(*) as count FROM highlights WHERE note IS NOT NULL AND note != ''",
   );
   const booksRows = await database.select<{ count: number }>(
-    "SELECT COUNT(DISTINCT book_id) as count FROM highlights"
+    "SELECT COUNT(DISTINCT book_id) as count FROM highlights",
   );
-  
+
   const colorRows = await database.select<{ color: string; count: number }>(
-    "SELECT color, COUNT(*) as count FROM highlights GROUP BY color"
+    "SELECT color, COUNT(*) as count FROM highlights GROUP BY color",
   );
   const colorDistribution: Record<string, number> = {};
   for (const row of colorRows) {
     colorDistribution[row.color] = row.count;
   }
-  
+
   const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
   const recentRows = await database.select<{ count: number }>(
     "SELECT COUNT(*) as count FROM highlights WHERE created_at >= ?",
-    [sevenDaysAgo]
+    [sevenDaysAgo],
   );
-  
+
   return {
     totalHighlights: totalRows[0]?.count || 0,
     highlightsWithNotes: notesRows[0]?.count || 0,
@@ -794,17 +803,17 @@ export async function deleteHighlight(id: string): Promise<void> {
 export async function getNotes(bookId: string): Promise<Note[]> {
   const database = await getDB();
   const rows = await database.select<{
-      id: string;
-      book_id: string;
-      highlight_id: string | null;
-      cfi: string | null;
-      title: string;
-      content: string;
-      chapter_title: string | null;
-      tags: string;
-      created_at: number;
-      updated_at: number;
-    }>("SELECT * FROM notes WHERE book_id = ? ORDER BY created_at DESC", [bookId]);
+    id: string;
+    book_id: string;
+    highlight_id: string | null;
+    cfi: string | null;
+    title: string;
+    content: string;
+    chapter_title: string | null;
+    tags: string;
+    created_at: number;
+    updated_at: number;
+  }>("SELECT * FROM notes WHERE book_id = ? ORDER BY created_at DESC", [bookId]);
   return rows.map((r) => ({
     id: r.id,
     bookId: r.book_id,
@@ -823,17 +832,17 @@ export async function getNotes(bookId: string): Promise<Note[]> {
 export async function getAllNotes(limit = 50): Promise<Note[]> {
   const database = await getDB();
   const rows = await database.select<{
-      id: string;
-      book_id: string;
-      highlight_id: string | null;
-      cfi: string | null;
-      title: string;
-      content: string;
-      chapter_title: string | null;
-      tags: string;
-      created_at: number;
-      updated_at: number;
-    }>("SELECT * FROM notes ORDER BY created_at DESC LIMIT ?", [limit]);
+    id: string;
+    book_id: string;
+    highlight_id: string | null;
+    cfi: string | null;
+    title: string;
+    content: string;
+    chapter_title: string | null;
+    tags: string;
+    created_at: number;
+    updated_at: number;
+  }>("SELECT * FROM notes ORDER BY created_at DESC LIMIT ?", [limit]);
   return rows.map((r) => ({
     id: r.id,
     bookId: r.book_id,
@@ -915,13 +924,13 @@ export async function deleteNote(id: string): Promise<void> {
 export async function getBookmarks(bookId: string): Promise<Bookmark[]> {
   const database = await getDB();
   const rows = await database.select<{
-      id: string;
-      book_id: string;
-      cfi: string;
-      label: string | null;
-      chapter_title: string | null;
-      created_at: number;
-    }>("SELECT * FROM bookmarks WHERE book_id = ? ORDER BY created_at DESC", [bookId]);
+    id: string;
+    book_id: string;
+    cfi: string;
+    label: string | null;
+    chapter_title: string | null;
+    created_at: number;
+  }>("SELECT * FROM bookmarks WHERE book_id = ? ORDER BY created_at DESC", [bookId]);
   return rows.map((r) => ({
     id: r.id,
     bookId: r.book_id,
@@ -963,19 +972,19 @@ export async function getThreads(bookId?: string): Promise<Thread[]> {
   const database = await getDB();
   const rows = bookId
     ? await database.select<{
-          id: string;
-          book_id: string | null;
-          title: string;
-          created_at: number;
-          updated_at: number;
-        }>("SELECT * FROM threads WHERE book_id = ? ORDER BY updated_at DESC", [bookId])
+        id: string;
+        book_id: string | null;
+        title: string;
+        created_at: number;
+        updated_at: number;
+      }>("SELECT * FROM threads WHERE book_id = ? ORDER BY updated_at DESC", [bookId])
     : await database.select<{
-          id: string;
-          book_id: string | null;
-          title: string;
-          created_at: number;
-          updated_at: number;
-        }>("SELECT * FROM threads ORDER BY updated_at DESC");
+        id: string;
+        book_id: string | null;
+        title: string;
+        created_at: number;
+        updated_at: number;
+      }>("SELECT * FROM threads ORDER BY updated_at DESC");
 
   const threads: Thread[] = [];
   for (const row of rows) {
@@ -995,12 +1004,12 @@ export async function getThreads(bookId?: string): Promise<Thread[]> {
 export async function getThread(id: string): Promise<Thread | null> {
   const database = await getDB();
   const rows = await database.select<{
-      id: string;
-      book_id: string | null;
-      title: string;
-      created_at: number;
-      updated_at: number;
-    }>("SELECT * FROM threads WHERE id = ?", [id]);
+    id: string;
+    book_id: string | null;
+    title: string;
+    created_at: number;
+    updated_at: number;
+  }>("SELECT * FROM threads WHERE id = ?", [id]);
   if (rows.length === 0) return null;
 
   const row = rows[0];
@@ -1021,7 +1030,15 @@ export async function insertThread(thread: Thread): Promise<void> {
   const syncVersion = await nextSyncVersion(database, "threads");
   await database.execute(
     "INSERT INTO threads (id, book_id, title, created_at, updated_at, sync_version, last_modified_by) VALUES (?, ?, ?, ?, ?, ?, ?)",
-    [thread.id, thread.bookId || null, thread.title, thread.createdAt, thread.updatedAt, syncVersion, deviceId],
+    [
+      thread.id,
+      thread.bookId || null,
+      thread.title,
+      thread.createdAt,
+      thread.updatedAt,
+      syncVersion,
+      deviceId,
+    ],
   );
 }
 
@@ -1029,20 +1046,18 @@ export async function updateThreadTitle(id: string, title: string): Promise<void
   const database = await getDB();
   const deviceId = await getDeviceId();
   const syncVersion = await nextSyncVersion(database, "threads");
-  await database.execute("UPDATE threads SET title = ?, updated_at = ?, sync_version = ?, last_modified_by = ? WHERE id = ?", [
-    title,
-    Date.now(),
-    syncVersion,
-    deviceId,
-    id,
-  ]);
+  await database.execute(
+    "UPDATE threads SET title = ?, updated_at = ?, sync_version = ?, last_modified_by = ? WHERE id = ?",
+    [title, Date.now(), syncVersion, deviceId, id],
+  );
 }
 
 export async function deleteThread(id: string): Promise<void> {
   const database = await getDB();
   // Get all message IDs in this thread for tombstones
   const messages = await database.select<{ id: string }>(
-    "SELECT id FROM messages WHERE thread_id = ?", [id]
+    "SELECT id FROM messages WHERE thread_id = ?",
+    [id],
   );
   for (const msg of messages) {
     await insertTombstone(database, msg.id, "messages");
@@ -1052,21 +1067,34 @@ export async function deleteThread(id: string): Promise<void> {
   await database.execute("DELETE FROM threads WHERE id = ?", [id]);
 }
 
+export async function deleteThreadsByBookId(bookId: string): Promise<void> {
+  const database = await getDB();
+  // Get all thread IDs for this book
+  const threads = await database.select<{ id: string }>(
+    "SELECT id FROM threads WHERE book_id = ?",
+    [bookId],
+  );
+  // Delete each thread (this handles messages and tombstones)
+  for (const thread of threads) {
+    await deleteThread(thread.id);
+  }
+}
+
 // --- Messages ---
 
 export async function getMessages(threadId: string): Promise<Message[]> {
   const database = await getDB();
   const rows = await database.select<{
-      id: string;
-      thread_id: string;
-      role: string;
-      content: string;
-      citations: string | null;
-      tool_calls: string | null;
-      reasoning: string | null;
-      parts_order: string | null;
-      created_at: number;
-    }>("SELECT * FROM messages WHERE thread_id = ? ORDER BY created_at ASC", [threadId]);
+    id: string;
+    thread_id: string;
+    role: string;
+    content: string;
+    citations: string | null;
+    tool_calls: string | null;
+    reasoning: string | null;
+    parts_order: string | null;
+    created_at: number;
+  }>("SELECT * FROM messages WHERE thread_id = ? ORDER BY created_at ASC", [threadId]);
   return rows.map((r) => ({
     id: r.id,
     threadId: r.thread_id,
@@ -1107,14 +1135,14 @@ export async function insertMessage(message: Message): Promise<void> {
 export async function getReadingSessions(bookId: string): Promise<ReadingSession[]> {
   const database = await getDB();
   const rows = await database.select<{
-      id: string;
-      book_id: string;
-      started_at: number;
-      ended_at: number | null;
-      total_active_time: number;
-      pages_read: number;
-      state: string;
-    }>("SELECT * FROM reading_sessions WHERE book_id = ? ORDER BY started_at DESC", [bookId]);
+    id: string;
+    book_id: string;
+    started_at: number;
+    ended_at: number | null;
+    total_active_time: number;
+    pages_read: number;
+    state: string;
+  }>("SELECT * FROM reading_sessions WHERE book_id = ? ORDER BY started_at DESC", [bookId]);
   return rows.map((r) => ({
     id: r.id,
     bookId: r.book_id,
@@ -1132,14 +1160,14 @@ export async function getReadingSessionsByDateRange(
 ): Promise<ReadingSession[]> {
   const database = await getDB();
   const rows = await database.select<{
-      id: string;
-      book_id: string;
-      started_at: number;
-      ended_at: number | null;
-      total_active_time: number;
-      pages_read: number;
-      state: string;
-    }>(
+    id: string;
+    book_id: string;
+    started_at: number;
+    ended_at: number | null;
+    total_active_time: number;
+    pages_read: number;
+    state: string;
+  }>(
     "SELECT * FROM reading_sessions WHERE started_at >= ? AND started_at <= ? ORDER BY started_at DESC",
     [startDate.getTime(), endDate.getTime()],
   );
@@ -1218,17 +1246,17 @@ export async function updateReadingSession(
 export async function getChunks(bookId: string): Promise<Chunk[]> {
   const database = await getDB();
   const rows = await database.select<{
-      id: string;
-      book_id: string;
-      chapter_index: number;
-      chapter_title: string;
-      content: string;
-      token_count: number;
-      start_cfi: string | null;
-      end_cfi: string | null;
-      segment_cfis: string | null;
-      embedding: unknown;
-    }>("SELECT * FROM chunks WHERE book_id = ? ORDER BY chapter_index, id", [bookId]);
+    id: string;
+    book_id: string;
+    chapter_index: number;
+    chapter_title: string;
+    content: string;
+    token_count: number;
+    start_cfi: string | null;
+    end_cfi: string | null;
+    segment_cfis: string | null;
+    embedding: unknown;
+  }>("SELECT * FROM chunks WHERE book_id = ? ORDER BY chapter_index, id", [bookId]);
   return rows.map((r) => ({
     id: r.id,
     bookId: r.book_id,
@@ -1274,17 +1302,17 @@ export async function deleteChunks(bookId: string): Promise<void> {
 export async function getSkills(): Promise<Skill[]> {
   const database = await getDB();
   const rows = await database.select<{
-      id: string;
-      name: string;
-      description: string;
-      icon: string | null;
-      enabled: number;
-      parameters: string;
-      prompt: string;
-      built_in: number;
-      created_at: number;
-      updated_at: number;
-    }>("SELECT * FROM skills ORDER BY created_at ASC");
+    id: string;
+    name: string;
+    description: string;
+    icon: string | null;
+    enabled: number;
+    parameters: string;
+    prompt: string;
+    built_in: number;
+    created_at: number;
+    updated_at: number;
+  }>("SELECT * FROM skills ORDER BY created_at ASC");
   return rows.map((r) => ({
     id: r.id,
     name: r.name,

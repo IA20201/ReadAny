@@ -121,7 +121,9 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
       try {
         const loaded = await loadFromFS<string[]>("library-tags");
         if (loaded) savedTags = loaded;
-      } catch { /* no saved tags */ }
+      } catch {
+        /* no saved tags */
+      }
 
       // Remove deleted tags from savedTags
       const deletedSet = new Set(deletedTags || []);
@@ -160,6 +162,8 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
     try {
       await db.initDatabase();
       await db.deleteBook(bookId);
+      // Delete associated chat threads
+      await db.deleteThreadsByBookId(bookId);
     } catch (err) {
       console.error("Failed to delete book from database:", err);
     }
