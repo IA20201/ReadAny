@@ -340,7 +340,7 @@ export default function AISettingsScreen() {
       style={[styles.container, { backgroundColor: colors.background }]}
       edges={["top"]}
     >
-      <SettingsHeader title={t("settings.ai_title", "AI 设置")} right={addButton} />
+      <SettingsHeader title={t("settings.ai_title", "AI 设置")} subtitle={t("settings.realtimeHint")} right={addButton} />
 
       <KeyboardAvoidingView
         style={styles.keyboardView}

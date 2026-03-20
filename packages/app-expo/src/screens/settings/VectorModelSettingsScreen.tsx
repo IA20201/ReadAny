@@ -150,6 +150,16 @@ function BuiltinModelsSection() {
     [setSelectedBuiltinModelId],
   );
 
+  const handleClear = useCallback(
+    (modelId: string) => {
+      if (selectedBuiltinModelId === modelId) {
+        setSelectedBuiltinModelId(null);
+      }
+      updateBuiltinModelState(modelId, { status: "idle", progress: 0, error: undefined });
+    },
+    [selectedBuiltinModelId, setSelectedBuiltinModelId, updateBuiltinModelState],
+  );
+
   return (
     <View style={s.section}>
       <Text style={s.sectionTitle}>{t("settings.vm_builtinModels", "内置模型")}</Text>
@@ -189,6 +199,22 @@ function BuiltinModelsSection() {
                 <View style={s.downloadingRow}>
                   <ActivityIndicator size="small" color={colors.primary} />
                   <Text style={s.downloadingText}>{state?.progress ?? 0}%</Text>
+                </View>
+              ) : isReady ? (
+                <View style={s.readyActions}>
+                  <TouchableOpacity
+                    style={s.clearBtn}
+                    onPress={() => handleClear(model.id)}
+                  >
+                    <Trash2Icon size={12} color={colors.mutedForeground} />
+                    <Text style={s.clearBtnText}>{t("settings.vm_clearCache")}</Text>
+                  </TouchableOpacity>
+                  <Switch
+                    value={isSelected}
+                    onValueChange={(v) => handleSelect(model.id, v)}
+                    trackColor={{ false: colors.muted, true: colors.primary }}
+                    thumbColor={colors.card}
+                  />
                 </View>
               ) : (
                 <Switch
@@ -524,6 +550,18 @@ const makeStyles = (colors: ThemeColors) =>
     modelDesc: { fontSize: fontSize.xs, color: colors.mutedForeground, marginTop: 6 },
     downloadingRow: { flexDirection: "row", alignItems: "center", gap: 6 },
     downloadingText: { fontSize: fontSize.xs, color: colors.mutedForeground },
+    readyActions: { flexDirection: "row", alignItems: "center", gap: 10 },
+    clearBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 3,
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      borderRadius: radius.md,
+      borderWidth: 0.5,
+      borderColor: colors.border,
+    },
+    clearBtnText: { fontSize: 11, color: colors.mutedForeground },
     // Remote
     remoteTitleRow: {
       flexDirection: "row",

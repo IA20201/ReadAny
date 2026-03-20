@@ -38,6 +38,8 @@ import { SearchBar } from "./SearchBar";
 import { SelectionPopover } from "./SelectionPopover";
 import { TOCPanel } from "./TOCPanel";
 import { TranslationPopover } from "./TranslationPopover";
+import { ResizeHandle } from "./ResizeHandle";
+import { useResizablePanel } from "@/hooks/use-resizable-panel";
 import { useTTSStore } from "@/stores/tts-store";
 
 // --- Tauri file loading ---
@@ -331,6 +333,20 @@ export function ReaderView({ bookId, tabId }: ReaderViewProps) {
   const [showChat, setShowChat] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showTTS, setShowTTS] = useState(false);
+
+  // Resizable panel widths
+  const chatPanel = useResizablePanel({
+    storageKey: "reader-chat-panel-width",
+    defaultWidth: 320,
+    minWidth: 200,
+    maxWidth: 600,
+  });
+  const notebookPanel = useResizablePanel({
+    storageKey: "reader-notebook-panel-width",
+    defaultWidth: 320,
+    minWidth: 200,
+    maxWidth: 600,
+  });
 
   const ttsPlayState = useTTSStore((s) => s.playState);
   const ttsPlay = useTTSStore((s) => s.play);
@@ -1045,6 +1061,10 @@ export function ReaderView({ bookId, tabId }: ReaderViewProps) {
         onDeleteAnnotation={(cfi) => {
           foliateRef.current?.deleteAnnotation({ value: cfi });
         }}
+        panelWidth={notebookPanel.width}
+        onResize={notebookPanel.handleResize}
+        onResizeStart={notebookPanel.handleResizeStart}
+        onResizeEnd={notebookPanel.handleResizeEnd}
       />
 
       {/* Main reading area */}
@@ -1265,9 +1285,18 @@ export function ReaderView({ bookId, tabId }: ReaderViewProps) {
         )}
       </div>
 
-      {/* AI Chat sidebar — RIGHT side */}
+      {/* AI Chat sidebar — RIGHT side, resizable */}
       {showChat && (
-        <div className="ml-1 flex w-80 shrink-0 flex-col overflow-hidden rounded-lg border border-border/60 bg-background shadow-sm">
+        <div
+          className="relative ml-1 flex shrink-0 flex-col overflow-hidden rounded-lg border border-border/60 bg-background shadow-sm"
+          style={{ width: chatPanel.width }}
+        >
+          <ResizeHandle
+            side="left"
+            onResizeStart={chatPanel.handleResizeStart}
+            onResize={(delta) => chatPanel.handleResize(delta, "left")}
+            onResizeEnd={chatPanel.handleResizeEnd}
+          />
           <div className="flex h-10 shrink-0 items-center justify-between border-b border-border/40 px-3">
             <span className="text-xs font-medium text-foreground">{t("chat.aiAssistant")}</span>
             <button
@@ -1293,11 +1322,19 @@ function NotebookSidebarWrapper({
   onGoToCfi,
   onAddAnnotation,
   onDeleteAnnotation,
+  panelWidth,
+  onResize,
+  onResizeStart,
+  onResizeEnd,
 }: {
   bookId: string;
   onGoToCfi: (cfi: string) => void;
   onAddAnnotation: (cfi: string, color: string, note?: string) => void;
   onDeleteAnnotation: (cfi: string) => void;
+  panelWidth: number;
+  onResize: (delta: number, side: "left" | "right") => void;
+  onResizeStart: () => void;
+  onResizeEnd: () => void;
 }) {
   const isOpen = useNotebookStore((s) => s.isOpen);
   const closeNotebook = useNotebookStore((s) => s.closeNotebook);
@@ -1305,7 +1342,16 @@ function NotebookSidebarWrapper({
   if (!isOpen) return null;
 
   return (
-    <div className="mr-1 flex w-80 shrink-0 flex-col overflow-hidden rounded-lg border border-border/60 bg-background shadow-sm">
+    <div
+      className="relative mr-1 flex shrink-0 flex-col overflow-hidden rounded-lg border border-border/60 bg-background shadow-sm"
+      style={{ width: panelWidth }}
+    >
+      <ResizeHandle
+        side="right"
+        onResizeStart={onResizeStart}
+        onResize={(delta) => onResize(delta, "right")}
+        onResizeEnd={onResizeEnd}
+      />
       <NotebookPanel
         bookId={bookId}
         onClose={closeNotebook}

@@ -354,6 +354,7 @@
   },
   "settings": {
     "title": "Settings",
+    "realtimeHint": "All changes are applied in real-time",
     "general": "General",
     "reading": "Reading",
     "ai": "AI",
@@ -513,6 +514,9 @@
     "vm_builtinDesc": "Download lightweight models to run locally in the app. Auto-cached after first download.",
     "vm_download": "Download",
     "vm_loaded": "Loaded",
+    "vm_clearCache": "Clear",
+    "vm_clearing": "Clearing...",
+    "vm_clearSuccess": "Cache cleared",
     "vm_recommended": "Recommended",
     "vm_loadError": "Load failed: {{error}}",
     "vm_remoteModels": "Remote Models",

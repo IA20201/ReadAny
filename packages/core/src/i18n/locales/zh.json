@@ -352,6 +352,7 @@
   },
   "settings": {
     "title": "设置",
+    "realtimeHint": "所有改动实时生效，无需手动保存",
     "general": "通用",
     "reading": "阅读",
     "ai": "AI",
@@ -509,6 +510,9 @@
     "vm_builtinDesc": "下载轻量模型在应用内本地运行，首次下载后自动缓存。",
     "vm_download": "下载",
     "vm_loaded": "已加载",
+    "vm_clearCache": "清除",
+    "vm_clearing": "清除中...",
+    "vm_clearSuccess": "已清除缓存",
     "vm_recommended": "推荐",
     "vm_loadError": "加载失败: {{error}}",
     "vm_remoteModels": "远程模型",

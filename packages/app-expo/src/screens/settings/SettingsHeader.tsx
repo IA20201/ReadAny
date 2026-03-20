@@ -5,10 +5,11 @@ import { fontSize, fontWeight, spacing, useColors } from "../../styles/theme";
 
 interface Props {
   title: string;
+  subtitle?: string;
   right?: React.ReactNode;
 }
 
-export function SettingsHeader({ title, right }: Props) {
+export function SettingsHeader({ title, subtitle, right }: Props) {
   const nav = useNavigation();
   const colors = useColors();
 
@@ -26,9 +27,16 @@ export function SettingsHeader({ title, right }: Props) {
       >
         <ChevronLeftIcon size={20} color={colors.foreground} />
       </TouchableOpacity>
-      <Text style={[styles.title, { color: colors.foreground }]} numberOfLines={1}>
-        {title}
-      </Text>
+      <View style={styles.titleWrap}>
+        <Text style={[styles.title, { color: colors.foreground }]} numberOfLines={1}>
+          {title}
+        </Text>
+        {subtitle ? (
+          <Text style={[styles.subtitle, { color: colors.mutedForeground }]} numberOfLines={1}>
+            {subtitle}
+          </Text>
+        ) : null}
+      </View>
       <View style={styles.rightSlot}>{right}</View>
     </View>
   );
@@ -49,9 +57,16 @@ const styles = StyleSheet.create({
     marginLeft: -4,
   },
   title: {
-    flex: 1,
     fontSize: fontSize.lg,
     fontWeight: fontWeight.semibold,
+  },
+  titleWrap: {
+    flex: 1,
+  },
+  subtitle: {
+    fontSize: fontSize.xs,
+    marginTop: 1,
+    opacity: 0.6,
   },
   rightSlot: {
     flexDirection: "row",

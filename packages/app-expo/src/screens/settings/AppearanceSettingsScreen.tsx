@@ -38,7 +38,7 @@ export default function AppearanceSettingsScreen() {
 
   return (
     <SafeAreaView style={[s.container, { backgroundColor: colors.background }]} edges={["top"]}>
-      <SettingsHeader title={t("settings.appearance", "外观设置")} />
+      <SettingsHeader title={t("settings.appearance", "外观设置")} subtitle={t("settings.realtimeHint")} />
 
       <ScrollView style={s.scroll} contentContainerStyle={s.scrollContent}>
         {/* Theme */}

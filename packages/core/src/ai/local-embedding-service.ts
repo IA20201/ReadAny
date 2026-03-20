@@ -123,3 +123,35 @@ export async function disposeEmbeddingPipeline() {
     }, 500);
   }
 }
+
+/**
+ * Clear cached model files from browser storage.
+ * This removes the downloaded ONNX model files so re-download is needed.
+ */
+export function clearModelCache(builtinModelId: string): Promise<void> {
+  const model = BUILTIN_EMBEDDING_MODELS.find((m) => m.id === builtinModelId);
+  if (!model) return Promise.reject(new Error(`Unknown built-in model: ${builtinModelId}`));
+
+  const w = getWorker();
+
+  // If this model is currently loaded, reset tracking
+  if (workerModelId === builtinModelId) {
+    workerModelId = null;
+  }
+
+  return new Promise<void>((resolve, reject) => {
+    const handler = (e: MessageEvent) => {
+      const msg = e.data;
+      if (msg.type === "clearCache:done") {
+        w.removeEventListener("message", handler);
+        resolve();
+      } else if (msg.type === "clearCache:error") {
+        w.removeEventListener("message", handler);
+        reject(new Error(msg.error));
+      }
+    };
+
+    w.addEventListener("message", handler);
+    w.postMessage({ type: "clearCache", hfModelId: model.hfModelId });
+  });
+}

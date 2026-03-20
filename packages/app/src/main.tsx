@@ -17,15 +17,22 @@ import { TauriVectorDB } from "./lib/tauri-vector-db";
 import { useVectorModelStore } from "./stores/vector-model-store";
 import { BUILTIN_EMBEDDING_MODELS } from "@readany/core/ai/builtin-embedding-models";
 import { setEmbeddingWorkerFactory } from "@readany/core/ai";
-import EmbeddingWorker from "@readany/core/ai/embedding-worker?worker";
 
 // Register platform service before any database/core operations
 const tauriPlatform = new TauriPlatformService();
 tauriPlatform.initSync().catch(console.error);
 setPlatformService(tauriPlatform);
 
-// Register embedding worker factory for Vite/Tauri (import.meta.url works here)
-setEmbeddingWorkerFactory(() => new EmbeddingWorker());
+// Register embedding worker factory for Vite/Tauri
+// Must use `new URL(...)` + explicit `{ type: "module" }` so that
+// import.meta.url is available inside the worker (needed by @huggingface/transformers / onnxruntime-web)
+setEmbeddingWorkerFactory(
+  () =>
+    new Worker(
+      new URL("@readany/core/ai/embedding-worker", import.meta.url),
+      { type: "module" },
+    ),
+);
 
 // Set vector database reference (initialized in Rust setup)
 const tauriVectorDB = new TauriVectorDB();

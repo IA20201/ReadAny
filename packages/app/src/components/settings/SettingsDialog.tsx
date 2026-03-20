@@ -46,6 +46,7 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
         {/* Header */}
         <div className="flex-shrink-0 border-b border-border px-4 py-3.5">
           <DialogTitle className="text-base font-semibold">{t("settings.title")}</DialogTitle>
+          <p className="mt-0.5 text-xs text-muted-foreground/60">{t("settings.realtimeHint")}</p>
         </div>
 
         <div className="flex min-h-0 flex-1">

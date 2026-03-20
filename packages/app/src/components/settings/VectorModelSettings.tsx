@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
 import { Switch } from "@/components/ui/switch";
 import { BUILTIN_EMBEDDING_MODELS } from "@readany/core/ai/builtin-embedding-models";
-import { loadEmbeddingPipeline } from "@readany/core/ai/local-embedding-service";
+import { clearModelCache, loadEmbeddingPipeline } from "@readany/core/ai/local-embedding-service";
 import { useVectorModelStore } from "@/stores/vector-model-store";
 import type { VectorModelConfig } from "@readany/core/types";
 import { Check, Download, Edit2, Loader2, Plus, Trash2, X } from "lucide-react";
@@ -65,6 +65,28 @@ function BuiltinModelsSection() {
     [builtinModelStates, setSelectedBuiltinModelId, handleLoadModel],
   );
 
+  const [clearingModelId, setClearingModelId] = useState<string | null>(null);
+
+  const handleClearModel = useCallback(
+    async (modelId: string) => {
+      setClearingModelId(modelId);
+      try {
+        // Deselect if this model is currently selected
+        if (selectedBuiltinModelId === modelId) {
+          setSelectedBuiltinModelId(null);
+        }
+        await clearModelCache(modelId);
+        updateBuiltinModelState(modelId, { status: "idle", progress: 0, error: undefined });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        updateBuiltinModelState(modelId, { error: message });
+      } finally {
+        setClearingModelId(null);
+      }
+    },
+    [selectedBuiltinModelId, setSelectedBuiltinModelId, updateBuiltinModelState],
+  );
+
   return (
     <section className="rounded-lg bg-muted/60 p-4">
       <div className="mb-3">
@@ -116,10 +138,30 @@ function BuiltinModelsSection() {
                       </span>
                     </div>
                   ) : isReady ? (
-                    <Switch
-                      checked={isSelected}
-                      onCheckedChange={(checked) => handleSelect(model.id, checked)}
-                    />
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        className="text-xs text-muted-foreground hover:text-destructive transition-colors disabled:opacity-50"
+                        disabled={clearingModelId === model.id}
+                        onClick={() => handleClearModel(model.id)}
+                      >
+                        {clearingModelId === model.id ? (
+                          <span className="flex items-center gap-1">
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                            {t("settings.vm_clearing")}
+                          </span>
+                        ) : (
+                          <span className="flex items-center gap-1">
+                            <Trash2 className="h-3 w-3" />
+                            {t("settings.vm_clearCache")}
+                          </span>
+                        )}
+                      </button>
+                      <Switch
+                        checked={isSelected}
+                        onCheckedChange={(checked) => handleSelect(model.id, checked)}
+                      />
+                    </div>
                   ) : (
                     <Button
                       variant="outline"

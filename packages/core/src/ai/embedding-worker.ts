@@ -28,6 +28,8 @@ self.onmessage = async (e: MessageEvent) => {
     await handleEmbed(msg.requestId, msg.texts);
   } else if (msg.type === "dispose") {
     await handleDispose();
+  } else if (msg.type === "clearCache") {
+    await handleClearCache(msg.hfModelId);
   }
 };
 
@@ -97,5 +99,43 @@ async function handleDispose() {
     try { await pipeline.dispose?.(); } catch { /* ignore */ }
     pipeline = null;
     currentModelId = null;
+  }
+}
+
+/**
+ * Clear cached model files from browser Cache Storage.
+ * Transformers.js stores downloaded models in caches named like
+ * "transformers-cache" or keyed by the HuggingFace model URL.
+ */
+async function handleClearCache(hfModelId: string) {
+  try {
+    // Dispose pipeline if it's the model being cleared
+    if (pipeline && currentModelId) {
+      try { await pipeline.dispose?.(); } catch { /* ignore */ }
+      pipeline = null;
+      currentModelId = null;
+    }
+
+    // Transformers.js uses the Cache API with cache name "transformers-cache"
+    const cacheNames = await caches.keys();
+    let deletedCount = 0;
+    for (const cacheName of cacheNames) {
+      const cache = await caches.open(cacheName);
+      const keys = await cache.keys();
+      for (const key of keys) {
+        // Match URLs containing the HuggingFace model ID
+        if (key.url.includes(hfModelId)) {
+          await cache.delete(key);
+          deletedCount++;
+        }
+      }
+    }
+
+    self.postMessage({ type: "clearCache:done", deletedCount });
+  } catch (err) {
+    self.postMessage({
+      type: "clearCache:error",
+      error: err instanceof Error ? err.message : String(err),
+    });
   }
 }

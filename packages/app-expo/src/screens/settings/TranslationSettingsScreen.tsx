@@ -37,7 +37,7 @@ export default function TranslationSettingsScreen() {
       style={[styles.container, { backgroundColor: colors.background }]}
       edges={["top"]}
     >
-      <SettingsHeader title={t("translation.settingsTitle", "翻译设置")} />
+      <SettingsHeader title={t("translation.settingsTitle", "翻译设置")} subtitle={t("settings.realtimeHint")} />
 
       <KeyboardAvoidingView
         style={styles.keyboardView}
