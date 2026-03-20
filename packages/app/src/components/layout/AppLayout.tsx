@@ -57,7 +57,7 @@ export function AppLayout() {
   const initTab = useReaderStore((s) => s.initTab);
   const readerStoreTabs = useReaderStore((s) => s.tabs);
   const books = useLibraryStore((s) => s.books);
-  const { hasCompletedOnboarding, _hasHydrated } = useSettingsStore();
+  const { hasCompletedOnboarding: _hasCompletedOnboarding, _hasHydrated } = useSettingsStore();
   const { t } = useTranslation();
 
   // Command palette state

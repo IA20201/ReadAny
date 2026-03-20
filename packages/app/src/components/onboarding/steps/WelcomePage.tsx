@@ -7,7 +7,7 @@ import { useSettingsStore } from "@readany/core/stores/settings-store";
 
 import { OnboardingLayout } from "../OnboardingLayout";
 
-export function WelcomePage({ onNext, onPrev, step, totalSteps }: any) {
+export function WelcomePage({ onNext, onPrev: _onPrev, step, totalSteps }: any) {
   const { t } = useTranslation();
   const { completeOnboarding } = useSettingsStore();
 

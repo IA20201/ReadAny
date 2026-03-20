@@ -39,14 +39,6 @@ export function AIPage({ onNext, onPrev, step, totalSteps }: any) {
     { id: "ollama", name: "Ollama (Local)", defaultUrl: "http://localhost:11434" },
   ];
 
-  // Find the endpoint with actual config (first one with API key, or active, or first)
-  const getConfiguredEndpoint = () => {
-    // Priority: 1st endpoint with API key > active endpoint > first endpoint
-    const endpointWithKey = aiConfig.endpoints.find((ep) => ep.apiKey && ep.apiKey.length > 0);
-    const activeEndpoint = aiConfig.endpoints.find((ep) => ep.id === aiConfig.activeEndpointId);
-    return endpointWithKey || activeEndpoint || aiConfig.endpoints[0];
-  };
-
   // Get the endpoint ID to use for syncing
   const syncEndpointId =
     aiConfig.endpoints.find((ep) => ep.apiKey && ep.apiKey.length > 0)?.id ||

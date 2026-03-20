@@ -70,13 +70,6 @@ function isAlphanumeric(char: string): boolean {
 }
 
 /**
- * Check if a character is a word character (any script)
- */
-function isWordChar(char: string): boolean {
-  return isCJK(char) || isJapanese(char) || isKorean(char) || isAlphanumeric(char);
-}
-
-/**
  * Normalize text: lowercase, remove extra whitespace, normalize Unicode
  */
 function normalizeText(text: string): string {
