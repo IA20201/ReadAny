@@ -21,7 +21,11 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "com.readany.app"
+      "package": "com.readany.app",
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "plugins": [
       "expo-font",
@@ -35,6 +39,11 @@
         }
       ]
     ],
-    "scheme": "readany"
+    "scheme": "readany",
+    "extra": {
+      "eas": {
+        "projectId": "e9c65825-d965-4d58-a3af-46406ee8a9ae"
+      }
+    }
   }
 }

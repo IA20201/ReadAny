@@ -84,22 +84,43 @@ const features = [
             </div>
           </div>
           
-          <div class="flex items-stretch gap-6">
-            <div class="relative rounded-xl border border-border/50 bg-muted/30 p-6 shadow-lg flex-1">
+          <!-- 移动端：上下排列 -->
+          <div class="flex flex-col gap-6 lg:hidden">
+            <div class="relative rounded-xl border border-border/50 bg-muted/30 shadow-lg overflow-hidden">
               <img 
                 src={feature.desktopImage} 
                 alt={t(feature.titleKey)}
-                class="w-full h-auto rounded-lg"
+                class="w-full h-auto"
               />
-              <div class="absolute -z-10 -top-4 -right-4 w-24 h-24 bg-primary/10 rounded-full blur-2xl"></div>
             </div>
             
-            <div class="relative w-64 bg-gradient-to-b from-muted to-muted/50 rounded-[2.5rem] border-4 border-border shadow-2xl flex-shrink-0 overflow-hidden">
+            <div class="relative bg-gradient-to-b from-muted to-muted/50 rounded-[2.5rem] border-4 border-border shadow-2xl overflow-hidden mx-auto w-64">
               <div class="absolute top-0 left-1/2 -translate-x-1/2 w-24 h-6 bg-border rounded-b-2xl z-10"></div>
               <img 
                 src={feature.mobileImage} 
                 alt={`${t(feature.titleKey)} - Mobile`}
-                class="w-full h-full object-cover"
+                class="w-full h-auto"
+              />
+            </div>
+          </div>
+          
+          <!-- 桌面端：左右排列 -->
+          <div class="hidden lg:flex gap-6 items-center">
+            <div class="relative rounded-xl border border-border/50 bg-muted/30 shadow-lg overflow-hidden flex-1">
+              <img 
+                src={feature.desktopImage} 
+                alt={t(feature.titleKey)}
+                class="w-full h-auto"
+              />
+              <div class="absolute -z-10 -top-4 -right-4 w-24 h-24 bg-primary/10 rounded-full blur-2xl"></div>
+            </div>
+            
+            <div class="relative bg-gradient-to-b from-muted to-muted/50 rounded-[2.5rem] border-4 border-border shadow-2xl overflow-hidden w-72 flex-shrink-0">
+              <div class="absolute top-0 left-1/2 -translate-x-1/2 w-24 h-6 bg-border rounded-b-2xl z-10"></div>
+              <img 
+                src={feature.mobileImage} 
+                alt={`${t(feature.titleKey)} - Mobile`}
+                class="w-full h-auto"
               />
             </div>
           </div>

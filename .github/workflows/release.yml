@@ -79,6 +79,50 @@ jobs:
           prerelease: false
           args: ${{ matrix.args }}
 
+  build-android:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Build reader assets
+        run: pnpm --filter @readany/app-expo run build:reader
+
+      - name: Setup Expo
+        uses: expo/expo-github-action@v8
+        with:
+          expo-version: latest
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Build Android APK (Local)
+        run: |
+          cd packages/app-expo
+          # Use --local to build on the runner itself and save EAS build credits
+          npx eas-cli build --platform android --profile preview --local --non-interactive --output=../../ReadAny.apk
+
+      - name: Upload to Release
+        uses: softprops/action-gh-release@v1
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: ReadAny.apk
+          tag_name: ${{ github.ref_name }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   create-updater-json:
     needs: build
     runs-on: ubuntu-latest

@@ -222,6 +222,7 @@ export function ReaderView({ bookId, tabId }: ReaderViewProps) {
   const setProgress = useReaderStore((s) => s.setProgress);
   const setChapter = useReaderStore((s) => s.setChapter);
   const setSelectedText = useReaderStore((s) => s.setSelectedText);
+  const pushHistory = useReaderStore((s) => s.pushHistory);
 
   const books = useLibraryStore((s) => s.books);
   const updateBook = useLibraryStore((s) => s.updateBook);
@@ -248,20 +249,53 @@ export function ReaderView({ bookId, tabId }: ReaderViewProps) {
     setFoliateReady(false);
   }, [bookId]);
 
+  // Ref to track if we've already handled the initialCfi for this mount
+  const handledInitialCfiRef = useRef<string | null>(null);
+
+  // Unified navigation function that records history
+  const navigateToCfi = useCallback(
+    (cfi: string) => {
+      if (!foliateRef.current || !readerTab) return;
+
+      // Push CURRENT location to history before jumping
+      if (readerTab.currentCfi) {
+        console.log("[ReaderView] Pushing current location to history:", readerTab.currentCfi);
+        pushHistory(tabId, {
+          cfi: readerTab.currentCfi,
+          chapterIndex: readerTab.chapterIndex,
+          chapterTitle: readerTab.chapterTitle,
+        });
+      }
+
+      console.log("[ReaderView] Navigating to CFI:", cfi);
+      foliateRef.current.goToCFI(cfi);
+    },
+    [tabId, readerTab, pushHistory],
+  );
+
   // Navigate to initialCfi when foliate is ready (from NotesPage navigation)
   useEffect(() => {
     if (!foliateReady || !appTab?.initialCfi) return;
 
+    // Only handle each unique initialCfi once
+    if (handledInitialCfiRef.current === appTab.initialCfi) return;
+
+    const targetCfi = appTab.initialCfi;
+    handledInitialCfiRef.current = targetCfi;
+
     const timer = setTimeout(() => {
-      if (foliateRef.current && appTab.initialCfi) {
-        foliateRef.current.goToCFI(appTab.initialCfi);
-        // Clear the initialCfi after navigation to prevent re-navigation
-        useAppStore.getState().addTab({ ...appTab, initialCfi: undefined });
+      if (foliateRef.current) {
+        navigateToCfi(targetCfi);
+        // Clear the initialCfi in the store after a slight delay to avoid the "stickiness"
+        // caused by immediate re-render during navigation.
+        setTimeout(() => {
+          useAppStore.getState().addTab({ ...appTab, initialCfi: undefined });
+        }, 500);
       }
-    }, 100);
+    }, 200);
 
     return () => clearTimeout(timer);
-  }, [foliateReady, appTab]);
+  }, [foliateReady, appTab, navigateToCfi]);
 
   // Sync highlights to FoliateViewer when they change or when foliate becomes ready
   // Use a timeout to ensure the foliate view is fully initialized
@@ -946,7 +980,7 @@ export function ReaderView({ bookId, tabId }: ReaderViewProps) {
           setSearchResults(results.length);
           if (results.length === 1) {
             setSearchIndex(0);
-            foliateRef.current?.goToCFI(results[0].cfi);
+            navigateToCfi(results[0].cfi);
           }
         } else if (r.cfi) {
           // Single-section search: flat results
@@ -962,7 +996,7 @@ export function ReaderView({ bookId, tabId }: ReaderViewProps) {
     setSearchResults(results.length);
     if (results.length > 0 && searchResultsListRef.current.length <= results.length) {
       setSearchIndex(0);
-      foliateRef.current?.goToCFI(results[0].cfi);
+      navigateToCfi(results[0].cfi);
     }
   }, []);
 
@@ -975,7 +1009,7 @@ export function ReaderView({ bookId, tabId }: ReaderViewProps) {
         direction === "next"
           ? (prev + 1) % results.length
           : (prev - 1 + results.length) % results.length;
-      foliateRef.current?.goToCFI(results[next].cfi);
+      navigateToCfi(results[next].cfi);
       return next;
     });
   }, []);
@@ -1010,8 +1044,7 @@ export function ReaderView({ bookId, tabId }: ReaderViewProps) {
     console.log("[handleNavigateToCitation] Citation clicked:", citation);
 
     try {
-      console.log("[handleNavigateToCitation] Navigating to CFI:", citation.cfi);
-      foliateRef.current?.goToCFI(citation.cfi);
+      navigateToCfi(citation.cfi);
 
       const flashHighlight = () => {
         let flashCount = 0;
@@ -1055,7 +1088,7 @@ export function ReaderView({ bookId, tabId }: ReaderViewProps) {
       {/* Notebook sidebar — LEFT side */}
       <NotebookSidebarWrapper
         bookId={bookId}
-        onGoToCfi={(cfi) => foliateRef.current?.goToCFI(cfi)}
+        onGoToCfi={navigateToCfi}
         onAddAnnotation={(cfi, color, note) => {
           foliateRef.current?.addAnnotation({
             value: cfi,
@@ -1256,7 +1289,7 @@ export function ReaderView({ bookId, tabId }: ReaderViewProps) {
                   setShowToc(false);
                 }}
                 onGoToCfi={(cfi) => {
-                  foliateRef.current?.goToCFI(cfi);
+                  navigateToCfi(cfi);
                   setShowToc(false);
                 }}
                 onClose={() => setShowToc(false)}

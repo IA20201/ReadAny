@@ -357,9 +357,7 @@ async function syncFiles(
         ? book.file_path
         : adapter.joinPath(appDataDir, book.file_path);
     const ext = book.file_path.split(".").pop() || "epub";
-    const remoteName = book.file_hash
-      ? `${book.file_hash}.${ext}`
-      : book.file_path.split("/").pop() || `${book.id}.${ext}`;
+    const remoteName = `${book.id}.${ext}`;
     bookFileInfos.push({ book, localPath, remoteName, ext });
   }
 

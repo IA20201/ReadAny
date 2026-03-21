@@ -15,6 +15,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -315,60 +316,66 @@ export function ChatScreen() {
                 <XIcon size={16} color={colors.foreground} />
               </TouchableOpacity>
             </View>
-            {generalThreads.length === 0 ? (
-              <View style={s.sidebarEmpty}>
-                <Text style={s.sidebarEmptyText}>{t("chat.noConversations", "暂无对话")}</Text>
-              </View>
-            ) : (
-              groupedThreads.map(({ key, label, threads }) => {
-                if (threads.length === 0) return null;
-                return (
-                  <View key={key}>
-                    <Text style={s.sectionLabel}>{label}</Text>
-                    {threads.map((thread) => {
-                      const isActive = thread.id === generalActiveThreadId;
-                      const lastMsg =
-                        thread.messages.length > 0
-                          ? thread.messages[thread.messages.length - 1]
-                          : null;
-                      const preview = lastMsg?.content?.slice(0, 60) || "";
-                      return (
-                        <TouchableOpacity
-                          key={thread.id}
-                          style={[s.threadItem, isActive && s.threadItemActive]}
-                          onPress={() => handleSelectThread(thread.id)}
-                          activeOpacity={0.7}
-                        >
-                          <View style={s.threadContent}>
-                            <View style={s.threadTitleRow}>
-                              <Text
-                                style={[s.threadTitle, isActive && s.threadTitleActive]}
-                                numberOfLines={1}
-                              >
-                                {thread.title || t("chat.newChat", "新对话")}
-                              </Text>
-                              <Text style={s.threadTime}>{formatTime(thread.updatedAt)}</Text>
-                            </View>
-                            {preview ? (
-                              <Text style={s.threadPreview} numberOfLines={1}>
-                                {preview}
-                              </Text>
-                            ) : null}
-                          </View>
+            <ScrollView
+              style={{ flex: 1 }}
+              contentContainerStyle={{ paddingBottom: 20 }}
+              showsVerticalScrollIndicator={false}
+            >
+              {generalThreads.length === 0 ? (
+                <View style={s.sidebarEmpty}>
+                  <Text style={s.sidebarEmptyText}>{t("chat.noConversations", "暂无对话")}</Text>
+                </View>
+              ) : (
+                groupedThreads.map(({ key, label, threads }) => {
+                  if (threads.length === 0) return null;
+                  return (
+                    <View key={key}>
+                      <Text style={s.sectionLabel}>{label}</Text>
+                      {threads.map((thread) => {
+                        const isActive = thread.id === generalActiveThreadId;
+                        const lastMsg =
+                          thread.messages.length > 0
+                            ? thread.messages[thread.messages.length - 1]
+                            : null;
+                        const preview = lastMsg?.content?.slice(0, 60) || "";
+                        return (
                           <TouchableOpacity
-                            style={s.threadDeleteBtn}
-                            onPress={() => removeThread(thread.id)}
-                            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                            key={thread.id}
+                            style={[s.threadItem, isActive && s.threadItemActive]}
+                            onPress={() => handleSelectThread(thread.id)}
+                            activeOpacity={0.7}
                           >
-                            <Trash2Icon size={12} color={colors.mutedForeground} />
+                            <View style={s.threadContent}>
+                              <View style={s.threadTitleRow}>
+                                <Text
+                                  style={[s.threadTitle, isActive && s.threadTitleActive]}
+                                  numberOfLines={1}
+                                >
+                                  {thread.title || t("chat.newChat", "新对话")}
+                                </Text>
+                                <Text style={s.threadTime}>{formatTime(thread.updatedAt)}</Text>
+                              </View>
+                              {preview ? (
+                                <Text style={s.threadPreview} numberOfLines={1}>
+                                  {preview}
+                                </Text>
+                              ) : null}
+                            </View>
+                            <TouchableOpacity
+                              style={s.threadDeleteBtn}
+                              onPress={() => removeThread(thread.id)}
+                              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                            >
+                              <Trash2Icon size={12} color={colors.mutedForeground} />
+                            </TouchableOpacity>
                           </TouchableOpacity>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
-                );
-              })
-            )}
+                        );
+                      })}
+                    </View>
+                  );
+                })
+              )}
+            </ScrollView>
           </Animated.View>
         </View>
       )}

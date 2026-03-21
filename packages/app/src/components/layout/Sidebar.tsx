@@ -43,7 +43,7 @@ const NAV_ITEMS: NavItem[] = [
 ];
 
 export function HomeSidebar() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { activeTabId, setActiveTab, addTab } = useAppStore();
   const { filter, setFilter, allTags, activeTag, setActiveTag, addTag, removeTag, renameTag } =
     useLibraryStore();
@@ -382,7 +382,7 @@ export function HomeSidebar() {
           <span className="text-sm">{t("stats.title")}</span>
         </button>
         <a
-          href="https://codedogqby.github.io/ReadAny/ support/"
+          href={`https://codedogqby.github.io/ReadAny/${i18n.language === "zh" ? "zh/" : ""}support/`}
           target="_blank"
           rel="noopener noreferrer"
           className="flex w-full items-center gap-2 rounded-md p-1 py-1 text-left text-muted-foreground text-sm hover:bg-muted hover:text-foreground"

@@ -255,7 +255,7 @@ function MiniHeatmap({ dailyStats }: { dailyStats: DailyStats[] }) {
 export function ProfileScreen() {
   const colors = useColors();
   const s = makeStyles(colors);
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const nav = useNavigation<Nav>();
   const [overall, setOverall] = useState<OverallStats | null>(null);
   const [dailyStats, setDailyStats] = useState<DailyStats[]>([]);
@@ -329,7 +329,7 @@ export function ProfileScreen() {
           {
             icon: HelpCircleIcon,
             label: t("about.supportCenter", "帮助中心"),
-            url: "https://codedogqby.github.io/ReadAny/support/",
+            url: `https://codedogqby.github.io/ReadAny/${i18n.language === "zh" ? "zh/" : ""}support/`,
           },
           { icon: InfoIcon, label: t("settings.about", "关于"), route: "About" as const },
         ],
