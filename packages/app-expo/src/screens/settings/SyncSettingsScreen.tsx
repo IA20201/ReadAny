@@ -10,11 +10,14 @@ import type { S3Config, WebDavConfig } from "@readany/core/sync/sync-backend";
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import Constants from "expo-constants";
+import { CameraView, useCameraPermissions } from "expo-camera";
 import {
   ActivityIndicator,
   Alert,
   Animated,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   ScrollView,
   StyleSheet,
@@ -23,6 +26,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { Scan } from "lucide-react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { PasswordInput } from "../../components/ui/PasswordInput";
 import {
@@ -105,6 +109,8 @@ export default function SyncSettingsScreen() {
   const [lanError, setLanError] = useState("");
   const [showManualIPInput, setShowManualIPInput] = useState(false);
   const [lanManualServerIP, setLanManualServerIP] = useState("");
+  const [showScanner, setShowScanner] = useState(false);
+  const [permission, requestPermission] = useCameraPermissions();
 
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<"success" | "error" | null>(null);
@@ -307,7 +313,8 @@ export default function SyncSettingsScreen() {
     setLanConnectionState("connecting");
     try {
       const serverUrl = `http://${lanManualIP}:${lanManualPort}`;
-      const backend = createLANBackend(serverUrl, lanManualPairCode, "Desktop");
+      const deviceName = Constants.deviceName || "Mobile";
+      const backend = createLANBackend(serverUrl, lanManualPairCode, deviceName);
       const connected = await backend.testConnection();
       if (!connected) {
         throw new Error(t("settings.syncLANConnectionFailed"));
@@ -323,6 +330,47 @@ export default function SyncSettingsScreen() {
       setLanConnectionState("error");
     }
   }, [lanManualIP, lanManualPort, lanManualPairCode, syncWithBackend, t]);
+
+  const handleScanQRCode = useCallback(async () => {
+    if (!permission) return;
+    if (!permission.granted) {
+      const res = await requestPermission();
+      if (!res.granted) {
+        Alert.alert(t("settings.cameraPermission"), t("settings.cameraPermissionDesc"));
+        return;
+      }
+    }
+    setShowScanner(true);
+  }, [permission, requestPermission, t]);
+
+  const onBarcodeScanned = useCallback(
+    ({ data }: { data: string }) => {
+      setShowScanner(false);
+      const { parseLANQRData } = require("@readany/core/sync/lan-backend");
+      const qrData = parseLANQRData(data);
+      if (qrData) {
+        setLanManualIP(qrData.ip);
+        setLanManualPort(qrData.port.toString());
+        setLanManualPairCode(qrData.pairCode);
+
+        // Auto-connect after 500ms
+        setTimeout(() => {
+          const url = `http://${qrData.ip}:${qrData.port}`;
+          const deviceName = Constants.deviceName || "Mobile";
+          const backend = createLANBackend(url, qrData.pairCode, deviceName);
+          setLanConnectionState("connecting");
+          setLanError("");
+          syncWithBackend(backend).catch((err) => {
+            setLanConnectionState("error");
+            setLanError(String(err));
+          });
+        }, 500);
+      } else {
+        setLanError(t("settings.syncLANInvalidQR"));
+      }
+    },
+    [syncWithBackend, t],
+  );
 
   const handleSync = useCallback(async () => {
     await syncNow();
@@ -1029,6 +1077,30 @@ export default function SyncSettingsScreen() {
           )}
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* QR Scanner Modal */}
+      <Modal visible={showScanner} animationType="slide" transparent={false}>
+        <View style={styles.scannerContainer}>
+          <CameraView
+            style={StyleSheet.absoluteFill}
+            facing="back"
+            onBarcodeScanned={onBarcodeScanned}
+            barcodeScannerSettings={{
+              barcodeTypes: ["qr"],
+            }}
+          />
+          <View style={styles.scannerOverlay}>
+            <View style={styles.scannerTarget} />
+            <Text style={styles.scannerText}>{t("settings.syncLANScanHint") || "Scan the center QR code."}</Text>
+            <TouchableOpacity
+              style={styles.scannerCloseBtn}
+              onPress={() => setShowScanner(false)}
+            >
+              <Text style={styles.scannerCloseText}>{t("settings.syncClose") || "Close"}</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -1384,5 +1456,59 @@ const makeStyles = (colors: ThemeColors) =>
       flexDirection: "row",
       gap: 8,
       alignItems: "center",
+    },
+    separator: {
+      flexDirection: "row",
+      alignItems: "center",
+      marginVertical: 16,
+      gap: 8,
+    },
+    separatorLine: {
+      flex: 1,
+      height: 1,
+      backgroundColor: colors.border,
+    },
+    separatorText: {
+      fontSize: 12,
+      color: colors.mutedForeground,
+      fontWeight: "500",
+    },
+    scannerContainer: {
+      flex: 1,
+      backgroundColor: "#000",
+    },
+    scannerOverlay: {
+      flex: 1,
+      backgroundColor: "rgba(0,0,0,0.5)",
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    scannerTarget: {
+      width: 250,
+      height: 250,
+      borderWidth: 2,
+      borderColor: colors.primary,
+      backgroundColor: "transparent",
+      borderRadius: 12,
+    },
+    scannerText: {
+      color: "#fff",
+      fontSize: 16,
+      marginTop: 24,
+      textAlign: "center",
+      paddingHorizontal: 32,
+    },
+    scannerCloseBtn: {
+      position: "absolute",
+      bottom: 64,
+      paddingVertical: 12,
+      paddingHorizontal: 32,
+      backgroundColor: "rgba(255,255,255,0.2)",
+      borderRadius: 24,
+    },
+    scannerCloseText: {
+      color: "#fff",
+      fontSize: 16,
+      fontWeight: "600",
     },
   });

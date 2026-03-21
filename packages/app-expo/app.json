@@ -23,7 +23,18 @@
       },
       "package": "com.readany.app"
     },
-    "plugins": ["expo-font", "expo-secure-store", "expo-sqlite", "expo-asset"],
+    "plugins": [
+      "expo-font",
+      "expo-secure-store",
+      "expo-sqlite",
+      "expo-asset",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow ReadAny to use your camera to scan sync QR codes."
+        }
+      ]
+    ],
     "scheme": "readany"
   }
 }

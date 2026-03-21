@@ -67,12 +67,22 @@ export function ResizeHandle({
     if (isDragging) {
       document.body.style.userSelect = "none";
       document.body.style.cursor = "col-resize";
-      return () => {
-        document.body.style.userSelect = "";
-        document.body.style.cursor = "";
-      };
     }
+    
+    return () => {
+      // Always cleanup on unmount or when isDragging changes
+      document.body.style.userSelect = "";
+      document.body.style.cursor = "";
+    };
   }, [isDragging]);
+
+  // Cleanup on unmount (component might unmount while dragging)
+  useEffect(() => {
+    return () => {
+      document.body.style.userSelect = "";
+      document.body.style.cursor = "";
+    };
+  }, []);
 
   return (
     <div
