@@ -55,6 +55,7 @@ export const ui = {
     "download.ios": "iOS",
     "download.android": "Android",
     "download.all": "View all releases",
+    "download.opensource": "The source code is completely open-source and free. App store versions may have a small fee to support ongoing development and certificate costs. You can always build from source for free.",
     "community.title": "Community & Support",
     "community.subtitle": "Join the conversation and get help",
     "community.join": "Join Our Community",
