@@ -36,11 +36,7 @@ export function ModelSelector({ onNavigateToSettings }: ModelSelectorProps) {
   const totalModels = endpointsWithModels.reduce((sum, ep) => sum + ep.models.length, 0);
   const canSwitch = totalModels >= 1;
 
-  const displayName = aiConfig.activeModel
-    ? aiConfig.activeModel.length > 16
-      ? `${aiConfig.activeModel.slice(0, 14)}...`
-      : aiConfig.activeModel
-    : t("chat.currentModel", "模型");
+  const displayName = aiConfig.activeModel || t("chat.currentModel", "模型");
 
   const handleSelect = useCallback(
     (endpointId: string, model: string) => {
@@ -134,6 +130,7 @@ const makeStyles = (colors: ThemeColors) =>
     triggerText: {
       fontSize: fs.xs,
       color: colors.mutedForeground,
+      flexShrink: 1,
     },
     backdrop: {
       flex: 1,

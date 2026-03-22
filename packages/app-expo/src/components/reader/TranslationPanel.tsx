@@ -43,18 +43,20 @@ export function TranslationPanel({ text, onClose }: TranslationPanelProps) {
     setTranslation(null);
 
     try {
-      const { getActiveEndpoint } = useSettingsStore.getState();
+      const { getEndpointById } = useSettingsStore.getState();
       const endpointId = translationConfig.provider.endpointId || aiConfig.activeEndpointId;
-
-      // 找到对应的端点并加载 apiKey
-      const endpointFromState = aiConfig.endpoints.find((e) => e.id === endpointId);
-      const activeEndpoint = await getActiveEndpoint();
-      const endpoint =
-        endpointFromState?.id === activeEndpoint?.id ? activeEndpoint : endpointFromState;
-      const model = translationConfig.provider.model || aiConfig.activeModel;
+      const endpoint = await getEndpointById(endpointId);
 
       if (!endpoint?.apiKey) {
         throw new Error(t("translation.noApiKey", "请先配置 AI 设置"));
+      }
+
+      // Resolve model: translation-specific → global active → first from endpoint
+      let model = translationConfig.provider.model || aiConfig.activeModel;
+      if (endpoint.models.length > 0) {
+        if (!model || !endpoint.models.includes(model)) {
+          model = endpoint.models[0];
+        }
       }
 
       const baseUrl = endpoint.baseUrl.replace(/\/+$/, "");
@@ -65,7 +67,7 @@ export function TranslationPanel({ text, onClose }: TranslationPanelProps) {
           Authorization: `Bearer ${endpoint.apiKey}`,
         },
         body: JSON.stringify({
-          model: model || "gpt-3.5-turbo",
+          model: model || "gpt-4o-mini",
           messages: [
             {
               role: "system",
@@ -159,7 +161,7 @@ export function TranslationPanel({ text, onClose }: TranslationPanelProps) {
           </ScrollView>
         )}
 
-        <View style={s.content}>
+        <ScrollView style={s.content} nestedScrollEnabled>
           <Text style={s.originalLabel}>{t("translation.original", "原文")}</Text>
           <Text style={s.originalText}>{text}</Text>
 
@@ -181,7 +183,7 @@ export function TranslationPanel({ text, onClose }: TranslationPanelProps) {
           ) : translation ? (
             <Text style={s.translationText}>{translation}</Text>
           ) : null}
-        </View>
+        </ScrollView>
       </View>
     </Modal>
   );
