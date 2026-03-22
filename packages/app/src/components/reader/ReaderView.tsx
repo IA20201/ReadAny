@@ -34,6 +34,7 @@ import { useTranslation } from "react-i18next";
 import type { BookSelection, FoliateViewerHandle, RelocateDetail, TOCItem } from "./FoliateViewer";
 import { FoliateViewer } from "./FoliateViewer";
 import { FooterBar } from "./FooterBar";
+import { BookmarkRibbon } from "./BookmarkRibbon";
 import { NotebookPanel } from "./NotebookPanel";
 import { ReaderToolbar } from "./ReaderToolbar";
 import { ResizeHandle } from "./ResizeHandle";
@@ -229,7 +230,12 @@ export function ReaderView({ bookId, tabId }: ReaderViewProps) {
   const book = books.find((b) => b.id === bookId);
 
   const highlights = useAnnotationStore((s) => s.highlights);
+  const bookmarks = useAnnotationStore((s) => s.bookmarks);
   const loadAnnotations = useAnnotationStore((s) => s.loadAnnotations);
+
+  const isBookmarked = bookmarks.some(
+    (b) => b.bookId === bookId && b.cfi === readerTab?.currentCfi,
+  );
 
   // Track reading session for statistics
   useReadingSession(bookId, tabId);
@@ -1195,6 +1201,9 @@ export function ReaderView({ bookId, tabId }: ReaderViewProps) {
                 </div>
               </div>
             )}
+
+            {/* Bookmark ribbon */}
+            <BookmarkRibbon visible={isBookmarked} />
 
             {/* Selection popover */}
             {selection && (

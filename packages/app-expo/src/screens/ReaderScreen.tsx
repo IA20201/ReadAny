@@ -1,4 +1,5 @@
 import { MarkdownRenderer } from "@/components/chat/MarkdownRenderer";
+import { BookmarkRibbon } from "@/components/reader/BookmarkRibbon";
 import { SelectionPopover } from "@/components/reader/SelectionPopover";
 import { TTSControls } from "@/components/reader/TTSControls";
 import { TranslationPanel } from "@/components/reader/TranslationPanel";
@@ -1013,6 +1014,9 @@ export function ReaderScreen({ route, navigation }: Props) {
           </Text>
         </View>
       )}
+
+      {/* ─── Bookmark Ribbon (top-right) ─── */}
+      <BookmarkRibbon visible={isBookmarked} />
 
       {/* ─── Bottom Toolbar (moved from top) ─── */}
       {!showSearch && (

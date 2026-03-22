@@ -80,6 +80,7 @@ jobs:
           args: ${{ matrix.args }}
 
   build-android:
+    needs: build
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -120,11 +121,12 @@ jobs:
         with:
           files: ReadAny.apk
           tag_name: ${{ github.ref_name }}
+          draft: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   create-updater-json:
-    needs: build
+    needs: [build, build-android]
     runs-on: ubuntu-latest
 
     steps:
