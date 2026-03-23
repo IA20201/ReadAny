@@ -4,8 +4,10 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { ThemeIcon } from "@/components/ui/ThemeIcon";
 import { useAppStore } from "@/stores/app-store";
 import { useLibraryStore } from "@/stores/library-store";
+import type { IconSlot } from "@readany/core/types";
 import {
   BarChart3,
   BookOpen,
@@ -32,14 +34,15 @@ interface NavItem {
   tabType: "home" | "chat" | "notes" | "skills";
   labelKey: string;
   icon: React.ComponentType<{ className?: string; size?: number }>;
+  iconSlot: IconSlot;
   expandable?: boolean;
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { tabType: "home", labelKey: "sidebar.library", icon: BookOpen, expandable: true },
-  { tabType: "chat", labelKey: "sidebar.chat", icon: MessageSquare },
-  { tabType: "notes", labelKey: "sidebar.notes", icon: NotebookPen },
-  { tabType: "skills", labelKey: "sidebar.skills", icon: Puzzle },
+  { tabType: "home", labelKey: "sidebar.library", icon: BookOpen, iconSlot: "bookOpen", expandable: true },
+  { tabType: "chat", labelKey: "sidebar.chat", icon: MessageSquare, iconSlot: "messageSquare" },
+  { tabType: "notes", labelKey: "sidebar.notes", icon: NotebookPen, iconSlot: "notebookPen" },
+  { tabType: "skills", labelKey: "sidebar.skills", icon: Puzzle, iconSlot: "puzzle" },
 ];
 
 export function HomeSidebar() {
@@ -133,7 +136,7 @@ export function HomeSidebar() {
                     onClick={() => handleNavClick(item.tabType)}
                   >
                     <div className="flex flex-1 items-center gap-2">
-                      <Icon size={16} className="shrink-0" />
+                      <ThemeIcon slot={item.iconSlot} fallback={Icon} size={16} className="shrink-0 h-4 w-4" />
                       <span className="font-medium text-sm">{t(item.labelKey)}</span>
                     </div>
                     <div
@@ -157,7 +160,7 @@ export function HomeSidebar() {
                   className={`flex w-full items-center gap-2 rounded-md p-1 py-1 text-left text-sm transition-colors hover:bg-muted ${isActive ? "text-foreground" : "text-muted-foreground"}`}
                   onClick={() => handleNavClick(item.tabType)}
                 >
-                  <Icon size={16} className="shrink-0" />
+                  <ThemeIcon slot={item.iconSlot} fallback={Icon} size={16} className="shrink-0 h-4 w-4" />
                   <span className="font-medium text-sm">{t(item.labelKey)}</span>
                 </button>
               )}
@@ -378,7 +381,7 @@ export function HomeSidebar() {
           className="flex w-full items-center gap-2 rounded-md p-1 py-1 text-left text-muted-foreground text-sm hover:bg-muted hover:text-foreground"
           onClick={handleStatsClick}
         >
-          <BarChart3 size={16} className="shrink-0" />
+          <ThemeIcon slot="barChart3" fallback={BarChart3} size={16} className="shrink-0 h-4 w-4" />
           <span className="text-sm">{t("stats.title")}</span>
         </button>
         <a
@@ -387,7 +390,7 @@ export function HomeSidebar() {
           rel="noopener noreferrer"
           className="flex w-full items-center gap-2 rounded-md p-1 py-1 text-left text-muted-foreground text-sm hover:bg-muted hover:text-foreground"
         >
-          <HelpCircle size={16} className="shrink-0" />
+          <ThemeIcon slot="helpCircle" fallback={HelpCircle} size={16} className="shrink-0 h-4 w-4" />
           <span className="text-sm">{t("settings.supportCenter")}</span>
         </a>
         <button
@@ -396,7 +399,7 @@ export function HomeSidebar() {
           className="flex w-full items-center gap-2 rounded-md p-1 py-1 text-left text-muted-foreground text-sm hover:bg-muted hover:text-foreground"
           onClick={() => setShowSettings(true)}
         >
-          <Settings size={16} className="shrink-0" />
+          <ThemeIcon slot="settings" fallback={Settings} size={16} className="shrink-0 h-4 w-4" />
           <span className="text-sm">{t("common.settings")}</span>
         </button>
       </div>
