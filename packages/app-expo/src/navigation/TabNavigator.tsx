@@ -4,7 +4,7 @@ import { ChatScreen } from "@/screens/ChatScreen";
 import { LibraryScreen } from "@/screens/LibraryScreen";
 import { NotesScreen } from "@/screens/NotesScreen";
 import { ProfileScreen } from "@/screens/ProfileScreen";
-import { useTheme } from "@/styles/ThemeContext";
+import { useTheme } from "@/styles/theme";
 /**
  * TabNavigator — bottom tab bar matching the Tauri mobile app's 4 tabs.
  * Icons: BookOpen, MessageSquare, NotebookPen, User (matching BottomTabBar.tsx)

@@ -299,6 +299,11 @@ export function ProfileScreen() {
             label: t("settings.appearance", "外观"),
             route: "AppearanceSettings" as const,
           },
+          {
+            icon: LanguagesIcon,
+            label: t("settings.languageTitle", "语言"),
+            route: "LanguageSettings" as const,
+          },
           { icon: CloudIcon, label: t("settings.sync", "同步"), route: "SyncSettings" as const },
         ],
       },

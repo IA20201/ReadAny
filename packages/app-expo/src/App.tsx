@@ -16,12 +16,14 @@ if (typeof AbortSignal !== "undefined" && !AbortSignal.prototype.throwIfAborted)
 
 import { DarkTheme, DefaultTheme, NavigationContainer } from "@react-navigation/native";
 import { StatusBar } from "expo-status-bar";
+import * as SecureStore from "expo-secure-store";
 import { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { rnSessionEventSource } from "@/hooks";
+import { useAppTheme } from "@/hooks/useAppTheme";
 import { setStreamingFetch } from "@readany/core/ai/llm-provider";
 import { initDatabase } from "@readany/core/db/database";
 import { setSessionEventSource } from "@readany/core/hooks/use-reading-session";
@@ -29,6 +31,8 @@ import { i18nReady, initI18nLanguage } from "@readany/core/i18n";
 import i18n from "@readany/core/i18n";
 import { setPlatformService } from "@readany/core/services";
 import { setSyncAdapter } from "@readany/core/sync";
+import { useThemeStore } from "@readany/core/stores";
+import { migrateFromLegacyTheme } from "@readany/core/theme/built-in-themes";
 import { I18nextProvider } from "react-i18next";
 
 import { ExpoPlatformService } from "@/lib/platform/expo-platform-service";
@@ -37,7 +41,28 @@ import { RNEmbeddingEngine } from "@/lib/ai/rn-embedding-engine";
 import { UpdateDialog } from "@/components/update/UpdateDialog";
 import { useUpdateChecker } from "@/hooks/use-update-checker";
 import { RootNavigator } from "@/navigation/RootNavigator";
-import { ThemeProvider, useTheme } from "@/styles/ThemeContext";
+
+/** Legacy SecureStore key used by the old ThemeContext */
+const LEGACY_THEME_KEY = "readany-theme";
+
+/**
+ * One-time migration from the old ThemeContext (light/dark/sepia string)
+ * to the new core theme store. Runs during bootstrap, before first render.
+ */
+async function migrateLegacyThemeIfNeeded() {
+  try {
+    const old = await SecureStore.getItemAsync(LEGACY_THEME_KEY);
+    if (old && (old === "light" || old === "dark" || old === "sepia")) {
+      const selection = migrateFromLegacyTheme(old);
+      const store = useThemeStore.getState();
+      store.setActiveTheme(selection.themeId, selection.preferredMode);
+      // Remove legacy key so we don't re-migrate
+      await SecureStore.deleteItemAsync(LEGACY_THEME_KEY);
+    }
+  } catch {
+    // Non-critical — if migration fails, user gets default (Classic auto)
+  }
+}
 
 export default function App() {
   const [ready, setReady] = useState(false);
@@ -77,6 +102,9 @@ export default function App() {
       const { setLocalEmbeddingEngine } = await import("@readany/core/ai/local-embedding-service");
       setLocalEmbeddingEngine(new RNEmbeddingEngine());
 
+      // 9. Migrate legacy theme selection (one-time)
+      await migrateLegacyThemeIfNeeded();
+
       setReady(true);
     }
     bootstrap();
@@ -99,15 +127,13 @@ export default function App() {
 
   return (
     <I18nextProvider i18n={i18n}>
-      <ThemeProvider>
-        <AppInner />
-      </ThemeProvider>
+      <AppInner />
     </I18nextProvider>
   );
 }
 
 function AppInner() {
-  const { colors, isDark, mode } = useTheme();
+  const { colors, isDark, mode } = useAppTheme();
   useUpdateChecker();
 
   const navTheme = useMemo(

@@ -34,7 +34,12 @@
       "WebFetch(domain:stackoverflow.com)",
       "WebFetch(domain:mozilla.github.io)",
       "WebFetch(domain:jsdev.space)",
-      "WebFetch(domain:pdf-lib.js.org)"
+      "WebFetch(domain:pdf-lib.js.org)",
+      "Bash(/tmp/file_structure.txt:*)",
+      "Read(//tmp/**)",
+      "Bash(/tmp/code_evidence.md:*)",
+      "Bash(/tmp/analyze_persist.md:*)",
+      "Bash(/tmp/issue_analysis.md:*)"
     ]
   }
 }

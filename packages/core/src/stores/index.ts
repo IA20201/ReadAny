@@ -3,7 +3,7 @@
  */
 
 // Persistence utilities
-export { debouncedSave, loadFromFS, flushAllWrites, withPersist } from "./persist";
+export { debouncedSave, loadFromFS, flushAllWrites, withPersist, waitForHydration } from "./persist";
 
 // Pure stores (no persistence)
 export { useAppStore } from "./app-store";

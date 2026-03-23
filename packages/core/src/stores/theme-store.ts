@@ -72,8 +72,21 @@ function generateId(): string {
 // Preload nanoid
 loadNanoid().catch(() => {});
 
-/** Detect system color scheme preference */
+/** Detect system color scheme preference (works on both Web and React Native) */
 function getSystemMode(): "light" | "dark" {
+  // React Native — use Appearance API when available (no window.matchMedia in RN)
+  try {
+    // Dynamic require so bundlers that don't target RN can tree-shake this
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { Appearance } = require("react-native");
+    if (Appearance?.getColorScheme) {
+      return Appearance.getColorScheme() === "dark" ? "dark" : "light";
+    }
+  } catch {
+    // Not in RN environment — fall through to web check
+  }
+
+  // Web — CSS media query
   if (typeof window !== "undefined" && window.matchMedia?.("(prefers-color-scheme: dark)").matches) {
     return "dark";
   }

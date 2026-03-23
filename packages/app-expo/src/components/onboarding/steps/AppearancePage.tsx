@@ -1,7 +1,8 @@
 import { DarkModeSvg } from "@/components/DarkModeSvg";
-import { type ThemeMode, useTheme } from "@/styles/ThemeContext";
+import { useTheme } from "@/styles/theme";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { useThemeStore } from "@readany/core/stores";
 import { Coffee, Moon, Sun } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
@@ -15,13 +16,14 @@ type NavProp = NativeStackNavigationProp<OnboardingStackParamList, "Appearance">
 export function AppearancePage() {
   const { t, i18n } = useTranslation();
   const navigation = useNavigation<NavProp>();
-  const { mode: currentTheme, setMode: setTheme, colors, isDark } = useTheme();
+  const { setMode: setTheme, colors, isDark } = useTheme();
+  const preferredMode = useThemeStore((s) => s.activeSelection.preferredMode);
   const insets = useSafeAreaInsets();
 
   const handleNext = () => navigation.navigate("AI");
   const handlePrev = () => navigation.goBack();
 
-  const themes: { id: ThemeMode; name: string; icon: React.ReactNode }[] = [
+  const themes: { id: "light" | "dark" | "auto"; name: string; icon: React.ReactNode }[] = [
     {
       id: "light",
       name: t("settings.light", "Light"),
@@ -33,8 +35,8 @@ export function AppearancePage() {
       icon: <Moon size={24} color={colors.foreground} />,
     },
     {
-      id: "sepia",
-      name: t("settings.sepia", "Sepia"),
+      id: "auto",
+      name: t("settings.auto", "Auto"),
       icon: <Coffee size={24} color={colors.foreground} />,
     },
   ];
@@ -80,7 +82,7 @@ export function AppearancePage() {
               </Text>
               <View style={styles.themeGrid}>
                 {themes.map((theme) => {
-                  const isActive = currentTheme === theme.id;
+                  const isActive = preferredMode === theme.id;
                   return (
                     <Pressable
                       key={theme.id}

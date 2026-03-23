@@ -29,7 +29,7 @@ import {
   useSettingsStore,
   useTTSStore,
 } from "@/stores";
-import { useTheme } from "@/styles/ThemeContext";
+import { useTheme } from "@/styles/theme";
 import { type ThemeColors, fontSize, fontWeight, radius, useColors } from "@/styles/theme";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { readingContextService } from "@readany/core/ai/reading-context-service";

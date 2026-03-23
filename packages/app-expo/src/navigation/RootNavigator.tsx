@@ -7,10 +7,18 @@ import StatsScreen from "@/screens/StatsScreen";
 import AISettingsScreen from "@/screens/settings/AISettingsScreen";
 import AboutScreen from "@/screens/settings/AboutScreen";
 import AppearanceSettingsScreen from "@/screens/settings/AppearanceSettingsScreen";
+import LanguageSettingsScreen from "@/screens/settings/LanguageSettingsScreen";
 import SyncSettingsScreen from "@/screens/settings/SyncSettingsScreen";
 import TTSSettingsScreen from "@/screens/settings/TTSSettingsScreen";
 import TranslationSettingsScreen from "@/screens/settings/TranslationSettingsScreen";
 import VectorModelSettingsScreen from "@/screens/settings/VectorModelSettingsScreen";
+// Theme editor screens
+import { ThemeEditorScreen } from "@/screens/settings/theme/ThemeEditorScreen";
+import { ThemeColorEditorScreen } from "@/screens/settings/theme/ThemeColorEditorScreen";
+import { ThemeTypographyScreen } from "@/screens/settings/theme/ThemeTypographyScreen";
+import { ThemeBackgroundScreen } from "@/screens/settings/theme/ThemeBackgroundScreen";
+import { ThemeIconsScreen } from "@/screens/settings/theme/ThemeIconsScreen";
+import { ThemeShareScreen } from "@/screens/settings/theme/ThemeShareScreen";
 /**
  * RootNavigator — top-level stack matching Tauri mobile App.tsx routes exactly.
  */
@@ -27,12 +35,20 @@ export type RootStackParamList = {
   Skills: undefined;
   VectorModelSettings: undefined;
   AppearanceSettings: undefined;
+  LanguageSettings: undefined;
   AISettings: undefined;
   TTSSettings: undefined;
   TranslationSettings: undefined;
   SyncSettings: undefined;
   About: undefined;
   FullScreenNotes: { bookId: string };
+  // Theme editor routes
+  ThemeEditor: { themeId?: string };
+  ThemeColorEditor: { themeId: string; mode: "light" | "dark" };
+  ThemeTypography: { themeId: string };
+  ThemeBackground: { themeId: string };
+  ThemeIcons: { themeId: string };
+  ThemeShare: { themeId: string };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -77,6 +93,7 @@ export function RootNavigator() {
             options={{ animation: "slide_from_right" }}
           />
           <Stack.Screen name="AppearanceSettings" component={AppearanceSettingsScreen} />
+          <Stack.Screen name="LanguageSettings" component={LanguageSettingsScreen} />
           <Stack.Screen name="AISettings" component={AISettingsScreen} />
           <Stack.Screen name="TTSSettings" component={TTSSettingsScreen} />
           <Stack.Screen name="TranslationSettings" component={TranslationSettingsScreen} />
@@ -85,6 +102,37 @@ export function RootNavigator() {
           <Stack.Screen
             name="FullScreenNotes"
             component={FullScreenNotesScreen}
+            options={{ animation: "slide_from_right" }}
+          />
+          {/* Theme editor screens */}
+          <Stack.Screen
+            name="ThemeEditor"
+            component={ThemeEditorScreen}
+            options={{ animation: "slide_from_right" }}
+          />
+          <Stack.Screen
+            name="ThemeColorEditor"
+            component={ThemeColorEditorScreen}
+            options={{ animation: "slide_from_right" }}
+          />
+          <Stack.Screen
+            name="ThemeTypography"
+            component={ThemeTypographyScreen}
+            options={{ animation: "slide_from_right" }}
+          />
+          <Stack.Screen
+            name="ThemeBackground"
+            component={ThemeBackgroundScreen}
+            options={{ animation: "slide_from_right" }}
+          />
+          <Stack.Screen
+            name="ThemeIcons"
+            component={ThemeIconsScreen}
+            options={{ animation: "slide_from_right" }}
+          />
+          <Stack.Screen
+            name="ThemeShare"
+            component={ThemeShareScreen}
             options={{ animation: "slide_from_right" }}
           />
         </>

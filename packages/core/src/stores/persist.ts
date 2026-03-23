@@ -10,6 +10,7 @@ const STORE_DIR = "readany-store";
 const pendingWrites = new Map<string, ReturnType<typeof setTimeout>>();
 const writePromises = new Map<string, Promise<void>>();
 const pendingData = new Map<string, unknown>();
+const hydrationPromises = new Map<string, Promise<void>>();
 
 /** Save state to FS with debounce */
 export function debouncedSave(key: string, data: unknown): void {
@@ -80,6 +81,11 @@ export async function flushAllWrites(): Promise<void> {
   await Promise.all(writePromises.values());
 }
 
+/** Wait for a specific store's hydration to complete */
+export function waitForHydration(key: string): Promise<void> {
+  return hydrationPromises.get(key) ?? Promise.resolve();
+}
+
 /** Create a persisted store middleware */
 export function withPersist<T extends object>(
   key: string,
@@ -98,13 +104,14 @@ export function withPersist<T extends object>(
     }) as typeof set;
     const state = creator(wrappedSet, get, api);
     // Load persisted state on creation
-    loadFromFS<T>(key).then((persisted) => {
+    const hydrationPromise = loadFromFS<T>(key).then((persisted) => {
       if (persisted) {
         set({ ...persisted, _hasHydrated: true } as unknown as Partial<T>);
       } else {
         set({ _hasHydrated: true } as unknown as Partial<T>);
       }
     });
+    hydrationPromises.set(key, hydrationPromise);
     return state;
   };
 }

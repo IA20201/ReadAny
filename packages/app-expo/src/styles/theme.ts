@@ -1,10 +1,19 @@
 /**
- * Theme constants — re-exports dark colors as default for backward compat.
- * Use `useTheme()` from ThemeContext for reactive theme colors.
+ * Theme constants & helpers.
+ *
+ * `useTheme()` now delegates to useAppTheme (backed by core's useThemeStore).
+ * `ThemeColors` is aliased from RNThemeColors for backward compat.
  */
-import { darkColors, useTheme } from "./ThemeContext";
-export type { ThemeColors } from "./ThemeContext";
-export { useTheme } from "./ThemeContext";
+import { useAppTheme } from "@/hooks/useAppTheme";
+import type { RNThemeColors } from "@/hooks/useAppTheme";
+
+/** Backward-compatible alias */
+export type ThemeColors = RNThemeColors;
+
+/** Re-export the bridge hook under the old name */
+export function useTheme() {
+  return useAppTheme();
+}
 
 /**
  * Convert a hex color to an rgba string with the given opacity.
@@ -26,7 +35,36 @@ export function withOpacity(hex: string, opacity: number): string {
 }
 
 /** @deprecated Use useColors() instead for theme-aware components */
-export const colors = darkColors;
+export const colors: ThemeColors = {
+  background: "#1c1c1e",
+  foreground: "#e8e8ed",
+  card: "#2c2c2e",
+  cardForeground: "#e8e8ed",
+  muted: "#333336",
+  mutedForeground: "#7c7c82",
+  border: "#3d3d40",
+  primary: "#e0e0e6",
+  primaryForeground: "#1c1c1e",
+  destructive: "#e53935",
+  destructiveForeground: "#ffffff",
+  accent: "#363638",
+  accentForeground: "#e0e0e6",
+  indigo: "#6366f1",
+  emerald: "#10b981",
+  amber: "#f59e0b",
+  blue: "#3b82f6",
+  violet: "#a78bfa",
+  highlightYellow: "#854d0e",
+  highlightGreen: "#166534",
+  highlightBlue: "#1e40af",
+  highlightPink: "#9d174d",
+  highlightPurple: "#6b21a8",
+  stone100: "#f5f5f4",
+  stone200: "#e7e5e4",
+  stone300: "#d6d3d1",
+  stone400: "#a8a29e",
+  stone500: "#78716c",
+};
 
 /**
  * Hook to get current theme colors. Use this in component function bodies

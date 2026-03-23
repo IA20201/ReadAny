@@ -14,3 +14,5 @@ export { rnSessionEventSource } from "@/lib/platform/rn-session-event-source";
 
 export { useDebounce } from "./use-debounce";
 export { useThrottledValue, useThrottledCallback } from "./use-throttled-value";
+export { useAppTheme } from "./useAppTheme";
+export type { AppThemeValue, RNThemeColors } from "./useAppTheme";

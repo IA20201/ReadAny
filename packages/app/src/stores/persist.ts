@@ -6,4 +6,5 @@ export {
   loadFromFS,
   flushAllWrites,
   withPersist,
+  waitForHydration,
 } from "@readany/core/stores/persist";

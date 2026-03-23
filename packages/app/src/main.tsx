@@ -17,7 +17,7 @@ import { applyThemeToDOM, migrateFromLegacyTheme } from "@readany/core/theme";
 import { TauriPlatformService } from "./lib/platform/tauri-platform-service";
 import { TauriVectorDB } from "./lib/tauri-vector-db";
 import { useLibraryStore } from "./stores/library-store";
-import { flushAllWrites } from "./stores/persist";
+import { flushAllWrites, waitForHydration } from "./stores/persist";
 import { useVectorModelStore } from "./stores/vector-model-store";
 
 // Register platform service before any database/core operations
@@ -63,7 +63,10 @@ console.log("[VectorDB] TauriVectorDB reference set");
 })();
 
 // Ensure i18n is fully initialized before rendering
-i18nReady.then(() => {
+i18nReady.then(async () => {
+  // Wait for theme store to hydrate from disk before applying
+  await waitForHydration("themes");
+
   // Apply theme from store (migrate legacy theme on first run)
   const legacyTheme = localStorage.getItem("readany-theme");
   if (legacyTheme) {
