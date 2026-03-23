@@ -5,6 +5,8 @@ export { eventBus } from "./event-bus";
 export type { EventMap } from "./event-bus";
 export { convertToMessageV2, mergeMessagesWithStreaming } from "./chat-utils";
 export { generateId } from "./generate-id";
+export { TxtToEpubConverter } from "./txt-to-epub";
+export type { Txt2EpubOptions, TxtConversionResult } from "./txt-to-epub";
 export {
   getTimeGroup,
   getMonthLabel,

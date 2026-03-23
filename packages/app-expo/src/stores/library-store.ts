@@ -215,6 +215,7 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
             cbr: "cbz",
             fb2: "fb2",
             fbz: "fbz",
+            txt: "txt",
           };
           const format: Book["format"] = formatMap[ext || ""] || "epub";
           const fileName = originalName;
@@ -224,23 +225,65 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
             `[importBooks] Importing: name=${fileName}, format=${format}, uri=${filePath}`,
           );
 
+          // For TXT files, convert to EPUB first
+          let importUri = filePath;
+          let importExt = ext || "epub";
+          let txtTitle: string | undefined;
+          if (ext === "txt") {
+            try {
+              const { TxtToEpubConverter } = await import("@readany/core/utils/txt-to-epub");
+              const FileSystem = await import("expo-file-system");
+              const base64Content = await FileSystem.readAsStringAsync(filePath, {
+                encoding: FileSystem.EncodingType.Base64,
+              });
+              const binaryString = atob(base64Content);
+              const bytes = new Uint8Array(binaryString.length);
+              for (let i = 0; i < binaryString.length; i++) {
+                bytes[i] = binaryString.charCodeAt(i);
+              }
+              const txtFile = new File([bytes], fileName, { type: "text/plain" });
+              const converter = new TxtToEpubConverter();
+              const result = await converter.convert({ file: txtFile });
+              txtTitle = result.bookTitle;
+              // Write the converted EPUB to cache
+              const epubBytes = new Uint8Array(await result.file.arrayBuffer());
+              let binary = "";
+              for (let i = 0; i < epubBytes.length; i++) {
+                binary += String.fromCharCode(epubBytes[i]!);
+              }
+              const epubBase64 = btoa(binary);
+              const epubUri = `${FileSystem.cacheDirectory}${bookId}.epub`;
+              await FileSystem.writeAsStringAsync(epubUri, epubBase64, {
+                encoding: FileSystem.EncodingType.Base64,
+              });
+              importUri = epubUri;
+              importExt = "epub";
+              console.log(`[importBooks] TXT converted to EPUB: ${epubUri}`);
+            } catch (convErr) {
+              console.error(`[importBooks] TXT conversion failed:`, convErr);
+              throw convErr;
+            }
+          }
+
           const { relativePath, fileBytes } = await copyBookToAppData(
             bookId,
-            ext || "epub",
-            filePath,
+            importExt,
+            importUri,
           );
           console.log(
             `[importBooks] File copied. Bytes length: ${fileBytes.length}, relativePath: ${relativePath}`,
           );
 
           // Extract metadata (title, author, cover) from book content
-          let title = fileName.replace(/\.\w+$/i, "") || "Untitled";
+          let title = txtTitle || fileName.replace(/\.\w+$/i, "") || "Untitled";
           let author = "";
           let coverUrl: string | undefined;
 
           try {
-            console.log(`[importBooks] Extracting metadata for format=${format}...`);
-            const meta = await extractBookMetadata(fileBytes, format, fileName);
+            // For TXT files that have been converted, use "epub" for metadata extraction
+            const metaFormat = ext === "txt" ? "epub" : format;
+            console.log(`[importBooks] Extracting metadata for format=${metaFormat}...`);
+            const meta = await extractBookMetadata(fileBytes, metaFormat, fileName);
             console.log(
               `[importBooks] Metadata result: title="${meta.title}", author="${meta.author}", hasCover=${!!meta.coverBytes}, coverSize=${meta.coverBytes?.length ?? 0}`,
             );

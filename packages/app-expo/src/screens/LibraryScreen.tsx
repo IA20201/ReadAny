@@ -211,6 +211,7 @@ export function LibraryScreen() {
           "application/vnd.amazon.ebook",
           "application/vnd.comicbook+zip",
           "application/x-fictionbook+xml",
+          "text/plain",
           "application/octet-stream",
         ],
         multiple: true,
