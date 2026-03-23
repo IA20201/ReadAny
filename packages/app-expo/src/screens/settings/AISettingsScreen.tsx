@@ -34,6 +34,13 @@ const PROVIDERS: { id: AIProviderType; label: string }[] = [
   { id: "deepseek", label: "DeepSeek" },
 ];
 
+const PROVIDER_DEFAULTS: Record<AIProviderType, { baseUrl: string; name: string }> = {
+  openai: { baseUrl: "https://api.openai.com/v1", name: "OpenAI" },
+  anthropic: { baseUrl: "", name: "Anthropic" },
+  google: { baseUrl: "", name: "Google" },
+  deepseek: { baseUrl: "https://api.deepseek.com/v1", name: "DeepSeek" },
+};
+
 // Individual endpoint editor with local state
 function EndpointEditor({
   ep,
@@ -133,7 +140,18 @@ function EndpointEditor({
             <TouchableOpacity
               key={p.id}
               style={[styles.providerBtn, ep.provider === p.id && styles.providerBtnActive]}
-              onPress={() => onUpdate(ep.id, { provider: p.id }).catch(console.error)}
+              onPress={() => {
+                const defaults = PROVIDER_DEFAULTS[p.id];
+                onUpdate(ep.id, {
+                  provider: p.id,
+                  baseUrl: defaults.baseUrl,
+                  name: defaults.name,
+                  models: [],
+                  modelsFetched: false,
+                }).catch(console.error);
+                setBaseUrl(defaults.baseUrl);
+                setName(defaults.name);
+              }}
               activeOpacity={0.7}
             >
               <Text
@@ -282,16 +300,18 @@ export default function AISettingsScreen() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const handleAddEndpoint = useCallback(async () => {
+    const defaultProvider = "openai";
+    const defaults = PROVIDER_DEFAULTS[defaultProvider];
     await addEndpoint({
       id: `${Date.now()}`,
-      name: t("settings.ai_newEndpoint", "新端点"),
-      provider: "openai",
+      name: defaults.name,
+      provider: defaultProvider,
       apiKey: "",
-      baseUrl: "https://api.openai.com/v1",
+      baseUrl: defaults.baseUrl,
       models: [],
       modelsFetched: false,
     });
-  }, [addEndpoint, t]);
+  }, [addEndpoint]);
 
   const handleFetchModels = useCallback(
     async (ep: AIEndpoint) => {
@@ -643,6 +663,7 @@ const makeStyles = (colors: ThemeColors) =>
       paddingHorizontal: spacing.sm,
       fontSize: fontSize.sm,
       color: colors.foreground,
+      textAlignVertical: "center",
     },
 
     providerGrid: {
@@ -820,5 +841,6 @@ const makeStyles = (colors: ThemeColors) =>
       backgroundColor: colors.background,
       fontSize: fontSize.sm,
       color: colors.foreground,
+      textAlignVertical: "center",
     },
   });

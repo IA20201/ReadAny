@@ -169,7 +169,7 @@ async function fetchGoogleModels(endpoint: AIEndpoint): Promise<string[]> {
 
 /** DeepSeek — uses OpenAI-compatible /models endpoint with fallback */
 async function fetchDeepSeekModels(endpoint: AIEndpoint): Promise<string[]> {
-  const baseUrl = (endpoint.baseUrl || "https://api.deepseek.com").replace(/\/+$/, "");
+  const baseUrl = (endpoint.baseUrl || "https://api.deepseek.com/v1").replace(/\/+$/, "");
   try {
     const response = await fetch(`${baseUrl}/models`, {
       headers: { Authorization: `Bearer ${endpoint.apiKey}` },

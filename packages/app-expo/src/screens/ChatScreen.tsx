@@ -25,7 +25,7 @@ import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 
 import { useChatStore } from "@/stores/chat-store";
 import { useSettingsStore } from "@/stores/settings-store";
-import { useStreamingChat } from "@readany/core/hooks";
+import { useStreamingChat } from "@/hooks";
 import type { AttachedQuote } from "@readany/core/types";
 import {
   convertToMessageV2,

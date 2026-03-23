@@ -40,8 +40,8 @@ const PROVIDER_DEFAULTS: Record<
     keyPlaceholder: "AIza...",
   },
   deepseek: {
-    baseUrl: "https://api.deepseek.com",
-    placeholder: "https://api.deepseek.com",
+    baseUrl: "https://api.deepseek.com/v1",
+    placeholder: "https://api.deepseek.com/v1",
     keyPlaceholder: "sk-...",
   },
 };

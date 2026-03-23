@@ -35,7 +35,7 @@ export function AIPage({ onNext, onPrev, step, totalSteps }: any) {
       name: "Google (Gemini)",
       defaultUrl: "https://generativelanguage.googleapis.com",
     },
-    { id: "deepseek", name: "DeepSeek", defaultUrl: "https://api.deepseek.com" },
+    { id: "deepseek", name: "DeepSeek", defaultUrl: "https://api.deepseek.com/v1" },
     { id: "ollama", name: "Ollama (Local)", defaultUrl: "http://localhost:11434" },
   ];
 
