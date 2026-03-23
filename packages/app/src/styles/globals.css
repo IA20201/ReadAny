@@ -1,8 +1,8 @@
 @import "tailwindcss";
 
 @custom-variant dark (&[data-theme="dark"]);
-@custom-variant sepia (&[data-theme="sepia"]);
 
+/* ── Default (fallback) variables — overridden at runtime by the theme engine ── */
 :root {
   --background: oklch(0.9902 0.0039 106.47);
   --foreground: oklch(0.14 0.0 285.86);
@@ -49,55 +49,8 @@
   --color-highlight-purple: #e9d5ff;
 }
 
-/* ── Dark theme ─────────────────────────────────────────── */
-[data-theme="dark"] {
-  --background: #1c1c1e;
-  --foreground: #e8e8ed;
-  --card: #2c2c2e;
-  --card-foreground: #e8e8ed;
-  --popover: #2c2c2e;
-  --popover-foreground: #e8e8ed;
-  --primary: #e0e0e6;
-  --primary-foreground: #1c1c1e;
-  --secondary: #363638;
-  --secondary-foreground: #e0e0e6;
-  --muted: #333336;
-  --muted-foreground: #7c7c82;
-  --accent: #363638;
-  --accent-foreground: #e0e0e6;
-  --destructive: #e53935;
-  --destructive-foreground: #ffffff;
-  --border: #3d3d40;
-  --input: #3d3d40;
-  --ring: #6366f1;
-  --sidebar: #242426;
-  --sidebar-foreground: #e8e8ed;
-}
-
-/* ── Sepia theme ─────────────────────────────────────────── */
-[data-theme="sepia"] {
-  --background: #f0e6d2;
-  --foreground: #3d2b1f;
-  --card: #f5ebd7;
-  --card-foreground: #3d2b1f;
-  --popover: #f5ebd7;
-  --popover-foreground: #3d2b1f;
-  --primary: #6b4c2a;
-  --primary-foreground: #f5ebd7;
-  --secondary: #e6d9c3;
-  --secondary-foreground: #4a3728;
-  --muted: #e6d9c3;
-  --muted-foreground: #7a6652;
-  --accent: #e6d9c3;
-  --accent-foreground: #4a3728;
-  --destructive: #e53935;
-  --destructive-foreground: #fafafa;
-  --border: #d4c4a8;
-  --input: #d4c4a8;
-  --ring: #6b4c2a;
-  --sidebar: #f5ebd7;
-  --sidebar-foreground: #3d2b1f;
-}
+/* ── Dark/Sepia CSS blocks removed — colors are now injected by the theme engine ── */
+/* data-theme="dark" is still set on <html> for @custom-variant dark and hljs themes */
 
 @theme inline {
   --color-background: var(--background);

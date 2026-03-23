@@ -22,6 +22,9 @@ export type { NavigationHistoryItem, ReaderTab, ReaderState } from "./reader-sto
 export { useSettingsStore } from "./settings-store";
 export type { SettingsState } from "./settings-store";
 
+export { useThemeStore } from "./theme-store";
+export type { ThemeStoreState } from "./theme-store";
+
 export { useVectorModelStore } from "./vector-model-store";
 export type { BuiltinModelStatus, BuiltinModelState, VectorModelState } from "./vector-model-store";
 
