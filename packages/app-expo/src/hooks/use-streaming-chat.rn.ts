@@ -1,5 +1,6 @@
 import { useChatStore } from "@/stores/chat-store";
 import { useSettingsStore } from "@/stores/settings-store";
+import { fetch as expoFetch } from "expo/fetch";
 import i18n from "@readany/core/i18n";
 import type { AttachedQuote, Book, SemanticContext } from "@readany/core/types";
 import type { Thread } from "@readany/core/types";
@@ -233,7 +234,7 @@ export function useStreamingChat(_options?: StreamingChatOptions) {
         abortControllerRef.current = new AbortController();
 
         const baseUrl = endpoint.baseUrl.replace(/\/+$/, "");
-        const response = await fetch(`${baseUrl}/chat/completions`, {
+        const response = await expoFetch(`${baseUrl}/chat/completions`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
