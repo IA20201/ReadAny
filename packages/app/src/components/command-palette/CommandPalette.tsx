@@ -8,6 +8,7 @@ import {
   Languages,
   type LucideIcon,
   Moon,
+  Palette,
   Search,
   Settings,
   Sun,
@@ -24,6 +25,8 @@ import {
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useThemeStore } from "@readany/core/stores";
+import { applyThemeToDOM } from "@readany/core/theme";
 
 // ── Types ──
 
@@ -231,39 +234,37 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
       },
       {
         id: "action.theme.light",
-        label: `${t("settings.theme")}: ${t("settings.light")}`,
+        label: `${t("settings.theme")}: ${t("theme.lightMode")}`,
         keywords: ["theme", "light", "bright"],
         category: "actions",
         icon: Sun,
         action: () => {
-          document.documentElement.setAttribute("data-theme", "light");
-          localStorage.setItem("readany-theme", "light");
+          const store = useThemeStore.getState();
+          store.setPreferredMode("light");
+          applyThemeToDOM(store.getActiveTheme(), store.getActiveMode());
           onClose();
         },
       },
       {
         id: "action.theme.dark",
-        label: `${t("settings.theme")}: ${t("settings.dark")}`,
+        label: `${t("settings.theme")}: ${t("theme.darkMode")}`,
         keywords: ["theme", "dark", "night"],
         category: "actions",
         icon: Moon,
         action: () => {
-          document.documentElement.setAttribute("data-theme", "dark");
-          localStorage.setItem("readany-theme", "dark");
+          const store = useThemeStore.getState();
+          store.setPreferredMode("dark");
+          applyThemeToDOM(store.getActiveTheme(), store.getActiveMode());
           onClose();
         },
       },
       {
-        id: "action.theme.sepia",
-        label: `${t("settings.theme")}: ${t("settings.sepia")}`,
-        keywords: ["theme", "sepia", "eye", "warm"],
+        id: "action.appearance",
+        label: t("settings.appearance"),
+        keywords: ["theme", "appearance", "color", "customize"],
         category: "actions",
-        icon: Sun,
-        action: () => {
-          document.documentElement.setAttribute("data-theme", "sepia");
-          localStorage.setItem("readany-theme", "sepia");
-          onClose();
-        },
+        icon: Palette,
+        action: () => openSettingsTab("appearance"),
       },
       {
         id: "action.shortcuts",

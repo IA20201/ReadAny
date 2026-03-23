@@ -7,6 +7,7 @@ import { cn } from "@readany/core/utils";
 import { useTranslation } from "react-i18next";
 import { AISettings } from "./AISettings";
 import { AboutSettings } from "./AboutSettings";
+import { AppearanceSettings } from "./AppearanceSettings";
 import { GeneralSettings } from "./GeneralSettings";
 import { ReadSettingsPanel } from "./ReadSettings";
 import { SyncSettings } from "./SyncSettings";
@@ -21,6 +22,7 @@ interface SettingsDialogProps {
 
 const TAB_IDS: SettingsTab[] = [
   "general",
+  "appearance",
   "reading",
   "ai",
   "vectorModel",
@@ -31,6 +33,7 @@ const TAB_IDS: SettingsTab[] = [
 ];
 const TAB_KEYS: Record<SettingsTab, string> = {
   general: "settings.general",
+  appearance: "settings.appearance",
   reading: "settings.reading",
   ai: "settings.ai",
   vectorModel: "settings.vectorModel",
@@ -82,6 +85,7 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
           {/* Content */}
           <div className="min-w-0 flex-1 overflow-y-auto">
             {settingsTab === "general" && <GeneralSettings />}
+            {settingsTab === "appearance" && <AppearanceSettings />}
             {settingsTab === "reading" && <ReadSettingsPanel />}
             {settingsTab === "ai" && <AISettings />}
             {settingsTab === "vectorModel" && <VectorModelSettings />}

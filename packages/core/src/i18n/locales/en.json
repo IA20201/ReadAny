@@ -668,6 +668,7 @@
     "appearanceLanguage": "Appearance & Language"
   },
   "theme": {
+    "title": "Theme",
     "builtInThemes": "Built-in Themes",
     "customThemes": "Custom Themes",
     "noCustomThemes": "No custom themes yet",
@@ -690,9 +691,10 @@
     "author": "Author",
     "authorPlaceholder": "Your name (optional)",
     "modes": "Color Modes",
-    "lightMode": "Light Mode",
-    "darkMode": "Dark Mode",
-    "bothModes": "Both Modes",
+    "lightMode": "Light",
+    "darkMode": "Dark",
+    "autoMode": "Auto",
+    "bothModes": "Light & Dark",
     "preferredMode": "Preferred Mode",
     "auto": "Follow System",
     "colorLevels": "Color Levels",

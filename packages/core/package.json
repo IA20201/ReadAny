@@ -41,7 +41,9 @@
     "./hooks/*": "./src/hooks/*.ts",
     "./hooks/reader": "./src/hooks/reader/index.ts",
     "./hooks/reader/*": "./src/hooks/reader/*.ts",
-    "./events/*": "./src/events/*.ts"
+    "./events/*": "./src/events/*.ts",
+    "./theme": "./src/theme/index.ts",
+    "./theme/*": "./src/theme/*.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.712.0",

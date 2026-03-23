@@ -8,6 +8,7 @@ import type { BookDoc, BookFormat } from "@/lib/reader/document-loader";
 import { getDirection, isFixedLayoutFormat } from "@/lib/reader/document-loader";
 import { getFontTheme } from "@/lib/reader/font-themes";
 import { registerIframeEventHandlers } from "@/lib/reader/iframe-event-handlers";
+import { useThemeStore } from "@readany/core/stores";
 import type { ViewSettings } from "@readany/core/types";
 import { Overlayer } from "foliate-js/overlayer.js";
 import { marked } from "marked";
@@ -28,22 +29,15 @@ import { marked } from "marked";
  */
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
 
-type AppTheme = "light" | "dark" | "sepia";
-
-const THEME_COLORS: Record<AppTheme, { bg: string; fg: string; link: string }> = {
-  light: { bg: "#ffffff", fg: "#1a1a1a", link: "#2563eb" },
-  dark: { bg: "#1c1c1e", fg: "#e8e8ed", link: "#60a5fa" },
-  sepia: { bg: "#f0e6d2", fg: "#3d2b1f", link: "#6b4c2a" },
-};
-
-function getAppTheme(): AppTheme {
-  if (typeof document === "undefined") return "dark";
-  const theme = document.documentElement.getAttribute("data-theme") as AppTheme | null;
-  return theme && THEME_COLORS[theme] ? theme : "dark";
-}
-
-function getThemeColors(theme: AppTheme) {
-  return THEME_COLORS[theme];
+/** Get reader colors from the theme store */
+function getReaderColors(): { bg: string; fg: string; link: string } {
+  const store = useThemeStore.getState();
+  const colors = store.getActiveModeColors();
+  return {
+    bg: colors.reader.background,
+    fg: colors.reader.foreground,
+    link: colors.reader.linkColor,
+  };
 }
 
 // Polyfills required by foliate-js
@@ -191,23 +185,20 @@ export const FoliateViewer = forwardRef<FoliateViewerHandle, FoliateViewerProps>
     // Track when view is ready so hooks/events re-bind
     const [viewReady, setViewReady] = useState(false);
 
-    // Track app theme for reader styling
-    const [appTheme, setAppTheme] = useState<AppTheme>(() => getAppTheme());
+    // Track app theme for reader styling — use a counter to trigger re-renders on theme change
+    const [themeVersion, setThemeVersion] = useState(0);
 
-    // Listen for theme changes
+    // Listen for theme changes (data-theme attribute or CSS variable changes)
     useEffect(() => {
       const observer = new MutationObserver(() => {
-        const newTheme = getAppTheme();
-        setAppTheme((prev) => {
-          if (prev !== newTheme) {
-            // Theme changed, re-apply styles
-            const view = viewRef.current;
-            if (view && viewReady) {
-              applyRendererStyles(view, viewSettings, isFixedLayout, newTheme);
-            }
-            return newTheme;
+        setThemeVersion((prev) => {
+          const next = prev + 1;
+          // Theme changed, re-apply styles
+          const view = viewRef.current;
+          if (view && viewReady) {
+            applyRendererStyles(view, viewSettings, isFixedLayout);
           }
-          return prev;
+          return next;
         });
       });
 
@@ -869,7 +860,7 @@ export const FoliateViewer = forwardRef<FoliateViewerHandle, FoliateViewerProps>
           }
 
           // Apply renderer settings
-          applyRendererSettings(view, viewSettings, isFixedLayout, appTheme);
+          applyRendererSettings(view, viewSettings, isFixedLayout);
 
           // IMPORTANT: Register event listeners BEFORE navigation to avoid race condition.
           // React's useFoliateEvents relies on viewReady state, but setState + re-render
@@ -921,14 +912,14 @@ export const FoliateViewer = forwardRef<FoliateViewerHandle, FoliateViewerProps>
       if (!view?.renderer) return;
       // Fixed layout (PDF/CBZ): don't override font/size/lineHeight
       if (isFixedLayout) return;
-      applyRendererStyles(view, viewSettings, false, appTheme);
+      applyRendererStyles(view, viewSettings, false);
     }, [
       viewSettings.fontSize,
       viewSettings.lineHeight,
       viewSettings.fontTheme,
       viewSettings.paragraphSpacing,
       isFixedLayout,
-      appTheme,
+      themeVersion,
     ]);
 
     // --- Apply view mode changes ---
@@ -986,7 +977,6 @@ function applyRendererSettings(
   view: FoliateView,
   settings: ViewSettings,
   isFixedLayout: boolean,
-  theme: AppTheme,
 ) {
   const renderer = view.renderer;
   if (!renderer) return;
@@ -1011,12 +1001,12 @@ function applyRendererSettings(
   renderer.setAttribute("animated", "");
 
   // Apply CSS styles (skip font overrides for fixed layout)
-  applyRendererStyles(view, settings, isFixedLayout, theme);
+  applyRendererStyles(view, settings, isFixedLayout);
 }
 
 /** Generate CSS string for renderer styles */
-function getRendererStyles(settings: ViewSettings, theme: AppTheme): string {
-  const colors = getThemeColors(theme);
+function getRendererStyles(settings: ViewSettings): string {
+  const colors = getReaderColors();
   const bgColor = colors.bg;
   const fgColor = colors.fg;
   const linkColor = colors.link;
@@ -1101,12 +1091,11 @@ function applyRendererStyles(
   view: FoliateView,
   settings: ViewSettings,
   isFixedLayout: boolean,
-  theme: AppTheme,
 ) {
   const renderer = view.renderer;
   if (!renderer?.setStyles) return;
 
-  const colors = getThemeColors(theme);
+  const colors = getReaderColors();
   const bgColor = colors.bg;
 
   if (isFixedLayout) {
@@ -1121,7 +1110,7 @@ function applyRendererStyles(
   }
 
   // Apply CSS string styles
-  const styles = getRendererStyles(settings, theme);
+  const styles = getRendererStyles(settings);
   renderer.setStyles(styles);
 }
 

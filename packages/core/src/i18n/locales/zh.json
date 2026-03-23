@@ -662,6 +662,7 @@
     "appearanceLanguage": "外观与语言"
   },
   "theme": {
+    "title": "主题",
     "builtInThemes": "内置主题",
     "customThemes": "自定义主题",
     "noCustomThemes": "暂无自定义主题",
@@ -684,9 +685,10 @@
     "author": "作者",
     "authorPlaceholder": "你的名字（可选）",
     "modes": "颜色模式",
-    "lightMode": "亮色模式",
-    "darkMode": "暗色模式",
-    "bothModes": "亮色 + 暗色",
+    "lightMode": "浅色",
+    "darkMode": "深色",
+    "autoMode": "自动",
+    "bothModes": "浅色 + 深色",
     "preferredMode": "偏好模式",
     "auto": "跟随系统",
     "colorLevels": "颜色层级",

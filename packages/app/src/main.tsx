@@ -12,6 +12,8 @@ import { BUILTIN_EMBEDDING_MODELS } from "@readany/core/ai/builtin-embedding-mod
 import { onLibraryChanged } from "@readany/core/events/library-events";
 import { setVectorDB } from "@readany/core/rag";
 import { setPlatformService } from "@readany/core/services";
+import { useThemeStore } from "@readany/core/stores";
+import { applyThemeToDOM, migrateFromLegacyTheme } from "@readany/core/theme";
 import { TauriPlatformService } from "./lib/platform/tauri-platform-service";
 import { TauriVectorDB } from "./lib/tauri-vector-db";
 import { useLibraryStore } from "./stores/library-store";
@@ -62,13 +64,18 @@ console.log("[VectorDB] TauriVectorDB reference set");
 
 // Ensure i18n is fully initialized before rendering
 i18nReady.then(() => {
-  // Restore saved theme from localStorage
-  const savedTheme = localStorage.getItem("readany-theme");
-  if (savedTheme && ["light", "dark", "sepia"].includes(savedTheme)) {
-    document.documentElement.setAttribute("data-theme", savedTheme);
-  } else {
-    // Default to sepia theme
-    document.documentElement.setAttribute("data-theme", "sepia");
+  // Apply theme from store (migrate legacy theme on first run)
+  const legacyTheme = localStorage.getItem("readany-theme");
+  if (legacyTheme) {
+    const migrated = migrateFromLegacyTheme(legacyTheme);
+    useThemeStore.getState().setActiveTheme(migrated.themeId, migrated.preferredMode);
+    localStorage.removeItem("readany-theme");
+  }
+  {
+    const store = useThemeStore.getState();
+    const theme = store.getActiveTheme();
+    const mode = store.getActiveMode();
+    applyThemeToDOM(theme, mode);
   }
 
   // Restore saved language from platform KV storage
