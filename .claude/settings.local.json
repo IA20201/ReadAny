@@ -39,7 +39,8 @@
       "Read(//tmp/**)",
       "Bash(/tmp/code_evidence.md:*)",
       "Bash(/tmp/analyze_persist.md:*)",
-      "Bash(/tmp/issue_analysis.md:*)"
+      "Bash(/tmp/issue_analysis.md:*)",
+      "Bash(/tmp/final_report.sh:*)"
     ]
   }
 }

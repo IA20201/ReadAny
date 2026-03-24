@@ -281,7 +281,7 @@ const makeStyles = (colors: ThemeColors) =>
     },
     engineCardActive: {
       borderColor: colors.primary,
-      backgroundColor: colors.accent,
+      backgroundColor: colors.primary,
     },
     engineLabel: {
       fontSize: fontSize.xs,

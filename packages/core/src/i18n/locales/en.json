@@ -809,6 +809,15 @@
     "newTheme": "My Theme",
     "createCustom": "Create Custom Theme",
     "delete": "Delete Theme",
+    "advancedSettings": "Typography, Background, Icons & more...",
+    "themeEditor": "Theme Editor",
+    "moreSettings": "More Settings",
+    "copyThemeCode": "Copy Theme Code",
+    "copied": "Copied",
+    "copiedDesc": "Theme code copied to clipboard",
+    "copyFailed": "Copy failed, please retry",
+    "original": "Original",
+    "current": "Current",
     "slot": {
       "background": "Background (L0)",
       "foreground": "Foreground (L0)",
@@ -826,6 +835,19 @@
       "readerBg": "Reader Background",
       "readerFg": "Reader Foreground",
       "readerLink": "Reader Link"
+    },
+    "slotDesc": {
+      "background": "Base page background",
+      "foreground": "Primary text color",
+      "card": "Cards, popups, containers",
+      "muted": "Tab bars, separator areas",
+      "mutedForeground": "Secondary text, placeholders",
+      "primary": "Buttons, links, highlights",
+      "primaryForeground": "Text on primary buttons",
+      "border": "Dividers, input borders",
+      "readerBg": "Reader page background",
+      "readerFg": "Reader body text",
+      "readerLink": "Links in reader pages"
     }
   },
   "tour": {

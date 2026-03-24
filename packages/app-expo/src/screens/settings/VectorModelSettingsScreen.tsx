@@ -540,7 +540,7 @@ const makeStyles = (colors: ThemeColors) =>
       backgroundColor: colors.card,
       padding: 12,
     },
-    modeCardActive: { borderColor: colors.primary, backgroundColor: colors.accent },
+    modeCardActive: { borderColor: colors.primary, backgroundColor: colors.primary },
     modeCardTitle: {
       fontSize: fontSize.sm,
       fontWeight: fontWeight.medium,
@@ -556,7 +556,7 @@ const makeStyles = (colors: ThemeColors) =>
       padding: 14,
       marginBottom: 8,
     },
-    modelCardActive: { borderColor: colors.primary, backgroundColor: colors.accent },
+    modelCardActive: { borderColor: colors.primary, backgroundColor: colors.primary },
     modelCardTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
     cardActions: { alignItems: "flex-end", justifyContent: "center" },
     iconBtn: { padding: 4 },

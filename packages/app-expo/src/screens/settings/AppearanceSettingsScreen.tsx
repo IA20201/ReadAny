@@ -58,21 +58,29 @@ export default function AppearanceSettingsScreen() {
     [setActiveTheme],
   );
 
+  const getDefaultMode = useCallback(
+    (themeId: string): "light" | "dark" => {
+      const th = themes.find((t) => t.id === themeId);
+      return th?.modes.light ? "light" : "dark";
+    },
+    [themes],
+  );
+
   const handleThemeLongPress = useCallback(
     (themeId: string, isBuiltIn: boolean) => {
       const options = isBuiltIn
         ? [
             { text: t("theme.duplicate", "Duplicate"), onPress: () => {
               const newId = duplicateTheme(themeId);
-              navigation.navigate("ThemeEditor", { themeId: newId });
+              navigation.navigate("ThemeColorEditor", { themeId: newId, mode: getDefaultMode(newId) });
             }},
             { text: t("common.cancel", "Cancel"), style: "cancel" as const },
           ]
         : [
-            { text: t("common.edit", "Edit"), onPress: () => navigation.navigate("ThemeEditor", { themeId }) },
+            { text: t("common.edit", "Edit"), onPress: () => navigation.navigate("ThemeColorEditor", { themeId, mode: getDefaultMode(themeId) }) },
             { text: t("theme.duplicate", "Duplicate"), onPress: () => {
               const newId = duplicateTheme(themeId);
-              navigation.navigate("ThemeEditor", { themeId: newId });
+              navigation.navigate("ThemeColorEditor", { themeId: newId, mode: getDefaultMode(newId) });
             }},
             { text: t("theme.share", "Share"), onPress: () => navigation.navigate("ThemeShare", { themeId }) },
             { text: t("common.delete", "Delete"), style: "destructive" as const, onPress: () => {
@@ -89,7 +97,7 @@ export default function AppearanceSettingsScreen() {
           ];
       Alert.alert(t("theme.actions", "Theme Actions"), undefined, options);
     },
-    [duplicateTheme, deleteTheme, navigation, t],
+    [duplicateTheme, deleteTheme, navigation, t, getDefaultMode],
   );
 
   const handleDeleteTheme = useCallback(
@@ -114,7 +122,7 @@ export default function AppearanceSettingsScreen() {
         dark: { ...BUILT_IN_THEMES[0].modes.dark! },
       },
     });
-    navigation.navigate("ThemeEditor", { themeId: newId });
+    navigation.navigate("ThemeColorEditor", { themeId: newId, mode: "light" });
   }, [addTheme, navigation, t]);
 
   const handleImport = useCallback(async () => {
@@ -238,7 +246,7 @@ export default function AppearanceSettingsScreen() {
                         <>
                           <TouchableOpacity
                             style={s.themeActionBtn}
-                            onPress={() => navigation.navigate("ThemeEditor", { themeId: theme.id })}
+                            onPress={() => navigation.navigate("ThemeColorEditor", { themeId: theme.id, mode: theme.modes.light ? "light" : "dark" })}
                             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                           >
                             <EditIcon size={16} color={colors.mutedForeground} />

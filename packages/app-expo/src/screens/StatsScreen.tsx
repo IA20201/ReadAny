@@ -300,7 +300,7 @@ function FullHeatmap({ dailyStats }: { dailyStats: DailyStats[] }) {
           <Text
             style={{
               fontSize: 12,
-              color: colors.cardForeground,
+              color: colors.foreground,
               fontWeight: "500",
               textAlign: "center",
             }}
@@ -419,7 +419,7 @@ function BarChart({
           <Text
             style={{
               fontSize: 12,
-              color: colors.cardForeground,
+              color: colors.foreground,
               fontWeight: "500",
               textAlign: "center",
             }}
@@ -609,7 +609,7 @@ function TrendChart({ data }: { data: TrendPoint[] }) {
               }}
               pointerEvents="none"
             >
-              <Text style={{ fontSize: 12, color: colors.cardForeground, fontWeight: "500" }}>
+              <Text style={{ fontSize: 12, color: colors.foreground, fontWeight: "500" }}>
                 {formatDate(data[selectedIdx].date)} {formatTime(data[selectedIdx].dailyTime)}
               </Text>
             </View>
@@ -1171,7 +1171,7 @@ const makeStyles = (colors: ThemeColors) =>
       borderWidth: 0.5,
       borderColor: colors.border,
     },
-    tooltipText: { fontSize: 9, color: colors.cardForeground, fontWeight: "500" },
+    tooltipText: { fontSize: 9, color: colors.foreground, fontWeight: "500" },
 
     // Trend chart
     trendContent: { alignItems: "flex-end", gap: 1 },

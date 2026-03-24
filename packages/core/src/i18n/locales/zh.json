@@ -803,6 +803,15 @@
     "newTheme": "我的主题",
     "createCustom": "创建自定义主题",
     "delete": "删除主题",
+    "advancedSettings": "字体、背景、图标与更多...",
+    "themeEditor": "主题编辑器",
+    "moreSettings": "更多设置",
+    "copyThemeCode": "复制主题码",
+    "copied": "已复制",
+    "copiedDesc": "主题码已复制到剪贴板",
+    "copyFailed": "复制失败，请重试",
+    "original": "原始",
+    "current": "当前",
     "slot": {
       "background": "背景色 (L0)",
       "foreground": "前景色 (L0)",
@@ -820,6 +829,19 @@
       "readerBg": "阅读器背景",
       "readerFg": "阅读器前景",
       "readerLink": "阅读器链接"
+    },
+    "slotDesc": {
+      "background": "页面底层背景",
+      "foreground": "主要文字颜色",
+      "card": "卡片、弹窗等容器背景",
+      "muted": "标签栏、分隔区域背景",
+      "mutedForeground": "次要文字、占位符",
+      "primary": "按钮、链接、高亮",
+      "primaryForeground": "主色按钮上的文字",
+      "border": "分割线、输入框边框",
+      "readerBg": "阅读页面背景",
+      "readerFg": "阅读页面正文",
+      "readerLink": "阅读页面中的链接"
     }
   },
   "stats": {

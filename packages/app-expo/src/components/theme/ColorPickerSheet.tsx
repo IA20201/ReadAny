@@ -1,10 +1,16 @@
 /**
  * ColorPickerSheet — bottom-sheet modal with HSV color picker + hex input.
  *
- * Uses `reanimated-color-picker` for the visual picker.
- * Writes the final color on `onComplete` to avoid excessive store writes during drag.
+ * CRITICAL (Reanimated 4): Use `onCompleteJS` / `onChangeJS` (not `onComplete` /
+ * `onChange`) because the callbacks run on the UI thread (worklet). Normal JS
+ * functions cause SIGABRT in Reanimated 4.
+ *
+ * Features:
+ *   - Original color swatch for comparison (tap to restore)
+ *   - Cancel restores original color via onCancel callback
  */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   KeyboardAvoidingView,
   Modal,
@@ -20,7 +26,6 @@ import ColorPicker, {
   HueSlider,
   Panel1,
   Preview,
-  OpacitySlider,
 } from "reanimated-color-picker";
 import { useColors } from "@/styles/theme";
 import { fontSize, fontWeight, radius, spacing } from "@/styles/theme";
@@ -28,33 +33,54 @@ import { fontSize, fontWeight, radius, spacing } from "@/styles/theme";
 interface Props {
   visible: boolean;
   initialColor: string;
+  /** Called with hex when user lifts finger or taps Done */
   onComplete: (hex: string) => void;
+  /** Called when user cancels — parent should restore original color */
+  onCancel?: (originalColor: string) => void;
   onClose: () => void;
   label?: string;
 }
 
-export function ColorPickerSheet({ visible, initialColor, onComplete, onClose, label }: Props) {
+export function ColorPickerSheet({ visible, initialColor, onComplete, onCancel, onClose, label }: Props) {
   const colors = useColors();
+  const { t } = useTranslation();
   const [hexInput, setHexInput] = useState(initialColor);
   const [currentColor, setCurrentColor] = useState(initialColor);
+  // Remember the color when the picker first opened — stable across drags
+  const originalColorRef = useRef(initialColor);
+  // Track previous visible to detect open transition
+  const prevVisibleRef = useRef(false);
+  // Stable value for ColorPicker — only set on open, not on every store update
+  const pickerValueRef = useRef(initialColor);
 
   useEffect(() => {
-    setHexInput(initialColor);
-    setCurrentColor(initialColor);
-  }, [initialColor]);
+    const justOpened = visible && !prevVisibleRef.current;
+    prevVisibleRef.current = visible;
 
-  const handleColorChange = useCallback(({ hex }: { hex: string }) => {
-    const normalized = hex.slice(0, 7); // strip alpha if present
+    if (justOpened) {
+      // Lock the original color ONLY when first opening
+      originalColorRef.current = initialColor;
+      pickerValueRef.current = initialColor;
+      setHexInput(initialColor);
+      setCurrentColor(initialColor);
+    }
+  }, [initialColor, visible]);
+
+  // onCompleteJS — finger lifted, final color
+  const handleColorComplete = useCallback(({ hex }: { hex: string }) => {
+    const normalized = hex.slice(0, 7);
     setCurrentColor(normalized);
     setHexInput(normalized);
-  }, []);
+    onComplete(normalized);
+  }, [onComplete]);
 
   const handleHexSubmit = useCallback(() => {
     const cleaned = hexInput.trim();
     if (/^#[0-9a-fA-F]{6}$/.test(cleaned)) {
       setCurrentColor(cleaned);
+      onComplete(cleaned);
     }
-  }, [hexInput]);
+  }, [hexInput, onComplete]);
 
   const handleDone = useCallback(() => {
     const cleaned = currentColor.trim();
@@ -64,9 +90,16 @@ export function ColorPickerSheet({ visible, initialColor, onComplete, onClose, l
     onClose();
   }, [currentColor, onComplete, onClose]);
 
+  const handleCancel = useCallback(() => {
+    // Restore to original color
+    const original = originalColorRef.current;
+    onCancel?.(original);
+    onClose();
+  }, [onCancel, onClose]);
+
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={styles.backdrop} onPress={onClose} />
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={handleCancel}>
+      <Pressable style={styles.backdrop} onPress={handleCancel} />
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : undefined}
         style={styles.sheetWrap}
@@ -83,15 +116,15 @@ export function ColorPickerSheet({ visible, initialColor, onComplete, onClose, l
           {/* Color picker */}
           <ColorPicker
             style={styles.picker}
-            value={initialColor}
-            onComplete={handleColorChange}
+            value={pickerValueRef.current}
+            onCompleteJS={handleColorComplete}
           >
             <Preview style={styles.preview} />
             <Panel1 style={styles.panel} />
             <HueSlider style={styles.slider} />
           </ColorPicker>
 
-          {/* Hex input */}
+          {/* Hex input + original color swatch */}
           <View style={styles.hexRow}>
             <Text style={[styles.hexLabel, { color: colors.mutedForeground }]}>HEX</Text>
             <TextInput
@@ -116,11 +149,11 @@ export function ColorPickerSheet({ visible, initialColor, onComplete, onClose, l
 
           {/* Actions */}
           <View style={styles.actions}>
-            <TouchableOpacity style={[styles.cancelBtn, { borderColor: colors.border }]} onPress={onClose}>
-              <Text style={{ color: colors.foreground, fontWeight: fontWeight.medium }}>Cancel</Text>
+            <TouchableOpacity style={[styles.cancelBtn, { borderColor: colors.border }]} onPress={handleCancel}>
+              <Text style={{ color: colors.foreground, fontWeight: fontWeight.medium }}>{t("common.cancel", "取消")}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={[styles.doneBtn, { backgroundColor: colors.primary }]} onPress={handleDone}>
-              <Text style={{ color: colors.primaryForeground, fontWeight: fontWeight.medium }}>Done</Text>
+              <Text style={{ color: colors.primaryForeground, fontWeight: fontWeight.medium }}>{t("common.done", "完成")}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -142,7 +175,7 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 20,
     padding: spacing.lg,
     paddingBottom: 32,
-    gap: 16,
+    gap: 14,
   },
   handle: {
     width: 36,
@@ -157,10 +190,10 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   picker: {
-    gap: 16,
+    gap: 14,
   },
   preview: {
-    height: 40,
+    height: 44,
     borderRadius: radius.md,
   },
   panel: {
