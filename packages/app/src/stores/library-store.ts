@@ -527,6 +527,7 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
             cbr: "cbz",
             fb2: "fb2",
             fbz: "fbz",
+            txt: "txt",
           };
           const format: Book["format"] = formatMap[ext] || "epub";
           let title =
@@ -538,8 +539,34 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
           let coverUrl: string | undefined;
           const bookId = crypto.randomUUID();
 
+          // For TXT files, convert to EPUB first before storing
+          if (ext === "txt") {
+            const { TxtToEpubConverter } = await import("@readany/core/utils/txt-to-epub");
+            const { readFile } = await import("@tauri-apps/plugin-fs");
+            const rawBytes = await readFile(filePath);
+            const txtFile = new File([rawBytes], filePath.split("/").pop() || "book.txt", {
+              type: "text/plain",
+            });
+            const converter = new TxtToEpubConverter();
+            const result = await converter.convert({ file: txtFile });
+            title = result.bookTitle;
+            if (result.language) author = "";
+            // Write the converted EPUB to a temp location for copyBookToAppData
+            const { writeFile, BaseDirectory } = await import("@tauri-apps/plugin-fs");
+            const epubBytes = new Uint8Array(await result.file.arrayBuffer());
+            const tmpPath = `books/${bookId}.epub`;
+            await writeFile(tmpPath, epubBytes, { baseDir: BaseDirectory.AppData });
+          }
+
           // Copy book file into app data dir (books/{id}.{ext})
-          const { relativePath, fileBytes } = await copyBookToAppData(bookId, ext, filePath);
+          const { relativePath, fileBytes } = ext === "txt"
+            ? await (async () => {
+                const { readFile, BaseDirectory } = await import("@tauri-apps/plugin-fs");
+                const relPath = `books/${bookId}.epub`;
+                const bytes = await readFile(relPath, { baseDir: BaseDirectory.AppData });
+                return { relativePath: relPath, fileBytes: bytes };
+              })()
+            : await copyBookToAppData(bookId, ext, filePath);
 
           // Compute file hash for sync file matching
           let fileHash: string | undefined;
@@ -553,7 +580,8 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
 
           const fileName = filePath.split("/").pop() || "book";
           const blob = new Blob([fileBytes]);
-          const file = new File([blob], fileName, {
+          const docFileName = ext === "txt" ? fileName.replace(/\.txt$/i, ".epub") : fileName;
+          const file = new File([blob], docFileName, {
             type: blob.type || "application/octet-stream",
           });
 

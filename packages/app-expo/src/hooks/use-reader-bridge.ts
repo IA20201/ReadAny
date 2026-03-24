@@ -50,6 +50,7 @@ export interface ReaderBridgeCallbacks {
   }) => void;
   onPageSnippet?: (text: string) => void;
   onBookmarkSnippet?: (text: string) => void;
+  onToggleBookmark?: () => void;
 }
 
 export function useReaderBridge(callbacks: ReaderBridgeCallbacks) {
@@ -293,6 +294,9 @@ export function useReaderBridge(callbacks: ReaderBridgeCallbacks) {
           break;
         case "bookmarkSnippet":
           cb.onBookmarkSnippet?.(msg.textSnippet || "");
+          break;
+        case "toggleBookmark":
+          cb.onToggleBookmark?.();
           break;
         case "visibleText":
           console.log(

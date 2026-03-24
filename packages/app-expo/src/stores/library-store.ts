@@ -10,6 +10,13 @@ import { generateId } from "@readany/core/utils";
 import { create } from "zustand";
 import { debouncedSave, loadFromFS } from "./persist";
 
+// Hermes (React Native) only supports UTF-8 in TextDecoder.
+// Use text-encoding polyfill for GBK/GB18030/Shift-JIS etc.
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { TextDecoder: PolyfillTextDecoder } = require("text-encoding") as {
+  TextDecoder: typeof TextDecoder;
+};
+
 export type LibraryViewMode = "grid" | "list";
 
 export interface LibraryState {
@@ -64,6 +71,78 @@ async function saveCoverToAppData(bookId: string, coverBlob: Blob): Promise<stri
   const arrayBuffer = await coverBlob.arrayBuffer();
   await platform.writeFile(absPath, new Uint8Array(arrayBuffer));
   return relativePath;
+}
+
+/**
+ * Ensure raw bytes are UTF-8 encoded. Hermes (React Native) only supports
+ * UTF-8 in TextDecoder — GBK/GB18030/Shift-JIS etc. are NOT supported.
+ * If the bytes are not UTF-8, use PolyfillTextDecoder to convert to UTF-8.
+ */
+function ensureUtf8Bytes(bytes: Uint8Array): Uint8Array {
+  // Check BOM markers
+  if (bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf) {
+    return bytes; // UTF-8 with BOM
+  }
+  if (bytes[0] === 0xff && bytes[1] === 0xfe) {
+    // UTF-16LE → decode via polyfill, re-encode as UTF-8
+    const text = new PolyfillTextDecoder("utf-16le").decode(bytes);
+    return new TextEncoder().encode(text);
+  }
+  if (bytes[0] === 0xfe && bytes[1] === 0xff) {
+    // UTF-16BE → decode via polyfill, re-encode as UTF-8
+    const text = new PolyfillTextDecoder("utf-16be").decode(bytes);
+    return new TextEncoder().encode(text);
+  }
+
+  // Try strict UTF-8 validation on a sample
+  const sampleSize = Math.min(bytes.length, 64 * 1024);
+  try {
+    new TextDecoder("utf-8", { fatal: true }).decode(bytes.subarray(0, sampleSize));
+    // Also check a mid-section for large files
+    if (bytes.length > sampleSize * 2) {
+      const midStart = Math.floor(bytes.length / 2);
+      const midEnd = Math.min(midStart + 8192, bytes.length);
+      new TextDecoder("utf-8", { fatal: true }).decode(bytes.subarray(midStart, midEnd));
+    }
+    return bytes; // Valid UTF-8
+  } catch {
+    // Not valid UTF-8 — detect which encoding it is
+  }
+
+  // Check if high bytes suggest GBK/GB18030 or Shift-JIS
+  const sample = bytes.subarray(0, Math.min(1024, bytes.length));
+  let highBytes = 0;
+  for (let i = 0; i < sample.length; i++) {
+    if (sample[i]! >= 0x80) highBytes++;
+  }
+  const highRatio = sample.length > 0 ? highBytes / sample.length : 0;
+
+  // Check for Shift-JIS patterns
+  let isShiftJIS = false;
+  if (highRatio > 0.1) {
+    for (let i = 0; i < sample.length - 1; i++) {
+      const b1 = sample[i]!;
+      const b2 = sample[i + 1]!;
+      if (
+        ((b1 >= 0x81 && b1 <= 0x9f) || (b1 >= 0xe0 && b1 <= 0xfc)) &&
+        ((b2 >= 0x40 && b2 <= 0x7e) || (b2 >= 0x80 && b2 <= 0xfc))
+      ) {
+        isShiftJIS = true;
+        break;
+      }
+    }
+  }
+
+  const encoding = isShiftJIS ? "shift_jis" : highRatio > 0.1 ? "gb18030" : "gbk";
+  console.log(`[ensureUtf8Bytes] Detected non-UTF-8 encoding: ${encoding}, converting to UTF-8`);
+
+  try {
+    const text = new PolyfillTextDecoder(encoding).decode(bytes);
+    return new TextEncoder().encode(text);
+  } catch (err) {
+    console.warn("[ensureUtf8Bytes] Polyfill decode failed, returning raw bytes:", err);
+    return bytes;
+  }
 }
 
 async function copyBookToAppData(
@@ -215,6 +294,7 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
             cbr: "cbz",
             fb2: "fb2",
             fbz: "fbz",
+            txt: "txt",
           };
           const format: Book["format"] = formatMap[ext || ""] || "epub";
           const fileName = originalName;
@@ -223,6 +303,76 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
           console.log(
             `[importBooks] Importing: name=${fileName}, format=${format}, uri=${filePath}`,
           );
+
+          // For TXT files: convert to EPUB bytes directly, skip Blob/File (slow in RN)
+          if (ext === "txt") {
+            try {
+              const { TxtToEpubConverter } = await import("@readany/core/utils/txt-to-epub");
+              const platform = getPlatformService();
+
+              // Read TXT file as bytes
+              const rawBytes = await platform.readFile(filePath);
+
+              // Hermes only supports UTF-8 in TextDecoder. Convert GBK/GB18030
+              // etc. to UTF-8 using iconv-lite before passing to the converter.
+              const bytes = ensureUtf8Bytes(rawBytes);
+
+              // React Native Blob/File constructor doesn't support ArrayBuffer/Uint8Array.
+              // Create a File-like shim that provides the methods TxtToEpubConverter needs.
+              const txtFile = {
+                name: fileName,
+                size: bytes.byteLength,
+                type: "text/plain",
+                arrayBuffer: () => Promise.resolve(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)),
+                slice: (start?: number, end?: number) => {
+                  const sliced = bytes.slice(start ?? 0, end ?? bytes.byteLength);
+                  return {
+                    arrayBuffer: () => Promise.resolve(sliced.buffer.slice(sliced.byteOffset, sliced.byteOffset + sliced.byteLength)),
+                    size: sliced.byteLength,
+                  };
+                },
+                stream: () => new ReadableStream({
+                  start(controller) {
+                    controller.enqueue(bytes);
+                    controller.close();
+                  },
+                }),
+              } as unknown as File;
+
+              // Use convertToBytes: pure-JS ZIP builder, no Blob bridge
+              const converter = new TxtToEpubConverter();
+              const result = await converter.convertToBytes({ file: txtFile });
+
+              // Write EPUB bytes directly to final app data location
+              await ensureAppSubDir("books");
+              const relativePath = `books/${bookId}.epub`;
+              const absPath = await resolveAppPath(relativePath);
+              await platform.writeFile(absPath, result.epubBytes);
+
+              // TXT-converted EPUBs have no cover, and title is already known from converter.
+              // Skip metadata extraction entirely — saves a full EPUB re-parse.
+              const title = result.bookTitle || fileName.replace(/\.\w+$/i, "") || "Untitled";
+              const book: Book = {
+                id: bookId,
+                filePath: relativePath,
+                format: "epub",
+                meta: { title, author: "" },
+                progress: 0,
+                isVectorized: false,
+                vectorizeProgress: 0,
+                tags: [],
+                addedAt: Date.now(),
+                updatedAt: Date.now(),
+                lastOpenedAt: Date.now(),
+              };
+              await get().addBook(book);
+              console.log(`[importBooks] TXT imported as EPUB: ${title}`);
+              continue;
+            } catch (convErr) {
+              console.error(`[importBooks] TXT conversion failed:`, convErr);
+              throw convErr;
+            }
+          }
 
           const { relativePath, fileBytes } = await copyBookToAppData(
             bookId,

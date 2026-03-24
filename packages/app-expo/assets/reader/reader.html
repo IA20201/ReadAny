@@ -206,10 +206,218 @@
       }, { passive: true });
     }
 
+    // ─── Pull down gesture for bookmark toggle ───
+    // State shared across all documents (main + iframes)
+    let pullDownState = {
+      startY: 0,
+      startX: 0,
+      isPulling: false,
+      pullDelta: 0,
+      scrollTop: 0,
+    };
+
+    function getReaderContainer() {
+      return document.querySelector('#reader-container');
+    }
+
+    function applyPull(delta) {
+      pullDownState.pullDelta = Math.min(delta * 0.6, 150);
+      const container = getReaderContainer();
+      if (container) {
+        container.style.transform = `translateY(${pullDownState.pullDelta}px)`;
+        container.style.transition = 'none';
+      }
+    }
+
+    function resetPull() {
+      const container = getReaderContainer();
+      if (container) {
+        container.style.transition = 'transform 0.35s cubic-bezier(0.2, 0, 0.2, 1)';
+        container.style.transform = '';
+      }
+      pullDownState.pullDelta = 0;
+    }
+
+    // Check if we're in an iframe
+    function isInIframe() {
+      try {
+        return window.self !== window.top;
+      } catch (e) {
+        return true;
+      }
+    }
+
+    function attachPullDownListener(doc) {
+      if (doc.__readany_pullDownAttached) return;
+      doc.__readany_pullDownAttached = true;
+
+      const win = doc.defaultView || window;
+      const inIframe = isInIframe();
+      
+      // Local state for iframe (since pullDownState is in parent)
+      let localStartY = 0;
+      let localStartX = 0;
+      let localScrollTop = 0;
+
+      const handleTouchStart = function(e) {
+        if (e.touches.length !== 1) return;
+        const startY = e.touches[0].clientY;
+        const startX = e.touches[0].clientX;
+        const docEl = doc.documentElement || doc.body;
+        const scrollTop = docEl.scrollTop || win.scrollY || 0;
+        
+        if (inIframe) {
+          localStartY = startY;
+          localStartX = startX;
+          localScrollTop = scrollTop;
+          postToRN('pullDownTouchStart', { startY, startX, scrollTop });
+        } else {
+          pullDownState.startY = startY;
+          pullDownState.startX = startX;
+          pullDownState.isPulling = false;
+          pullDownState.scrollTop = scrollTop;
+        }
+      };
+
+      const handleTouchMove = function(e) {
+        if (inIframe) {
+          const y = e.touches[0].clientY;
+          const x = e.touches[0].clientX;
+          const dy = y - localStartY;
+          const dx = x - localStartX;
+          
+          // If pulling down at top, prevent swipe and notify parent
+          if (dy > 15 && dy > Math.abs(dx) * 2 && localScrollTop <= 5) {
+            e.preventDefault();
+            e.stopPropagation();
+          }
+          postToRN('pullDownTouchMove', { y, x });
+        } else {
+          if (!pullDownState.startY || e.touches.length !== 1) return;
+          const y = e.touches[0].clientY;
+          const dy = y - pullDownState.startY;
+          const dx = e.touches[0].clientX - pullDownState.startX;
+          
+          if (dy > 15 && dy > Math.abs(dx) * 2 && pullDownState.scrollTop <= 5) {
+            // Prevent swipe gesture when pulling down at top
+            e.preventDefault();
+            e.stopPropagation();
+            pullDownState.isPulling = true;
+            applyPull(dy);
+          }
+        }
+      };
+
+      const handleTouchEnd = function(e) {
+        if (inIframe) {
+          postToRN('pullDownTouchEnd', {});
+          localStartY = 0;
+          localStartX = 0;
+          localScrollTop = 0;
+        } else {
+          if (pullDownState.isPulling) {
+            e.preventDefault();
+            const wasTrigger = pullDownState.pullDelta > 50;
+            resetPull();
+            if (wasTrigger) {
+              postToRN('toggleBookmark', {});
+            }
+          }
+          pullDownState.isPulling = false;
+          pullDownState.startY = 0;
+          pullDownState.startX = 0;
+          pullDownState.scrollTop = 0;
+        }
+      };
+
+      const handleTouchCancel = function() {
+        if (inIframe) {
+          postToRN('pullDownTouchCancel', {});
+          localStartY = 0;
+          localStartX = 0;
+          localScrollTop = 0;
+        } else {
+          if (pullDownState.isPulling) {
+            resetPull();
+          }
+          pullDownState.isPulling = false;
+          pullDownState.startY = 0;
+          pullDownState.startX = 0;
+          pullDownState.scrollTop = 0;
+        }
+      };
+
+      // Use passive: false to allow preventDefault
+      doc.addEventListener('touchstart', handleTouchStart, { capture: true, passive: true });
+      doc.addEventListener('touchmove', handleTouchMove, { capture: true, passive: false });
+      doc.addEventListener('touchend', handleTouchEnd, { capture: true, passive: false });
+      doc.addEventListener('touchcancel', handleTouchCancel, { capture: true, passive: true });
+
+      win.addEventListener('touchstart', handleTouchStart, { capture: true, passive: true });
+      win.addEventListener('touchmove', handleTouchMove, { capture: true, passive: false });
+      win.addEventListener('touchend', handleTouchEnd, { capture: true, passive: false });
+      win.addEventListener('touchcancel', handleTouchCancel, { capture: true, passive: true });
+    }
+
+    // Handle pull-down messages from iframes (in main document only)
+    function handlePullDownMessage(msg) {
+      if (isInIframe()) return; // Only handle in main document
+      
+      switch (msg.type) {
+        case 'pullDownTouchStart':
+          pullDownState.startY = msg.startY;
+          pullDownState.startX = msg.startX;
+          pullDownState.isPulling = false;
+          pullDownState.scrollTop = msg.scrollTop;
+          break;
+        case 'pullDownTouchMove':
+          if (!pullDownState.startY) return;
+          const dy = msg.y - pullDownState.startY;
+          const dx = msg.x - pullDownState.startX;
+          if (dy > 15 && dy > Math.abs(dx) * 2 && pullDownState.scrollTop <= 5) {
+            pullDownState.isPulling = true;
+            applyPull(dy);
+          }
+          break;
+        case 'pullDownTouchEnd':
+          if (pullDownState.isPulling) {
+            const wasTrigger = pullDownState.pullDelta > 50;
+            resetPull();
+            if (wasTrigger) {
+              postToRN('toggleBookmark', {});
+            }
+          }
+          pullDownState.isPulling = false;
+          pullDownState.startY = 0;
+          pullDownState.startX = 0;
+          pullDownState.scrollTop = 0;
+          break;
+        case 'pullDownTouchCancel':
+          if (pullDownState.isPulling) {
+            resetPull();
+          }
+          pullDownState.isPulling = false;
+          pullDownState.startY = 0;
+          pullDownState.startX = 0;
+          pullDownState.scrollTop = 0;
+          break;
+      }
+    }
+
+    // Also attach to main document body
+    (function initMainPullDown() {
+      attachPullDownListener(document);
+    })();
+
     // ─── Message handler from React Native ───
     window.addEventListener('message', async (e) => {
       try {
         const msg = JSON.parse(e.data);
+        // Handle pull-down messages from iframes
+        if (msg.type && msg.type.startsWith('pullDown')) {
+          handlePullDownMessage(msg);
+          return;
+        }
         await handleCommand(msg);
       } catch (err) {
         console.error('[WebView] Error in message handler:', err);
@@ -220,6 +428,11 @@
     document.addEventListener('message', async (e) => {
       try {
         const msg = JSON.parse(e.data);
+        // Handle pull-down messages from iframes
+        if (msg.type && msg.type.startsWith('pullDown')) {
+          handlePullDownMessage(msg);
+          return;
+        }
         await handleCommand(msg);
       } catch (err) {
         console.error('[WebView] Error in iOS message handler:', err);
@@ -329,6 +542,7 @@
           attachTapListener(doc);
           attachSelectionListener(doc);
           attachNoteLongPress(doc);
+          attachPullDownListener(doc);
           // Re-add all user annotations for this page
           // foliate-view will only render those that belong to current section
           for (const [cfi, annotation] of userAnnotations) {

@@ -259,6 +259,7 @@ export function ReaderScreen({ route, navigation }: Props) {
   const noteTooltipTimer = useRef<NodeJS.Timeout | null>(null);
   const assetLoadedRef = useRef(false);
   const pendingBookmarkRef = useRef(false);
+
   const bridgeRef = useRef<{
     requestPageSnippet: () => void;
     goNext: () => void;
@@ -445,6 +446,9 @@ export function ReaderScreen({ route, navigation }: Props) {
         return;
       }
       toggleControls();
+    },
+    onToggleBookmark: () => {
+      handleToggleBookmark();
     },
     onSearchResult: (index: number, count: number) => {
       setSearchIndex(index);
@@ -877,32 +881,34 @@ export function ReaderScreen({ route, navigation }: Props) {
   return (
     <View style={[s.container, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
       {/* WebView with foliate-js */}
-      <WebView
-        ref={bridge.webViewRef}
-        source={{ uri: readerHtmlUri }}
-        style={[s.webview, { marginTop: 24 }]}
-        pointerEvents={isPanelOpen ? "none" : "auto"}
-        onMessage={bridge.handleMessage}
-        onError={(e) => {
-          console.error("[ReaderScreen] WebView error:", e.nativeEvent);
-        }}
-        onHttpError={(e) => {
-          console.error("[ReaderScreen] WebView HTTP error:", e.nativeEvent);
-        }}
-        onContentProcessDidTerminate={() => {
-          console.warn("[ReaderScreen] WebView content process terminated");
-        }}
-        javaScriptEnabled
-        domStorageEnabled
-        allowFileAccess
-        allowFileAccessFromFileURLs
-        allowUniversalAccessFromFileURLs
-        allowsInlineMediaPlayback
-        scrollEnabled={false}
-        showsVerticalScrollIndicator={false}
-        originWhitelist={["*"]}
-        mixedContentMode="always"
-      />
+      <View style={{ flex: 1 }}>
+        <WebView
+          ref={bridge.webViewRef}
+          source={{ uri: readerHtmlUri }}
+          style={[s.webview, { marginTop: 24 }]}
+          pointerEvents={isPanelOpen ? "none" : "auto"}
+          onMessage={bridge.handleMessage}
+          onError={(e) => {
+            console.error("[ReaderScreen] WebView error:", e.nativeEvent);
+          }}
+          onHttpError={(e) => {
+            console.error("[ReaderScreen] WebView HTTP error:", e.nativeEvent);
+          }}
+          onContentProcessDidTerminate={() => {
+            console.warn("[ReaderScreen] WebView content process terminated");
+          }}
+          javaScriptEnabled
+          domStorageEnabled
+          allowFileAccess
+          allowFileAccessFromFileURLs
+          allowUniversalAccessFromFileURLs
+          allowsInlineMediaPlayback
+          scrollEnabled={false}
+          showsVerticalScrollIndicator={false}
+          originWhitelist={["*"]}
+          mixedContentMode="always"
+        />
+      </View>
 
       {/* Loading overlay */}
       {loading && (
