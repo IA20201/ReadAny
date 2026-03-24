@@ -6,7 +6,7 @@
  * foliate-js parser. Returns a unified BookDoc interface.
  */
 
-export type BookFormat = "EPUB" | "PDF" | "MOBI" | "AZW" | "AZW3" | "CBZ" | "FB2" | "FBZ";
+export type BookFormat = "EPUB" | "PDF" | "MOBI" | "AZW" | "AZW3" | "CBZ" | "FB2" | "FBZ" | "TXT";
 
 export interface TOCItem {
   id: number;
@@ -63,6 +63,7 @@ const EXTS: Record<BookFormat, string> = {
   CBZ: "cbz",
   FB2: "fb2",
   FBZ: "fbz",
+  TXT: "txt",
 };
 
 export class DocumentLoader {

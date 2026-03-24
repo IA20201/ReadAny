@@ -458,7 +458,7 @@ function extensionToMime(ext: string): string {
     cbz: "application/vnd.comicbook+zip",
     fb2: "application/x-fictionbook+xml",
     fbz: "application/x-zip-compressed-fb2",
-    // Common archive types that may contain books
+    txt: "text/plain",
     zip: "application/zip",
   };
   return map[ext.toLowerCase()] || "application/octet-stream";
