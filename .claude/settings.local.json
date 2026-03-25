@@ -37,7 +37,8 @@
       "WebFetch(domain:pdf-lib.js.org)",
       "Bash(xargs basename:*)",
       "WebFetch(domain:deepwiki.com)",
-      "WebFetch(domain:daviddaytw.github.io)"
+      "WebFetch(domain:daviddaytw.github.io)",
+      "WebFetch(domain:docs.rs)"
     ]
   }
 }

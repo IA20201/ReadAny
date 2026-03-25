@@ -39,6 +39,7 @@ export function SyncSettings() {
   const [webdavUrl, setWebdavUrl] = useState("");
   const [webdavUsername, setWebdavUsername] = useState("");
   const [webdavPassword, setWebdavPassword] = useState("");
+  const [webdavAllowInsecure, setWebdavAllowInsecure] = useState(false);
 
   // S3 state
   const [s3Endpoint, setS3Endpoint] = useState("");
@@ -71,6 +72,7 @@ export function SyncSettings() {
       if (config.type === "webdav") {
         setWebdavUrl(config.url);
         setWebdavUsername(config.username);
+        setWebdavAllowInsecure(config.allowInsecure ?? false);
         getPlatformService()
           .kvGetItem("sync_webdav_password")
           .then((pw) => {
@@ -97,7 +99,7 @@ export function SyncSettings() {
     setTesting(true);
     setTestResult(null);
     try {
-      const success = await testWebDavConnection(webdavUrl, webdavUsername, webdavPassword);
+      const success = await testWebDavConnection(webdavUrl, webdavUsername, webdavPassword, webdavAllowInsecure);
       setTestResult(success ? "success" : "error");
     } catch (e) {
       setTestResult("error");
@@ -105,16 +107,16 @@ export function SyncSettings() {
     } finally {
       setTesting(false);
     }
-  }, [webdavUrl, webdavUsername, webdavPassword, testWebDavConnection]);
+  }, [webdavUrl, webdavUsername, webdavPassword, webdavAllowInsecure, testWebDavConnection]);
 
   const handleSaveWebDav = useCallback(async () => {
     setSaving(true);
     try {
-      await saveWebDavConfig(webdavUrl, webdavUsername, webdavPassword);
+      await saveWebDavConfig(webdavUrl, webdavUsername, webdavPassword, webdavAllowInsecure);
     } finally {
       setSaving(false);
     }
-  }, [webdavUrl, webdavUsername, webdavPassword, saveWebDavConfig]);
+  }, [webdavUrl, webdavUsername, webdavPassword, webdavAllowInsecure, saveWebDavConfig]);
 
   const handleTestS3 = useCallback(async () => {
     setTesting(true);
@@ -293,6 +295,16 @@ export function SyncSettings() {
               className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm text-foreground outline-none focus:border-primary"
             />
           </div>
+        </div>
+        <div className="flex items-center justify-between pt-1">
+          <div>
+            <span className="text-sm text-foreground">{t("settings.syncAllowInsecure")}</span>
+            <p className="mt-0.5 text-xs text-muted-foreground">{t("settings.syncAllowInsecureDesc")}</p>
+          </div>
+          <Switch
+            checked={webdavAllowInsecure}
+            onCheckedChange={(checked) => setWebdavAllowInsecure(checked)}
+          />
         </div>
         <div className="flex items-center gap-2 pt-1">
           <button

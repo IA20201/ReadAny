@@ -61,6 +61,7 @@ export interface WebDavConfig {
   type: "webdav";
   url: string;
   username: string;
+  allowInsecure?: boolean;
   autoSync: boolean;
   syncIntervalMins: number;
   wifiOnly: boolean;

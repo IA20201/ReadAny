@@ -35,8 +35,8 @@ export interface SyncState {
   loadConfig: () => Promise<void>;
 
   // WebDAV actions
-  saveWebDavConfig: (url: string, username: string, password: string) => Promise<void>;
-  testWebDavConnection: (url: string, username: string, password: string) => Promise<boolean>;
+  saveWebDavConfig: (url: string, username: string, password: string, allowInsecure?: boolean) => Promise<void>;
+  testWebDavConnection: (url: string, username: string, password: string, allowInsecure?: boolean) => Promise<boolean>;
 
   // S3 actions
   saveS3Config: (
@@ -104,13 +104,14 @@ export const useSyncStore = create<SyncState>((set, get) => ({
     }
   },
 
-  saveWebDavConfig: async (url, username, password) => {
+  saveWebDavConfig: async (url, username, password, allowInsecure) => {
     const platform = getPlatformService();
     const existing = get().config;
     const config: WebDavConfig = {
       type: "webdav",
       url: url.replace(/\/+$/, ""),
       username,
+      allowInsecure: allowInsecure ?? (existing as WebDavConfig)?.allowInsecure ?? false,
       autoSync: (existing as WebDavConfig)?.autoSync ?? DEFAULT_SYNC_CONFIG.autoSync,
       syncIntervalMins:
         (existing as WebDavConfig)?.syncIntervalMins ?? DEFAULT_SYNC_CONFIG.syncIntervalMins,
@@ -123,8 +124,8 @@ export const useSyncStore = create<SyncState>((set, get) => ({
     set({ config, isConfigured: true, backendType: "webdav" });
   },
 
-  testWebDavConnection: async (url, username, password) => {
-    const client = new WebDavClient(url, username, password);
+  testWebDavConnection: async (url, username, password, allowInsecure) => {
+    const client = new WebDavClient(url, username, password, allowInsecure);
     return client.testConnection();
   },
 

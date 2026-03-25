@@ -10,6 +10,7 @@
  * - expo-constants for app version
  */
 import type {
+  FetchOptions,
   FilePickerOptions,
   IDatabase,
   IPlatformService,
@@ -162,18 +163,21 @@ export class ExpoPlatformService implements IPlatformService {
 
   // ---- Network ----
 
-  async fetch(url: string, options?: RequestInit): Promise<Response> {
-    const method = options?.method?.toUpperCase() || "GET";
+  async fetch(url: string, options?: FetchOptions): Promise<Response> {
+    const { allowInsecure, ...fetchOptions } = options ?? {};
+    // When allowInsecure is enabled, downgrade https → http (RN cannot skip TLS verification)
+    const effectiveUrl = allowInsecure ? url.replace(/^https:\/\//i, "http://") : url;
+    const method = fetchOptions?.method?.toUpperCase() || "GET";
     const standardMethods = ["GET", "POST", "PUT", "DELETE", "HEAD", "OPTIONS", "PATCH"];
 
     // Use XMLHttpRequest for custom WebDAV methods (MKCOL, PROPFIND, etc.)
     // React Native's fetch doesn't properly support custom HTTP methods
     if (!standardMethods.includes(method)) {
-      return this._fetchWithXHR(url, options);
+      return this._fetchWithXHR(effectiveUrl, fetchOptions);
     }
 
     // Use standard fetch for standard HTTP methods
-    return globalThis.fetch(url, options);
+    return globalThis.fetch(effectiveUrl, fetchOptions);
   }
 
   private _fetchWithXHR(url: string, options?: RequestInit): Promise<Response> {

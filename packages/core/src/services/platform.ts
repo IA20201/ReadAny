@@ -17,6 +17,12 @@ export interface WebSocketOptions {
   headers?: Record<string, string>;
 }
 
+/** Extended fetch options with insecure certificate support */
+export interface FetchOptions extends RequestInit {
+  /** When true, skip TLS certificate verification (for self-signed certs) */
+  allowInsecure?: boolean;
+}
+
 export interface UpdateInfo {
   version: string;
   notes?: string;
@@ -66,7 +72,7 @@ export interface IPlatformService {
   loadDatabase(path: string): Promise<IDatabase>;
 
   // ---- Network (for scenarios requiring custom headers) ----
-  fetch(url: string, options?: RequestInit): Promise<Response>;
+  fetch(url: string, options?: FetchOptions): Promise<Response>;
   createWebSocket(url: string, options?: WebSocketOptions): Promise<IWebSocket>;
 
   // ---- App info ----

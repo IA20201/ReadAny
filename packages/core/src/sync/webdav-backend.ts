@@ -18,7 +18,7 @@ export class WebDavBackend implements ISyncBackend {
 
   constructor(config: WebDavConfig, password: string) {
     this.config = config;
-    this.client = new WebDavClient(config.url, config.username, password);
+    this.client = new WebDavClient(config.url, config.username, password, config.allowInsecure);
   }
 
   async testConnection(): Promise<boolean> {

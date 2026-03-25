@@ -2,6 +2,7 @@ export type {
   IPlatformService,
   IDatabase,
   IWebSocket,
+  FetchOptions,
   FilePickerOptions,
   WebSocketOptions,
   UpdateInfo,
