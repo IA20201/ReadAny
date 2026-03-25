@@ -29,6 +29,7 @@
       ]
     },
     "plugins": [
+      "onnxruntime-react-native",
       "expo-font",
       "expo-secure-store",
       "expo-sqlite",

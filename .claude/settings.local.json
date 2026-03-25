@@ -34,7 +34,10 @@
       "WebFetch(domain:stackoverflow.com)",
       "WebFetch(domain:mozilla.github.io)",
       "WebFetch(domain:jsdev.space)",
-      "WebFetch(domain:pdf-lib.js.org)"
+      "WebFetch(domain:pdf-lib.js.org)",
+      "Bash(xargs basename:*)",
+      "WebFetch(domain:deepwiki.com)",
+      "WebFetch(domain:daviddaytw.github.io)"
     ]
   }
 }
