@@ -42,6 +42,7 @@ import { SearchBar } from "./SearchBar";
 import { SelectionPopover } from "./SelectionPopover";
 import { TOCPanel } from "./TOCPanel";
 import { TranslationPopover } from "./TranslationPopover";
+import { useChapterTranslation } from "@readany/core/hooks";
 
 // --- Tauri file loading ---
 async function loadFileAsBlob(filePath: string): Promise<Blob> {
@@ -242,6 +243,18 @@ export function ReaderView({ bookId, tabId }: ReaderViewProps) {
 
   // Ref to FoliateViewer imperative handle
   const foliateRef = useRef<FoliateViewerHandle>(null);
+
+  // Current section index for chapter translation
+  const [currentSectionIndex, setCurrentSectionIndex] = useState(0);
+
+  // Chapter translation hook
+  const chapterTranslation = useChapterTranslation({
+    bookId,
+    sectionIndex: currentSectionIndex,
+    getParagraphs: () => foliateRef.current?.getChapterParagraphs() ?? [],
+    injectTranslations: (results) => foliateRef.current?.injectChapterTranslations(results),
+    removeTranslations: () => foliateRef.current?.removeChapterTranslations(),
+  });
 
   // Track which highlights have been rendered (id -> {cfi, note}) to detect changes
   const renderedHighlightsRef = useRef<Map<string, { cfi: string; hasNote: boolean }>>(new Map());
@@ -521,6 +534,10 @@ export function ReaderView({ bookId, tabId }: ReaderViewProps) {
   // We need to re-add all highlights for the current book.
   const handleSectionLoad = useCallback(
     (sectionIndex: number) => {
+      // Reset chapter translation on section change
+      setCurrentSectionIndex(sectionIndex);
+      chapterTranslation.reset();
+
       // Delay slightly to ensure foliate view is ready
       setTimeout(() => {
         if (!foliateRef.current) return;
@@ -549,13 +566,38 @@ export function ReaderView({ bookId, tabId }: ReaderViewProps) {
         );
       }, 100);
     },
-    [highlights, bookId],
+    [highlights, bookId, chapterTranslation.reset],
   );
 
   const handleError = useCallback((err: Error) => {
     setError(err.message);
     setIsLoading(false);
   }, []);
+
+  // Sync chapter translation visibility with DOM
+  useEffect(() => {
+    if (chapterTranslation.state.status !== "complete") return;
+    try {
+      const renderer = foliateRef.current?.getView()?.renderer;
+      const contents = renderer?.getContents?.();
+      if (!contents?.[0]?.doc) return;
+      const doc = contents[0].doc as Document;
+      // Translation elements
+      const translationEls = doc.querySelectorAll(".readany-translation");
+      const translationHidden = !chapterTranslation.state.translationVisible;
+      translationEls.forEach((el) => {
+        (el as HTMLElement).setAttribute("data-hidden", String(translationHidden));
+      });
+      // Original text elements
+      const originalEls = doc.querySelectorAll("[data-translate-id]");
+      const originalHidden = !chapterTranslation.state.originalVisible;
+      originalEls.forEach((el) => {
+        (el as HTMLElement).setAttribute("data-original-hidden", String(originalHidden));
+      });
+    } catch {
+      // Ignore
+    }
+  }, [chapterTranslation.state]);
 
   const handleSelection = useCallback(
     (sel: BookSelection | null) => {
@@ -1250,6 +1292,12 @@ export function ReaderView({ bookId, tabId }: ReaderViewProps) {
             onToggleSettings={handleToggleSettings}
             onToggleChat={handleToggleChat}
             onToggleTTS={handleToggleTTS}
+            chapterTranslationState={chapterTranslation.state}
+            onChapterTranslationStart={chapterTranslation.startTranslation}
+            onChapterTranslationCancel={chapterTranslation.cancelTranslation}
+            onToggleOriginalVisible={chapterTranslation.toggleOriginalVisible}
+            onToggleTranslationVisible={chapterTranslation.toggleTranslationVisible}
+            onChapterTranslationReset={chapterTranslation.reset}
             isChatOpen={showChat}
             isTTSActive={showTTS || ttsPlayState !== "stopped"}
             isFixedLayout={isFixedLayoutFormat(bookFormat)}

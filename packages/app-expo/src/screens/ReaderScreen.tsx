@@ -3,6 +3,8 @@ import { BookmarkRibbon } from "@/components/reader/BookmarkRibbon";
 import { SelectionPopover } from "@/components/reader/SelectionPopover";
 import { TTSControls } from "@/components/reader/TTSControls";
 import { TranslationPanel } from "@/components/reader/TranslationPanel";
+import { ChapterTranslationSheet } from "@/components/reader/ChapterTranslationSheet";
+import { useChapterTranslation } from "@readany/core/hooks";
 import {
   BookmarkFilledIcon,
   BookmarkIcon,
@@ -11,6 +13,7 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
   EditIcon,
+  LanguagesIcon,
   MessageSquareIcon,
   NotebookPenIcon,
   SearchIcon,
@@ -226,6 +229,7 @@ export function ReaderScreen({ route, navigation }: Props) {
   const [showTranslation, setShowTranslation] = useState(false);
   const [translationText, setTranslationText] = useState("");
   const [showTTS, setShowTTS] = useState(false);
+  const [showChapterTranslation, setShowChapterTranslation] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResultCount, setSearchResultCount] = useState(0);
   const [searchIndex, setSearchIndex] = useState(0);
@@ -266,6 +270,14 @@ export function ReaderScreen({ route, navigation }: Props) {
     getVisibleText: () => Promise<string>;
   } | null>(null);
 
+  // Chapter translation state
+  const [currentSectionIndex, setCurrentSectionIndex] = useState(0);
+  const chapterTranslationBridgeRef = useRef<{
+    getChapterParagraphs: () => Promise<Array<{ id: string; text: string; tagName: string }>>;
+    injectChapterTranslations: (results: Array<{ paragraphId: string; originalText: string; translatedText: string }>) => void;
+    removeChapterTranslations: () => void;
+  } | null>(null);
+
   const readSettings = useSettingsStore((s) => s.readSettings);
   const updateReadSettings = useSettingsStore((s) => s.updateReadSettings);
   const settingFontSize = readSettings.fontSize;
@@ -300,6 +312,22 @@ export function ReaderScreen({ route, navigation }: Props) {
   const ttsSetOnEnd = useTTSStore((s) => s.setOnEnd);
 
   const book = useMemo(() => books.find((b) => b.id === bookId), [books, bookId]);
+
+  // Chapter translation hook
+  const chapterTranslation = useChapterTranslation({
+    bookId,
+    sectionIndex: currentSectionIndex,
+    getParagraphs: async () => {
+      if (!chapterTranslationBridgeRef.current) return [];
+      return chapterTranslationBridgeRef.current.getChapterParagraphs();
+    },
+    injectTranslations: (results) => {
+      chapterTranslationBridgeRef.current?.injectChapterTranslations(results);
+    },
+    removeTranslations: () => {
+      chapterTranslationBridgeRef.current?.removeChapterTranslations();
+    },
+  });
 
   // Bookmark state
   const existingBookmark = useMemo(
@@ -381,6 +409,13 @@ export function ReaderScreen({ route, navigation }: Props) {
       });
     },
     onRelocate: (detail: RelocateEvent) => {
+      // Track section changes for chapter translation reset
+      const newSection = detail.section?.current ?? 0;
+      if (newSection !== currentSectionIndex) {
+        setCurrentSectionIndex(newSection);
+        chapterTranslation.reset();
+      }
+
       if (detail.fraction != null) setProgress(detail.fraction);
       if (detail.location) {
         setCurrentPage(detail.location.current);
@@ -527,6 +562,46 @@ export function ReaderScreen({ route, navigation }: Props) {
   });
 
   bridgeRef.current = bridge;
+  chapterTranslationBridgeRef.current = bridge;
+
+  // Sync chapter translation visibility with WebView DOM
+  useEffect(() => {
+    if (chapterTranslation.state.status !== "complete") return;
+    const translationHidden = !chapterTranslation.state.translationVisible;
+    const originalHidden = !chapterTranslation.state.originalVisible;
+    // Inject JS to toggle data-hidden on translation elements and data-original-hidden on originals
+    bridge.webViewRef.current?.injectJavaScript(`
+      (function() {
+        try {
+          var doc = null;
+          var renderer = typeof view !== 'undefined' && view && view.renderer;
+          if (renderer && renderer.getContents) {
+            var contents = renderer.getContents();
+            if (contents && contents[0] && contents[0].doc) doc = contents[0].doc;
+          }
+          if (!doc) {
+            var iframes = document.querySelectorAll('iframe');
+            for (var fi = 0; fi < iframes.length; fi++) {
+              try {
+                var iframeDoc = iframes[fi].contentDocument || (iframes[fi].contentWindow && iframes[fi].contentWindow.document);
+                if (iframeDoc && iframeDoc.body) { doc = iframeDoc; break; }
+              } catch (e) {}
+            }
+          }
+          if (!doc) return;
+          var els = doc.querySelectorAll('.readany-translation');
+          for (var i = 0; i < els.length; i++) {
+            els[i].setAttribute('data-hidden', '${translationHidden}');
+          }
+          var origEls = doc.querySelectorAll('[data-translate-id]');
+          for (var j = 0; j < origEls.length; j++) {
+            origEls[j].setAttribute('data-original-hidden', '${originalHidden}');
+          }
+        } catch(e) {}
+      })();
+      true;
+    `);
+  }, [chapterTranslation.state, bridge.webViewRef]);
 
   // Load book
   useEffect(() => {
@@ -1059,6 +1134,22 @@ export function ReaderScreen({ route, navigation }: Props) {
               </TouchableOpacity>
               <TouchableOpacity style={s.toolbarBtn} onPress={() => setShowTOC(true)}>
                 <ListIcon size={18} color="#fff" />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  s.toolbarBtn,
+                  chapterTranslation.state.status !== "idle" && s.toolbarBtnActive,
+                ]}
+                onPress={() => setShowChapterTranslation(true)}
+              >
+                <LanguagesIcon
+                  size={18}
+                  color={
+                    chapterTranslation.state.status !== "idle"
+                      ? colors.primary
+                      : "#fff"
+                  }
+                />
               </TouchableOpacity>
               <TouchableOpacity
                 style={s.toolbarBtn}
@@ -1688,6 +1779,18 @@ export function ReaderScreen({ route, navigation }: Props) {
           }}
         />
       )}
+
+      {/* ─── Chapter Translation Sheet ─── */}
+      <ChapterTranslationSheet
+        visible={showChapterTranslation}
+        onClose={() => setShowChapterTranslation(false)}
+        state={chapterTranslation.state}
+        onStart={chapterTranslation.startTranslation}
+        onCancel={chapterTranslation.cancelTranslation}
+        onToggleOriginalVisible={chapterTranslation.toggleOriginalVisible}
+        onToggleTranslationVisible={chapterTranslation.toggleTranslationVisible}
+        onReset={chapterTranslation.reset}
+      />
 
       {/* ─── TTS Controls ─── */}
       {showTTS && (
