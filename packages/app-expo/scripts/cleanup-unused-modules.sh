@@ -14,14 +14,11 @@ MONOREPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 echo "  Monorepo root: $MONOREPO_ROOT"
 
 # Define the modules to remove (these are brought in by @huggingface/transformers but not needed on mobile)
+# Note: Only remove modules that are NOT needed by desktop build
 UNUSED_MODULES=(
   "onnxruntime-node"
   "onnxruntime-web"
   "@pagefind"
-  "pdfjs-dist"
-  "typescript"
-  "esbuild"
-  "@biomejs"
   "react-devtools-core"
 )
 
