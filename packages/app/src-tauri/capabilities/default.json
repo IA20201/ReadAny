@@ -49,6 +49,7 @@
         { "url": "http://127.0.0.1:*" }
       ]
     },
+    "single-instance:default",
     "websocket:default"
   ]
 }

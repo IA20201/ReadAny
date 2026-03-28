@@ -127,6 +127,8 @@ export const ui = {
     "faq.a5": "Yes! ReadAny supports WebDAV, S3, and LAN sync, allowing you to sync your library, reading progress, and annotations across all your devices.",
     "faq.q6": "How does the AI chat work?",
     "faq.a6": "The AI chat understands your current reading context - your position in the book, selected text, and chapter information. It can answer questions, explain concepts, and help with summaries.",
+    "faq.q7": "macOS says the app \"is damaged and can't be opened\"?",
+    "faq.a7": "This is caused by macOS Gatekeeper security. To fix it: 1) Go to System Settings → Privacy & Security → Security, and allow apps from \"Anywhere\". 2) If it still doesn't work, drag the app to the Applications folder, then open Terminal and run: <code>sudo xattr -rd com.apple.quarantine /Applications/ReadAny.app</code>",
     "faq.more": "Still have questions?",
     "faq.help": "Visit Help Center",
     
@@ -260,6 +262,8 @@ export const ui = {
     "faq.a5": "可以！ReadAny 支持 WebDAV、S3 和局域网同步，可以在所有设备间同步你的书库、阅读进度和标注。",
     "faq.q6": "AI 对话如何工作？",
     "faq.a6": "AI 对话理解你当前的阅读上下文 - 你在书中的位置、选中的文本和章节信息。它可以回答问题、解释概念并帮助总结。",
+    "faq.q7": "macOS 打开软件提示「已损坏，无法打开」怎么办？",
+    "faq.a7": "这是 macOS 的安全机制导致的。解决方法：1) 前往「系统设置」→「隐私与安全性」→「安全性」，允许从「任何来源」下载的 App。2) 如果仍无法运行，请将应用拖到「应用程序」文件夹，然后打开终端执行：<code>sudo xattr -rd com.apple.quarantine /Applications/ReadAny.app</code>",
     "faq.more": "还有问题？",
     "faq.help": "访问帮助中心",
     

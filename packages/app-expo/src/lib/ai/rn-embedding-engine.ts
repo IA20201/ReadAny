@@ -1,38 +1,22 @@
 import type { ILocalEmbeddingEngine } from "@readany/core/ai/local-embedding-service";
 import Constants from "expo-constants";
-import * as FileSystem from "expo-file-system/legacy";
+import * as FileSystem from "expo-file-system";
 
-const MODELS_DIR = `${FileSystem.documentDirectory}models/`;
-
-/**
- * React Native embedding engine using react-native-transformers + onnxruntime-react-native.
- *
- * Runs ONNX models via native C++ inference (no WASM, no base64 hacks).
- */
 export class RNEmbeddingEngine implements ILocalEmbeddingEngine {
-  private pipeline: {
-    init: (
-      modelName: string,
-      onnxPath: string,
-      options?: Record<string, unknown>,
-    ) => Promise<void>;
-    embed: (text: string) => Promise<Float32Array>;
-    release: () => Promise<void>;
-  } | null = null;
-  private loaded = false;
+  private generator: any = null;
+  private transformers: any = null;
 
-  async init(): Promise<void> {
-    // No-op — lazily loaded in load() to avoid crashing on standard App startup.
-  }
+  private async ensureTransformers(): Promise<any> {
+    if (this.transformers) return this.transformers;
 
-  async load(
-    modelId: string,
-    hfModelId: string,
-    onProgress?: (p: number) => void,
-  ): Promise<void> {
     const isExpoGo =
-      Constants.executionEnvironment === "storeClient" ||
-      Constants.appOwnership === "expo";
+      Constants.executionEnvironment === "storeClient" || Constants.appOwnership === "expo";
+    console.log("[RNEmbeddingEngine] Environment check:", {
+      executionEnvironment: Constants.executionEnvironment,
+      appOwnership: Constants.appOwnership,
+      isExpoGo,
+    });
+
     if (isExpoGo) {
       throw new Error(
         "本地向量模型推理依赖 ONNX C++ 原生引擎库。Expo Go 沙盒均不提供。请编译自定义原生客户端体验本地大模型！",
@@ -40,79 +24,167 @@ export class RNEmbeddingEngine implements ILocalEmbeddingEngine {
     }
 
     try {
-      // TextEmbedding pipeline exists in the module but is not exported from the package index.
-      // Import directly from the subpath.
-      const TextEmbeddingPipeline = (
-        await import(
-          // @ts-expect-error — subpath not declared in package.json "exports"
-          "react-native-transformers/lib/module/pipelines/text-embedding.js"
-        )
-      ).default;
-      this.pipeline = TextEmbeddingPipeline;
+      console.log("[RNEmbeddingEngine] Attempting to import @huggingface/transformers...");
 
-      await FileSystem.makeDirectoryAsync(MODELS_DIR, {
-        intermediates: true,
-      }).catch(() => {});
+      // First check if onnxruntime-react-native is available
+      try {
+        const onnxruntime = await import("onnxruntime-react-native");
+        console.log("[RNEmbeddingEngine] onnxruntime-react-native available:", !!onnxruntime);
+      } catch (onnxErr) {
+        console.warn("[RNEmbeddingEngine] onnxruntime-react-native not available:", onnxErr);
+      }
 
-      console.log(`[RNEmbeddingEngine] Loading model ${hfModelId}...`);
+      this.transformers = await import("@huggingface/transformers");
+      console.log("[RNEmbeddingEngine] Successfully imported @huggingface/transformers");
 
-      /**
-       * Custom fetch: downloads HuggingFace model files to local storage.
-       * Returns the local file URI so ONNX Runtime can read from disk.
-       */
-      const customFetch = async (url: string): Promise<string> => {
-        const safeName = url.replace(/[^a-zA-Z0-9._-]/g, "_");
-        const localUri = `${MODELS_DIR}${safeName}`;
+      // Verify the env object
+      if (this.transformers?.env) {
+        console.log("[RNEmbeddingEngine] Transformers env:", {
+          allowLocalModels: this.transformers.env.allowLocalModels,
+          backends: Object.keys(this.transformers.env.backends || {}),
+        });
+      }
+    } catch (e) {
+      console.error("[RNEmbeddingEngine] Failed to import @huggingface/transformers:", e);
+      throw new Error(
+        "无法加载本地向量模型引擎。请确保已正确安装 onnxruntime-react-native 原生模块。",
+      );
+    }
 
+    try {
+      this.transformers = await import("@huggingface/transformers");
+    } catch (e) {
+      console.warn("[RNEmbeddingEngine] Transformers/ONNX not available natively", e);
+      throw e;
+    }
+
+    const { env } = this.transformers;
+    env.allowLocalModels = false;
+
+    // Disable WASM threads to prevent issues in strict environments
+    if (env.backends?.onnx?.wasm) {
+      env.backends.onnx.wasm.numThreads = 1;
+    }
+
+    // Intercept fetch to cache model files on disk
+    const originalFetch = fetch;
+    const cacheDir = `${(FileSystem as any).documentDirectory}models/`;
+
+    await FileSystem.makeDirectoryAsync(cacheDir, { intermediates: true }).catch(() => {});
+
+    // @ts-ignore - transformers.js v3 allows overriding fetch on the env object
+    env.fetch = async (url: RequestInfo | URL, init?: RequestInit) => {
+      const urlStr = url.toString();
+
+      // Only cache huggingface model files
+      if (!urlStr.includes("huggingface.co")) {
+        return originalFetch(url, init);
+      }
+
+      const filename = urlStr.split("/").pop() || "unknown";
+      // Generate a unique cache key based on URL path to avoid collisions
+      const urlPath = new URL(urlStr).pathname.replace(/[^a-zA-Z0-9]/g, "_");
+      const localUri = `${cacheDir}${urlPath}_${filename}`;
+
+      try {
         const fileInfo = await FileSystem.getInfoAsync(localUri);
         if (fileInfo.exists) {
-          console.log(
-            `[RNEmbeddingEngine] Cache HIT: ${url.split("/").pop()}`,
-          );
-          return localUri;
+          console.log(`[RNEmbeddingEngine] Cache HIT for ${filename}`);
+          // Read as binary string, then convert to ArrayBuffer
+          const base64 = await FileSystem.readAsStringAsync(localUri, { encoding: "base64" });
+          const binaryStr = atob(base64);
+          const len = binaryStr.length;
+          const bytes = new Uint8Array(len);
+          for (let i = 0; i < len; i++) {
+            bytes[i] = binaryStr.charCodeAt(i);
+          }
+
+          return new Response(bytes.buffer, {
+            status: 200,
+            headers: new Headers({ "Content-Type": "application/octet-stream" }),
+          });
         }
+      } catch (e) {
+        console.warn(`[RNEmbeddingEngine] Cache read error for ${filename}:`, e);
+      }
 
-        console.log(
-          `[RNEmbeddingEngine] Downloading: ${url.split("/").pop()}`,
-        );
+      console.log(`[RNEmbeddingEngine] Cache MISS for ${filename}. Downloading...`);
+      const response = await originalFetch(url, init);
 
-        const downloadResumable = FileSystem.createDownloadResumable(
-          url,
-          localUri,
-          {},
-          (downloadProgress) => {
-            if (
-              onProgress &&
-              downloadProgress.totalBytesExpectedToWrite > 0
-            ) {
-              const pct =
-                (downloadProgress.totalBytesWritten /
-                  downloadProgress.totalBytesExpectedToWrite) *
-                100;
-              onProgress(pct);
-            }
-          },
-        );
+      if (response.ok) {
+        try {
+          // Clone the response so we can both save it and return it
+          const resClone = response.clone();
+          const buffer = await resClone.arrayBuffer();
+          const bytes = new Uint8Array(buffer);
 
-        const result = await downloadResumable.downloadAsync();
-        if (!result || result.status !== 200) {
-          throw new Error(`Failed to download model file: ${url}`);
+          // Convert to base64 for writing via Expo FileSystem
+          // This is a bit expensive for large models but works reliably
+          let binaryStr = "";
+          for (let i = 0; i < bytes.length; i++) {
+            binaryStr += String.fromCharCode(bytes[i]);
+          }
+          const base64 = btoa(binaryStr);
+
+          await FileSystem.writeAsStringAsync(localUri, base64, { encoding: "base64" });
+          console.log(`[RNEmbeddingEngine] Saved ${filename} to cache`);
+        } catch (e) {
+          console.warn(`[RNEmbeddingEngine] Failed to cache ${filename}:`, e);
         }
+      }
 
-        console.log(
-          `[RNEmbeddingEngine] Downloaded: ${url.split("/").pop()}`,
+      return response;
+    };
+
+    return this.transformers;
+  }
+
+  async init(): Promise<void> {
+    // No-op for Expo initialization to prevent crashing on standard App startup.
+    // Transformers and its native modules will be lazily loaded in `load()`.
+  }
+
+  async load(modelId: string, hfModelId: string, onProgress?: (p: number) => void): Promise<void> {
+    let transformers: any;
+    try {
+      transformers = await this.ensureTransformers();
+    } catch (e) {
+      const errorMsg = e instanceof Error ? e.message : String(e);
+      console.error("[RNEmbeddingEngine] Failed to initialize Transformers engine:", errorMsg);
+
+      // Check if this is Expo Go
+      const isExpoGo =
+        Constants.executionEnvironment === "storeClient" || Constants.appOwnership === "expo";
+      if (isExpoGo) {
+        throw new Error(
+          "本地向量模型在 Expo Go 中不可用。请使用自定义开发构建（Development Build）来体验此功能。\n\n操作步骤：\n1. 运行 `npx expo prebuild` 生成原生代码\n2. 运行 `npx expo run:ios` 或 `npx expo run:android` 构建应用",
         );
-        return result.uri;
-      };
+      }
 
-      await this.pipeline!.init(hfModelId, "model_quantized.onnx", {
-        fetch: customFetch,
+      throw new Error(`本地向量模型引擎初始化失败: ${errorMsg}`);
+    }
+
+    if (!transformers) {
+      console.error("[RNEmbeddingEngine] Transformers engine not loaded. Cannot load model.");
+      throw new Error("本地向量模型引擎未正确加载，请确保已安装 onnxruntime-react-native 原生模块");
+    }
+    try {
+      console.log(`[RNEmbeddingEngine] Loading model ${hfModelId}...`);
+
+      const { pipeline } = transformers;
+      // Initialize pipeline
+      this.generator = await pipeline("feature-extraction", hfModelId, {
+        progress_callback: (info: any) => {
+          if (info.status === "progress" && onProgress) {
+            onProgress(info.progress);
+          }
+        },
+        dtype: "q8",
       });
 
-      this.loaded = true;
       console.log(`[RNEmbeddingEngine] Model ${hfModelId} ready!`);
     } catch (e) {
-      console.error("[RNEmbeddingEngine] Failed to load model:", e);
+      console.error(`[RNEmbeddingEngine] Failed to load model:`, e);
       throw e;
     }
   }
@@ -122,46 +194,39 @@ export class RNEmbeddingEngine implements ILocalEmbeddingEngine {
     texts: string[],
     onItemProgress?: (done: number, total: number) => void,
   ): Promise<number[][]> {
-    if (!this.loaded || !this.pipeline) {
+    if (!this.generator) {
       throw new Error("RNEmbeddingEngine pipeline not loaded.");
     }
 
     const embeddings: number[][] = [];
     for (let i = 0; i < texts.length; i++) {
-      const output = await this.pipeline.embed(texts[i]);
-      // output is Float32Array — convert to standard JS array
-      embeddings.push(Array.from(output));
+      const text = texts[i];
+      // Generate embedding for one text
+      const output = await this.generator(text, { pooling: "mean", normalize: true });
+
+      // Extract Float32Array to standard JS Array
+      embeddings.push(Array.from(output.data));
+
       onItemProgress?.(i + 1, texts.length);
     }
     return embeddings;
   }
 
   async dispose(): Promise<void> {
-    if (this.loaded && this.pipeline) {
+    if (this.generator) {
       try {
-        await this.pipeline.release();
+        await this.generator.dispose();
       } catch (e) {
-        console.warn("[RNEmbeddingEngine] Error releasing pipeline:", e);
+        console.warn("[RNEmbeddingEngine] Error disposing pipeline:", e);
       }
-      this.pipeline = null;
-      this.loaded = false;
+      this.generator = null;
     }
   }
 
   async clearCache(hfModelId: string): Promise<void> {
-    // Release loaded model first
-    await this.dispose();
-
-    try {
-      const dirInfo = await FileSystem.getInfoAsync(MODELS_DIR);
-      if (dirInfo.exists) {
-        await FileSystem.deleteAsync(MODELS_DIR, { idempotent: true });
-        console.log(
-          `[RNEmbeddingEngine] Cleared model cache for ${hfModelId}`,
-        );
-      }
-    } catch (e) {
-      console.warn("[RNEmbeddingEngine] Failed to clear cache:", e);
-    }
+    // Currently relying on React Native's fetch cache or custom polyfills.
+    // If transformers.js uses Cache API, we might need a custom clear mechanism.
+    this.generator = null;
+    console.log(`[RNEmbeddingEngine] Cleared cache flag for ${hfModelId}`);
   }
 }

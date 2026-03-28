@@ -1,7 +1,7 @@
+import { useColors } from "@/styles/theme";
 import { useEffect, useRef } from "react";
 import { Animated, StyleSheet } from "react-native";
 import Svg, { Path } from "react-native-svg";
-import { useColors } from "@/styles/theme";
 
 interface BookmarkRibbonProps {
   visible: boolean;
@@ -35,8 +35,8 @@ export function BookmarkRibbon({ visible }: BookmarkRibbonProps) {
       pointerEvents="none"
       style={[styles.container, { opacity, transform: [{ translateY }] }]}
     >
-      <Svg width={14} height={40} viewBox="0 0 14 40">
-        <Path d="M0 0h14v36l-7-4-7 4V0z" fill={colors.primary} />
+      <Svg width={14} height={60} viewBox="0 0 14 60">
+        <Path d="M0 0h14v54l-7-4-7 4V0z" fill={colors.primary} />
       </Svg>
     </Animated.View>
   );

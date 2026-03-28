@@ -37,4 +37,5 @@ pnpm-debug.log*
 
 readese/*
 
+# Local WebDAV test server
 webdav-server/

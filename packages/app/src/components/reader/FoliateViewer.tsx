@@ -8,6 +8,10 @@ import type { BookDoc, BookFormat } from "@/lib/reader/document-loader";
 import { getDirection, isFixedLayoutFormat } from "@/lib/reader/document-loader";
 import { getFontTheme } from "@/lib/reader/font-themes";
 import { registerIframeEventHandlers } from "@/lib/reader/iframe-event-handlers";
+import type {
+  ChapterParagraph,
+  ChapterTranslationResult,
+} from "@readany/core/translation/chapter-translator";
 import type { ViewSettings } from "@readany/core/types";
 import { Overlayer } from "foliate-js/overlayer.js";
 import { marked } from "marked";
@@ -32,7 +36,7 @@ type AppTheme = "light" | "dark" | "sepia";
 
 const THEME_COLORS: Record<AppTheme, { bg: string; fg: string; link: string }> = {
   light: { bg: "#ffffff", fg: "#1a1a1a", link: "#2563eb" },
-  dark: { bg: "#1c1c1e", fg: "#e8e8ed", link: "#60a5fa" },
+  dark: { bg: "#121212", fg: "#f5f5f5", link: "#60a5fa" },
   sepia: { bg: "#f0e6d2", fg: "#3d2b1f", link: "#6b4c2a" },
 };
 
@@ -139,6 +143,12 @@ export interface FoliateViewerHandle {
   getView: () => FoliateView | null;
   /** Get visible text on the current page for TTS */
   getVisibleText: () => string;
+  /** Extract all paragraphs from current section for chapter translation */
+  getChapterParagraphs: () => ChapterParagraph[];
+  /** Inject translated paragraphs below each original paragraph */
+  injectChapterTranslations: (results: ChapterTranslationResult[]) => void;
+  /** Remove all injected chapter translation elements */
+  removeChapterTranslations: () => void;
 }
 
 interface FoliateViewerProps {
@@ -325,6 +335,7 @@ export const FoliateViewer = forwardRef<FoliateViewerHandle, FoliateViewerProps>
                   const parent = (node as Text).parentElement;
                   const tag = parent?.tagName?.toLowerCase();
                   if (tag === "script" || tag === "style") return NodeFilter.FILTER_REJECT;
+                  if (parent?.closest?.(".readany-translation")) return NodeFilter.FILTER_REJECT;
                   return NodeFilter.FILTER_ACCEPT;
                 },
               });
@@ -387,6 +398,111 @@ export const FoliateViewer = forwardRef<FoliateViewerHandle, FoliateViewerProps>
             return doc.body?.innerText?.trim() || "";
           } catch {
             return "";
+          }
+        },
+        getChapterParagraphs: () => {
+          try {
+            const renderer = viewRef.current?.renderer;
+            const contents = renderer?.getContents?.();
+            if (!contents?.[0]?.doc) return [];
+            const doc = contents[0].doc as Document;
+
+            const blockSelector =
+              "p, h1, h2, h3, h4, h5, h6, li, blockquote, dd, dt, figcaption, pre, td, th";
+            const blocks = doc.querySelectorAll(blockSelector);
+            const paragraphs: ChapterParagraph[] = [];
+
+            blocks.forEach((el, i) => {
+              const text = (el as HTMLElement).innerText?.trim() || el.textContent?.trim() || "";
+              if (text.length < 2) return;
+              const id = `para_${i}`;
+              (el as HTMLElement).setAttribute("data-translate-id", id);
+              paragraphs.push({
+                id,
+                text,
+                tagName: el.tagName.toLowerCase(),
+              });
+            });
+
+            return paragraphs;
+          } catch {
+            return [];
+          }
+        },
+        injectChapterTranslations: (results: ChapterTranslationResult[]) => {
+          try {
+            const renderer = viewRef.current?.renderer;
+            const contents = renderer?.getContents?.();
+            if (!contents?.[0]?.doc) return;
+            const doc = contents[0].doc as Document;
+
+            // Inject translation CSS once
+            if (!doc.getElementById("readany-chapter-translation-style")) {
+              const style = doc.createElement("style");
+              style.id = "readany-chapter-translation-style";
+              style.textContent = `
+                .readany-translation {
+                  color: #6b7280;
+                  font-size: 0.9em;
+                  line-height: 1.5;
+                  margin-top: 4px;
+                  margin-bottom: 8px;
+                  padding-left: 8px;
+                  border-left: 2px solid #d1d5db;
+                  opacity: 0.85;
+                }
+                .readany-translation[data-hidden="true"] { display: none; }
+                .readany-translation[data-solo="true"] {
+                  color: inherit;
+                  font-size: inherit;
+                  line-height: inherit;
+                  margin-top: 0;
+                  margin-bottom: 0.8em;
+                  padding-left: 0;
+                  border-left: none;
+                  opacity: 1;
+                }
+                [data-translate-id][data-original-hidden="true"] { display: none; }
+                @media (prefers-color-scheme: dark) {
+                  .readany-translation { color: #9ca3af; border-left-color: #4b5563; }
+                }
+              `;
+              doc.head.appendChild(style);
+            }
+
+            for (const result of results) {
+              if (!result.translatedText) continue;
+              const el = doc.querySelector(
+                `[data-translate-id="${result.paragraphId}"]`,
+              ) as HTMLElement | null;
+              if (!el) continue;
+              // Skip if already injected
+              if (el.nextElementSibling?.classList?.contains("readany-translation")) continue;
+
+              const div = doc.createElement("div");
+              div.className = "readany-translation";
+              div.setAttribute("data-para-id", result.paragraphId);
+              div.textContent = result.translatedText;
+              el.parentNode?.insertBefore(div, el.nextSibling);
+            }
+          } catch (err) {
+            console.error("[injectChapterTranslations] Error:", err);
+          }
+        },
+        removeChapterTranslations: () => {
+          try {
+            const renderer = viewRef.current?.renderer;
+            const contents = renderer?.getContents?.();
+            if (!contents?.[0]?.doc) return;
+            const doc = contents[0].doc as Document;
+
+            const elements = doc.querySelectorAll(".readany-translation");
+            elements.forEach((el) => el.remove());
+
+            const style = doc.getElementById("readany-chapter-translation-style");
+            style?.remove();
+          } catch (err) {
+            console.error("[removeChapterTranslations] Error:", err);
           }
         },
       }),

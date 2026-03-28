@@ -253,7 +253,19 @@
     "useAIModel": "Using {{model}}",
     "deeplApiKey": "DeepL API Key",
     "deeplApiKeyPlaceholder": "Enter DeepL API Key...",
-    "targetLanguage": "Target Language"
+    "targetLanguage": "Target Language",
+    "selectLanguage": "Select Language",
+    "translateChapter": "Translate Chapter",
+    "translatingProgress": "Translating... {{count}}/{{total}}",
+    "chapterTranslated": "Chapter Translated",
+    "showTranslations": "Show Translations",
+    "hideTranslations": "Hide Translations",
+    "showOriginal": "Show Original",
+    "hideOriginal": "Hide Original",
+    "showTranslation": "Show Translation",
+    "hideTranslation": "Hide Translation",
+    "cancelTranslation": "Cancel Translation",
+    "noTextToTranslate": "No text to translate"
   },
   "highlights": {
     "yellow": "Yellow",

@@ -13,6 +13,16 @@ export { getTranslator, getTranslators, aiProvider, deeplProvider } from "./prov
 // Cache
 export { getFromCache, storeInCache, clearTranslationCache } from "./cache";
 
+// Chapter-level translation
+export {
+  translateChapter,
+  type ChapterParagraph,
+  type ChapterTranslationProgress,
+  type ChapterTranslationResult,
+  type TranslateChapterOptions,
+} from "./chapter-translator";
+export { isChapterFullyCached, markChapterFullyCached } from "./chapter-cache";
+
 // Language support
 export const SUPPORTED_LANGUAGES = [
   { code: "zh-CN", name: "Chinese (Simplified)", nativeName: "简体中文" },

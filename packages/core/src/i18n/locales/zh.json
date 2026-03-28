@@ -251,7 +251,19 @@
     "useAIModel": "使用 {{model}}",
     "deeplApiKey": "DeepL API Key",
     "deeplApiKeyPlaceholder": "输入 DeepL API Key...",
-    "targetLanguage": "目标语言"
+    "targetLanguage": "目标语言",
+    "selectLanguage": "选择语言",
+    "translateChapter": "翻译本章",
+    "translatingProgress": "翻译中... {{count}}/{{total}}",
+    "chapterTranslated": "已翻译本章",
+    "showTranslations": "显示翻译",
+    "hideTranslations": "隐藏翻译",
+    "showOriginal": "显示原文",
+    "hideOriginal": "隐藏原文",
+    "showTranslation": "显示译文",
+    "hideTranslation": "隐藏译文",
+    "cancelTranslation": "取消翻译",
+    "noTextToTranslate": "没有可翻译的文本"
   },
   "highlights": {
     "yellow": "黄色",

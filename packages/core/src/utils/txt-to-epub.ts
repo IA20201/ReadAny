@@ -637,7 +637,7 @@ export class TxtToEpubConverter {
     if (headerBytes[0] === 0xef && headerBytes[1] === 0xbb && headerBytes[2] === 0xbf)
       return "utf-8";
 
-    const sample = new Uint8Array(buffer.slice(0, Math.min(1024, buffer.byteLength)));
+    const sample = new Uint8Array(buffer.slice(0, Math.min(4096, buffer.byteLength)));
     let highByteCount = 0;
     for (let i = 0; i < sample.length; i++) {
       if (sample[i]! >= 0x80) highByteCount++;
@@ -647,16 +647,23 @@ export class TxtToEpubConverter {
     if (highByteRatio > 0.3) return "gbk";
 
     if (highByteRatio > 0.1) {
+      // Disambiguate Shift-JIS vs GBK/GB18030 by counting distinctive patterns.
+      // GBK double-byte: lead 0xA1-0xFE, trail 0xA1-0xFE
+      // Shift-JIS distinctive: lead 0x81-0x9F (below GBK lead range)
+      let gbkPairs = 0;
+      let sjisDistinctPairs = 0;
       for (let i = 0; i < sample.length - 1; i++) {
         const b1 = sample[i]!;
         const b2 = sample[i + 1]!;
-        if (
-          ((b1 >= 0x81 && b1 <= 0x9f) || (b1 >= 0xe0 && b1 <= 0xfc)) &&
-          ((b2 >= 0x40 && b2 <= 0x7e) || (b2 >= 0x80 && b2 <= 0xfc))
-        ) {
-          return "shift-jis";
+        if (b1 >= 0xA1 && b1 <= 0xFE && b2 >= 0xA1 && b2 <= 0xFE) {
+          gbkPairs++;
+          i++;
+        } else if (b1 >= 0x81 && b1 <= 0x9F && ((b2 >= 0x40 && b2 <= 0x7E) || (b2 >= 0x80 && b2 <= 0xFC))) {
+          sjisDistinctPairs++;
+          i++;
         }
       }
+      if (sjisDistinctPairs > 0 && sjisDistinctPairs > gbkPairs) return "shift-jis";
       return "gb18030";
     }
 
@@ -704,7 +711,7 @@ export class TxtToEpubConverter {
     if (headSample[0] === 0xef && headSample[1] === 0xbb && headSample[2] === 0xbf)
       return "utf-8";
 
-    const sample = headSample.slice(0, Math.min(1024, headSample.length));
+    const sample = headSample.slice(0, Math.min(4096, headSample.length));
     let highByteCount = 0;
     for (let i = 0; i < sample.length; i++) {
       if (sample[i]! >= 0x80) highByteCount++;
@@ -714,16 +721,21 @@ export class TxtToEpubConverter {
     if (highByteRatio > 0.3) return "gbk";
 
     if (highByteRatio > 0.1) {
+      // Disambiguate Shift-JIS vs GBK/GB18030 by counting distinctive patterns.
+      let gbkPairs = 0;
+      let sjisDistinctPairs = 0;
       for (let i = 0; i < sample.length - 1; i++) {
         const b1 = sample[i]!;
         const b2 = sample[i + 1]!;
-        if (
-          ((b1 >= 0x81 && b1 <= 0x9f) || (b1 >= 0xe0 && b1 <= 0xfc)) &&
-          ((b2 >= 0x40 && b2 <= 0x7e) || (b2 >= 0x80 && b2 <= 0xfc))
-        ) {
-          return "shift-jis";
+        if (b1 >= 0xA1 && b1 <= 0xFE && b2 >= 0xA1 && b2 <= 0xFE) {
+          gbkPairs++;
+          i++;
+        } else if (b1 >= 0x81 && b1 <= 0x9F && ((b2 >= 0x40 && b2 <= 0x7E) || (b2 >= 0x80 && b2 <= 0xFC))) {
+          sjisDistinctPairs++;
+          i++;
         }
       }
+      if (sjisDistinctPairs > 0 && sjisDistinctPairs > gbkPairs) return "shift-jis";
       return "gb18030";
     }
 

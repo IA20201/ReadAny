@@ -303,6 +303,12 @@ pnpm tauri build
 
 ---
 
+## 社区
+
+感谢 [linux.do](https://linux.do/) — 一个活跃的中文技术社区，在这里你可以学习 AI、开发等前沿技术。
+
+---
+
 <p align="center">
   用 ❤️ 打造 by ReadAny Team
 </p>

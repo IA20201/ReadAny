@@ -50,6 +50,7 @@ export interface ReaderBridgeCallbacks {
   }) => void;
   onPageSnippet?: (text: string) => void;
   onBookmarkSnippet?: (text: string) => void;
+  onToggleBookmark?: () => void;
 }
 
 export function useReaderBridge(callbacks: ReaderBridgeCallbacks) {
@@ -57,6 +58,12 @@ export function useReaderBridge(callbacks: ReaderBridgeCallbacks) {
   const callbacksRef = useRef(callbacks);
   callbacksRef.current = callbacks;
   const pendingVisibleTextResolveRef = useRef<((text: string) => void) | null>(null);
+  const pendingChapterParagraphsResolveRef = useRef<
+    | ((
+        paragraphs: Array<{ id: string; text: string; tagName: string }>,
+      ) => void)
+    | null
+  >(null);
 
   // ─── Send commands to WebView ───
 
@@ -229,6 +236,65 @@ export function useReaderBridge(callbacks: ReaderBridgeCallbacks) {
     [inject],
   );
 
+  const getChapterParagraphs = useCallback(() => {
+    return new Promise<Array<{ id: string; text: string; tagName: string }>>((resolve) => {
+      pendingChapterParagraphsResolveRef.current = resolve;
+
+      webViewRef.current?.injectJavaScript(`
+        (function() {
+          try {
+            if (window.doGetChapterParagraphs) {
+              window.doGetChapterParagraphs();
+            } else {
+              window.ReactNativeWebView.postMessage(JSON.stringify({type:'chapterParagraphs',paragraphs:[],error:'doGetChapterParagraphs not defined'}));
+            }
+          } catch(e) {
+            window.ReactNativeWebView.postMessage(JSON.stringify({type:'chapterParagraphs',paragraphs:[],error:String(e)}));
+          }
+        })();
+        true;
+      `);
+
+      // Timeout fallback
+      setTimeout(() => {
+        if (pendingChapterParagraphsResolveRef.current === resolve) {
+          pendingChapterParagraphsResolveRef.current = null;
+          resolve([]);
+        }
+      }, 5000);
+    });
+  }, []);
+
+  const injectChapterTranslations = useCallback(
+    (results: Array<{ paragraphId: string; originalText: string; translatedText: string }>) => {
+      const payload = JSON.stringify(results);
+      webViewRef.current?.injectJavaScript(`
+        (function() {
+          try {
+            if (window.doInjectChapterTranslations) {
+              window.doInjectChapterTranslations(${payload});
+            }
+          } catch(e) { console.error('[WebView] injectChapterTranslations error:', e); }
+        })();
+        true;
+      `);
+    },
+    [],
+  );
+
+  const removeChapterTranslations = useCallback(() => {
+    webViewRef.current?.injectJavaScript(`
+      (function() {
+        try {
+          if (window.doRemoveChapterTranslations) {
+            window.doRemoveChapterTranslations();
+          }
+        } catch(e) { console.error('[WebView] removeChapterTranslations error:', e); }
+      })();
+      true;
+    `);
+  }, []);
+
   // ─── Handle messages from WebView ───
 
   const handleMessage = useCallback((event: { nativeEvent: { data: string } }) => {
@@ -294,6 +360,9 @@ export function useReaderBridge(callbacks: ReaderBridgeCallbacks) {
         case "bookmarkSnippet":
           cb.onBookmarkSnippet?.(msg.textSnippet || "");
           break;
+        case "toggleBookmark":
+          cb.onToggleBookmark?.();
+          break;
         case "visibleText":
           console.log(
             "[ReaderBridge] received visibleText:",
@@ -306,6 +375,21 @@ export function useReaderBridge(callbacks: ReaderBridgeCallbacks) {
           if (pendingVisibleTextResolveRef.current) {
             pendingVisibleTextResolveRef.current(msg.text || "");
             pendingVisibleTextResolveRef.current = null;
+          }
+          break;
+        case "chapterParagraphs":
+          console.log("[ChapterTranslation] Received chapterParagraphs:", JSON.stringify({
+            count: msg.paragraphs?.length || 0,
+            error: msg.error || "none",
+          }));
+          if (pendingChapterParagraphsResolveRef.current) {
+            if (msg.error) {
+              console.warn("[ChapterTranslation] WebView error:", msg.error);
+            }
+            pendingChapterParagraphsResolveRef.current(msg.paragraphs || []);
+            pendingChapterParagraphsResolveRef.current = null;
+          } else {
+            console.warn("[ChapterTranslation] No pending resolve for chapterParagraphs (timed out?)");
           }
           break;
         default:
@@ -339,6 +423,9 @@ export function useReaderBridge(callbacks: ReaderBridgeCallbacks) {
       requestPageSnippet,
       getVisibleText,
       flashHighlight,
+      getChapterParagraphs,
+      injectChapterTranslations,
+      removeChapterTranslations,
     }),
     [
       handleMessage,
@@ -359,6 +446,9 @@ export function useReaderBridge(callbacks: ReaderBridgeCallbacks) {
       setNavigationLocked,
       requestPageSnippet,
       getVisibleText,
+      getChapterParagraphs,
+      injectChapterTranslations,
+      removeChapterTranslations,
     ],
   );
 }

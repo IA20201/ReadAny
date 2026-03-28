@@ -112,7 +112,6 @@
     let searchGenerator = null;
     let searchResults = [];
     let searchIndex = 0;
-    const loadedDocuments = new Set();
 
     // Store user annotations for re-rendering on page change
     const userAnnotations = new Map();
@@ -285,6 +284,15 @@
         case 'extractChapters':
           await handleExtractChapters();
           break;
+        case 'getChapterParagraphs':
+          handleGetChapterParagraphs();
+          break;
+        case 'injectChapterTranslations':
+          handleInjectChapterTranslations(msg.results || []);
+          break;
+        case 'removeChapterTranslations':
+          handleRemoveChapterTranslations();
+          break;
       }
     }
 
@@ -292,9 +300,6 @@
     async function openBook(msg) {
       const container = document.getElementById('reader-container');
       const loading = document.getElementById('loading');
-      
-      // Clear loaded documents set when opening a new book
-      loadedDocuments.clear();
 
       try {
         let file;
@@ -324,7 +329,6 @@
         el.addEventListener('load', (e) => {
           const { doc, index } = e.detail;
           loading.classList.add('hidden');
-          loadedDocuments.add(doc);
           applyDocStyles(doc);
           attachTapListener(doc);
           attachSelectionListener(doc);
@@ -557,32 +561,6 @@
       }
     }
 
-    function updateAllDocumentsTheme() {
-      const bgColor = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim() || '#1c1c1e';
-      const textColor = getComputedStyle(document.documentElement).getPropertyValue('--fg').trim() || '#e8e8ed';
-      const mutedColor = getComputedStyle(document.documentElement).getPropertyValue('--muted').trim() || '#7c7c82';
-      
-      loadedDocuments.forEach(doc => {
-        // Update existing style if it exists, or create new one
-        let style = doc.querySelector('style[data-theme-colors]');
-        if (!style) {
-          style = doc.createElement('style');
-          style.setAttribute('data-theme-colors', 'true');
-          doc.head.appendChild(style);
-        }
-        style.textContent = `
-          * { -webkit-touch-callout: none !important; -webkit-user-select: text !important; user-select: text !important; }
-          ::selection { background: rgba(250, 204, 21, 0.4) !important; }
-          html, body {
-            background-color: ${bgColor} !important;
-            color: ${textColor} !important;
-          }
-          a { color: var(--primary, #3b82f6) !important; }
-          .text-muted, [class*="muted"], [class*="secondary"] { color: ${mutedColor} !important; }
-        `;
-      });
-    }
-
     function setThemeColors(colors) {
       document.documentElement.style.setProperty('--bg', colors.background || '#1c1c1e');
       document.documentElement.style.setProperty('--fg', colors.foreground || '#e8e8ed');
@@ -594,8 +572,6 @@
       if (view && view.setSearchIndicator) {
         view.setSearchIndicator('outline', { color: colors.primary || '#3b82f6' });
       }
-      // Update all loaded documents with new theme colors
-      updateAllDocumentsTheme();
     }
 
     // ─── Document styles ───
@@ -604,23 +580,10 @@
         img.style.maxWidth = '100%';
         img.style.height = 'auto';
       }
-      
-      // Get theme colors from parent document
-      const parentDoc = window.top?.document || document;
       const style = doc.createElement('style');
-      const bgColor = getComputedStyle(parentDoc.documentElement).getPropertyValue('--bg').trim() || '#1c1c1e';
-      const textColor = getComputedStyle(parentDoc.documentElement).getPropertyValue('--fg').trim() || '#e8e8ed';
-      const mutedColor = getComputedStyle(parentDoc.documentElement).getPropertyValue('--muted').trim() || '#7c7c82';
-      
       style.textContent = `
         * { -webkit-touch-callout: none !important; -webkit-user-select: text !important; user-select: text !important; }
         ::selection { background: rgba(250, 204, 21, 0.4) !important; }
-        html, body {
-          background-color: ${bgColor} !important;
-          color: ${textColor} !important;
-        }
-        a { color: var(--primary, #3b82f6) !important; }
-        .text-muted, [class*="muted"], [class*="secondary"] { color: ${mutedColor} !important; }
       `;
       doc.head.appendChild(style);
       doc.addEventListener('contextmenu', (e) => { e.preventDefault(); e.stopPropagation(); return false; }, true);
@@ -779,8 +742,10 @@
         var walker = doc.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT, {
           acceptNode: function(node) {
             if (!node.nodeValue || !node.nodeValue.trim()) return NodeFilter.FILTER_SKIP;
-            var tag = node.parentElement && node.parentElement.tagName && node.parentElement.tagName.toLowerCase();
+            var parent = node.parentElement;
+            var tag = parent && parent.tagName && parent.tagName.toLowerCase();
             if (tag === 'script' || tag === 'style') return NodeFilter.FILTER_REJECT;
+            if (parent && parent.closest && parent.closest('.readany-translation')) return NodeFilter.FILTER_REJECT;
             return NodeFilter.FILTER_ACCEPT;
           }
         });
@@ -845,8 +810,10 @@
         var walker = doc.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT, {
           acceptNode: function(node) {
             if (!node.nodeValue || !node.nodeValue.trim()) return NodeFilter.FILTER_SKIP;
-            var tag = node.parentElement && node.parentElement.tagName && node.parentElement.tagName.toLowerCase();
+            var parent = node.parentElement;
+            var tag = parent && parent.tagName && parent.tagName.toLowerCase();
             if (tag === 'script' || tag === 'style') return NodeFilter.FILTER_REJECT;
+            if (parent && parent.closest && parent.closest('.readany-translation')) return NodeFilter.FILTER_REJECT;
             return NodeFilter.FILTER_ACCEPT;
           }
         });
@@ -989,6 +956,15 @@
     window.getVisibleText = function () {
       var result = doGetVisibleText();
       return JSON.stringify(result);
+    };
+    window.doGetChapterParagraphs = function () {
+      handleGetChapterParagraphs();
+    };
+    window.doInjectChapterTranslations = function (results) {
+      handleInjectChapterTranslations(results);
+    };
+    window.doRemoveChapterTranslations = function () {
+      handleRemoveChapterTranslations();
     };
 
     // ─── Polyfills ───
@@ -1142,6 +1118,154 @@
         }
       }
       return segments;
+    }
+
+    // ─── Chapter Translation Handlers ───
+
+    function handleGetChapterParagraphs() {
+      try {
+        // First try: view.renderer.getContents()
+        var doc = null;
+        var renderer = view && view.renderer;
+        if (renderer && renderer.getContents) {
+          var contents = renderer.getContents();
+          if (contents && contents.length && contents[0] && contents[0].doc) {
+            doc = contents[0].doc;
+          }
+        }
+
+        // Fallback: scan iframes
+        if (!doc) {
+          var iframes = document.querySelectorAll('iframe');
+          for (var fi = 0; fi < iframes.length; fi++) {
+            try {
+              var iframeDoc = iframes[fi].contentDocument || (iframes[fi].contentWindow && iframes[fi].contentWindow.document);
+              if (iframeDoc && iframeDoc.body && iframeDoc.body.innerText && iframeDoc.body.innerText.trim().length > 0) {
+                doc = iframeDoc;
+                break;
+              }
+            } catch (e) { /* cross-origin, skip */ }
+          }
+        }
+
+        if (!doc) {
+          postToRN('chapterParagraphs', { paragraphs: [], error: 'no document found (view=' + !!view + ', renderer=' + !!renderer + ', iframes=' + document.querySelectorAll('iframe').length + ')' });
+          return;
+        }
+
+        var blockSelector = "p, h1, h2, h3, h4, h5, h6, li, blockquote, dd, dt, figcaption, pre, td, th";
+        var blocks = doc.querySelectorAll(blockSelector);
+        var paragraphs = [];
+        for (var i = 0; i < blocks.length; i++) {
+          var el = blocks[i];
+          var text = (el.innerText || el.textContent || '').trim();
+          if (text.length < 2) continue;
+          var id = 'para_' + i;
+          el.setAttribute('data-translate-id', id);
+          paragraphs.push({ id: id, text: text, tagName: el.tagName.toLowerCase() });
+        }
+
+        postToRN('chapterParagraphs', { paragraphs: paragraphs });
+      } catch (err) {
+        postToRN('chapterParagraphs', { paragraphs: [], error: String(err) });
+      }
+    }
+
+    function handleInjectChapterTranslations(results) {
+      try {
+        var doc = null;
+        var renderer = view && view.renderer;
+        if (renderer && renderer.getContents) {
+          var contents = renderer.getContents();
+          if (contents && contents.length && contents[0] && contents[0].doc) {
+            doc = contents[0].doc;
+          }
+        }
+        if (!doc) {
+          var iframes = document.querySelectorAll('iframe');
+          for (var fi = 0; fi < iframes.length; fi++) {
+            try {
+              var iframeDoc = iframes[fi].contentDocument || (iframes[fi].contentWindow && iframes[fi].contentWindow.document);
+              if (iframeDoc && iframeDoc.body) { doc = iframeDoc; break; }
+            } catch (e) {}
+          }
+        }
+        if (!doc) return;
+
+        // Inject CSS once
+        if (!doc.getElementById('readany-chapter-translation-style')) {
+          var style = doc.createElement('style');
+          style.id = 'readany-chapter-translation-style';
+          style.textContent = [
+            '.readany-translation {',
+            '  color: #6b7280;',
+            '  font-size: 0.9em;',
+            '  line-height: 1.5;',
+            '  margin-top: 4px;',
+            '  margin-bottom: 8px;',
+            '  padding-left: 8px;',
+            '  border-left: 2px solid #d1d5db;',
+            '  opacity: 0.85;',
+            '}',
+            '.readany-translation[data-hidden="true"] { display: none; }',
+            '.readany-translation[data-solo="true"] { color: inherit; font-size: inherit; line-height: inherit; margin-top: 0; margin-bottom: 0.8em; padding-left: 0; border-left: none; opacity: 1; }',
+            '[data-translate-id][data-original-hidden="true"] { display: none; }',
+            '@media (prefers-color-scheme: dark) {',
+            '  .readany-translation { color: #9ca3af; border-left-color: #4b5563; }',
+            '}'
+          ].join('\n');
+          doc.head.appendChild(style);
+        }
+
+        for (var i = 0; i < results.length; i++) {
+          var r = results[i];
+          if (!r.translatedText) continue;
+          var el = doc.querySelector('[data-translate-id="' + r.paragraphId + '"]');
+          if (!el) continue;
+          // Skip if already injected
+          if (el.nextElementSibling && el.nextElementSibling.classList.contains('readany-translation')) continue;
+
+          var div = doc.createElement('div');
+          div.className = 'readany-translation';
+          div.setAttribute('data-para-id', r.paragraphId);
+          div.textContent = r.translatedText;
+          el.parentNode.insertBefore(div, el.nextSibling);
+        }
+      } catch (err) {
+        console.error('[WebView] Error injecting translations:', err);
+      }
+    }
+
+    function handleRemoveChapterTranslations() {
+      try {
+        var doc = null;
+        var renderer = view && view.renderer;
+        if (renderer && renderer.getContents) {
+          var contents = renderer.getContents();
+          if (contents && contents.length && contents[0] && contents[0].doc) {
+            doc = contents[0].doc;
+          }
+        }
+        if (!doc) {
+          var iframes = document.querySelectorAll('iframe');
+          for (var fi = 0; fi < iframes.length; fi++) {
+            try {
+              var iframeDoc = iframes[fi].contentDocument || (iframes[fi].contentWindow && iframes[fi].contentWindow.document);
+              if (iframeDoc && iframeDoc.body) { doc = iframeDoc; break; }
+            } catch (e) {}
+          }
+        }
+        if (!doc) return;
+
+        var elements = doc.querySelectorAll('.readany-translation');
+        for (var i = 0; i < elements.length; i++) {
+          elements[i].remove();
+        }
+        var style = doc.getElementById('readany-chapter-translation-style');
+        if (style) style.remove();
+      } catch (err) {
+        console.error('[WebView] Error removing translations:', err);
+      }
     }
 
     function getTextNodes(element) {
