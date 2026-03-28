@@ -224,7 +224,7 @@ export function SelectionPopover({
       >
         <KeyboardAvoidingView
           style={s.modalOverlay}
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
         >
           <TouchableOpacity
             style={StyleSheet.absoluteFill}
