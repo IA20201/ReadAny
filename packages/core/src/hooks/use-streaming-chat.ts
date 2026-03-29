@@ -578,7 +578,10 @@ export function useStreamingChat(options?: StreamingChatOptions) {
 
   const stopStream = useCallback(() => {
     streamingRef.current?.abort();
-  }, []);
+    // Immediately update UI state
+    setState((prev) => ({ ...prev, isStreaming: false }));
+    setStreaming(false);
+  }, [setStreaming]);
 
   return {
     ...state,

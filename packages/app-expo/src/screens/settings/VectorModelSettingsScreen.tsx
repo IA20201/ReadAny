@@ -95,6 +95,7 @@ function RemoteModelsSection() {
     updateVectorModel,
     deleteVectorModel,
     setSelectedVectorModelId,
+    setVectorModelMode,
   } = useVectorModelStore();
 
   const [showAddForm, setShowAddForm] = useState(false);
@@ -199,7 +200,14 @@ function RemoteModelsSection() {
             </View>
             <Switch
               value={selectedVectorModelId === model.id}
-              onValueChange={(v) => setSelectedVectorModelId(v ? model.id : null)}
+              onValueChange={(v) => {
+                if (v) {
+                  setSelectedVectorModelId(model.id);
+                  setVectorModelMode("remote");
+                } else {
+                  setSelectedVectorModelId(null);
+                }
+              }}
               trackColor={{ false: colors.muted, true: colors.primary }}
               thumbColor={colors.card}
             />

@@ -38,8 +38,8 @@ export const useVectorModelStore = create<VectorModelState>()(
     vectorModels: [],
     selectedVectorModelId: null,
     vectorModelEnabled: true,
-    vectorModelMode: "builtin",
-    selectedBuiltinModelId: "all-MiniLM-L6-v2",
+    vectorModelMode: "remote",
+    selectedBuiltinModelId: null,
     builtinModelStates: {},
 
     setVectorModelEnabled: (vectorModelEnabled) => set({ vectorModelEnabled }),

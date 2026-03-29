@@ -51,10 +51,11 @@ export interface StreamingOptions {
 }
 
 export class StreamingChat {
-  private aborted = false;
+  private abortController: AbortController | null = null;
 
   async stream(options: StreamingOptions): Promise<void> {
-    this.aborted = false;
+    this.abortController = new AbortController();
+    const signal = this.abortController.signal;
 
     const { messages } = processMessages(
       options.thread,
@@ -90,13 +91,36 @@ export class StreamingChat {
           deepThinking: options.deepThinking,
           spoilerFree: options.spoilerFree,
           getAvailableTools: options.getAvailableTools,
+          signal,
         },
         userInput,
         history,
       );
 
-      for await (const event of stream) {
-        if (this.aborted) {
+      // Helper to race iterator next() against abort signal
+      const raceNext = async (
+        iterator: AsyncIterator<unknown>,
+      ): Promise<IteratorResult<unknown>> => {
+        if (signal.aborted) {
+          return { done: true, value: undefined };
+        }
+        const abortPromise = new Promise<IteratorResult<unknown>>((resolve) => {
+          const onAbort = () => {
+            signal.removeEventListener("abort", onAbort);
+            resolve({ done: true, value: undefined });
+          };
+          signal.addEventListener("abort", onAbort);
+        });
+        return Promise.race([iterator.next(), abortPromise]);
+      };
+
+      const iterator = stream[Symbol.asyncIterator]();
+      let eventResult = await raceNext(iterator);
+
+      while (!eventResult.done) {
+        const event = eventResult.value as any;
+
+        if (signal.aborted) {
           options.onAbort?.(fullText, toolCalls.length > 0 ? toolCalls : undefined);
           return;
         }
@@ -114,7 +138,6 @@ export class StreamingChat {
 
           case "tool_result":
             options.onToolResult?.(event.name, event.result);
-            // Find the last tool call with matching name that doesn't have a result yet
             const existingTc = [...toolCalls]
               .reverse()
               .find((tc) => tc.name === event.name && !tc.result);
@@ -131,15 +154,22 @@ export class StreamingChat {
 
           case "error":
             options.onError(new Error(event.error));
-            return; // Stop processing further events after error
+            return;
         }
+
+        eventResult = await raceNext(iterator);
       }
 
-      if (!this.aborted) {
+      // If loop exited due to abort, call onAbort
+      if (signal.aborted) {
+        options.onAbort?.(fullText, toolCalls.length > 0 ? toolCalls : undefined);
+      } else {
         options.onComplete(fullText, toolCalls.length > 0 ? toolCalls : undefined);
       }
     } catch (error) {
-      if (this.aborted) return;
+      if (signal.aborted) {
+        return;
+      }
       console.error("[StreamingChat] Error:", error);
       if (error instanceof Error) {
         console.error("[StreamingChat] Stack:", error.stack);
@@ -149,7 +179,7 @@ export class StreamingChat {
   }
 
   abort(): void {
-    this.aborted = true;
+    this.abortController?.abort();
   }
 }
 
