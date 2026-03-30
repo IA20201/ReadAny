@@ -22,7 +22,8 @@ export default defineConfig(async () => ({
   },
   optimizeDeps: {
     // Exclude foliate-js pdf.js from pre-bundling so that @pdfjs alias works
-    exclude: ["foliate-js/pdf.js"],
+    // Exclude react-native - it has Flow syntax that esbuild doesn't understand
+    exclude: ["foliate-js/pdf.js", "react-native"],
   },
   clearScreen: false,
   server: {
