@@ -4,7 +4,7 @@ import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { getPlatformService } from "@readany/core/services";
 import { useSyncStore } from "@readany/core/stores/sync-store";
-import type { WebDavConfig } from "@readany/core/sync/sync-backend";
+import { SYNC_SECRET_KEYS, type WebDavConfig } from "@readany/core/sync/sync-backend";
 import { AlertCircle, CheckCircle2, Eye, EyeOff } from "lucide-react-native";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -55,7 +55,7 @@ export function SyncPage() {
 
     const loadPassword = async () => {
       const platform = getPlatformService();
-      const savedPassword = await platform.kvGetItem("sync_password");
+      const savedPassword = await platform.kvGetItem(SYNC_SECRET_KEYS.webdav);
       if (savedPassword) setPassword(savedPassword);
     };
     loadPassword();

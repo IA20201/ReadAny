@@ -40,6 +40,17 @@ export async function closeDB(): Promise<void> {
   }
 }
 
+/** Ensure no active transaction (rollback if any) */
+export async function ensureNoTransaction(): Promise<void> {
+  if (db) {
+    try {
+      await db.execute("ROLLBACK", []);
+    } catch {
+      // No active transaction, ignore
+    }
+  }
+}
+
 /** Reset the DB cache without closing (for use after external file replacement) */
 export function resetDBCache(): void {
   db = null;
@@ -170,6 +181,23 @@ export async function initDatabase(): Promise<void> {
       chapter_title TEXT,
       created_at INTEGER NOT NULL,
       FOREIGN KEY (book_id) REFERENCES books(id) ON DELETE CASCADE
+    )
+  `);
+
+  await database.execute(`
+    CREATE TABLE IF NOT EXISTS tags (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL UNIQUE
+    )
+  `);
+
+  await database.execute(`
+    CREATE TABLE IF NOT EXISTS book_tags (
+      book_id TEXT NOT NULL,
+      tag_id TEXT NOT NULL,
+      PRIMARY KEY (book_id, tag_id),
+      FOREIGN KEY (book_id) REFERENCES books(id) ON DELETE CASCADE,
+      FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE
     )
   `);
 
@@ -342,6 +370,40 @@ export async function initDatabase(): Promise<void> {
     }
   }
 
+  // Migration 8: Add updated_at to tables that need it for incremental sync
+  const tablesNeedingUpdatedAt = ["bookmarks", "reading_sessions"];
+  for (const table of tablesNeedingUpdatedAt) {
+    try {
+      await database.execute(
+        `ALTER TABLE ${table} ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0`,
+      );
+    } catch {
+      // Column already exists
+    }
+  }
+  // Initialize updated_at from created_at or started_at
+  try {
+    await database.execute("UPDATE bookmarks SET updated_at = created_at WHERE updated_at = 0");
+  } catch {
+    // Already updated or column doesn't exist
+  }
+  try {
+    await database.execute(
+      "UPDATE reading_sessions SET updated_at = started_at WHERE updated_at = 0",
+    );
+  } catch {
+    // Already updated or column doesn't exist
+  }
+
+  // Migration 9: Add sync_status to books for on-demand download
+  try {
+    await database.execute(
+      "ALTER TABLE books ADD COLUMN sync_status TEXT NOT NULL DEFAULT 'local'",
+    );
+  } catch {
+    // Column already exists
+  }
+
   dbInitialized = true;
 }
 
@@ -401,6 +463,7 @@ interface BookRow {
   vectorize_progress: number;
   tags: string;
   file_hash: string | null;
+  sync_status: string;
 }
 
 function rowToBook(row: BookRow): Book {
@@ -430,6 +493,7 @@ function rowToBook(row: BookRow): Book {
     vectorizeProgress: row.vectorize_progress,
     tags: parseJSON(row.tags, []),
     fileHash: row.file_hash || undefined,
+    syncStatus: (row.sync_status as Book["syncStatus"]) || "local",
   };
 }
 
@@ -453,8 +517,8 @@ export async function insertBook(book: Book): Promise<void> {
   const syncVersion = await nextSyncVersion(database, "books");
   const now = Date.now();
   await database.execute(
-    `INSERT INTO books (id, file_path, format, title, author, publisher, language, isbn, description, cover_url, publish_date, subjects, total_pages, total_chapters, added_at, last_opened_at, updated_at, progress, current_cfi, is_vectorized, vectorize_progress, tags, file_hash, sync_version, last_modified_by)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO books (id, file_path, format, title, author, publisher, language, isbn, description, cover_url, publish_date, subjects, total_pages, total_chapters, added_at, last_opened_at, updated_at, progress, current_cfi, is_vectorized, vectorize_progress, tags, file_hash, sync_status, sync_version, last_modified_by)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       book.id,
       book.filePath,
@@ -479,6 +543,7 @@ export async function insertBook(book: Book): Promise<void> {
       book.vectorizeProgress,
       JSON.stringify(book.tags),
       book.fileHash || null,
+      book.syncStatus || "local",
       syncVersion,
       deviceId,
     ],
@@ -553,6 +618,10 @@ export async function updateBook(id: string, updates: Partial<Book>): Promise<vo
   if (updates.fileHash !== undefined) {
     sets.push("file_hash = ?");
     values.push(updates.fileHash);
+  }
+  if (updates.syncStatus !== undefined) {
+    sets.push("sync_status = ?");
+    values.push(updates.syncStatus);
   }
 
   if (sets.length === 0) return;

@@ -1,13 +1,6 @@
 import type { BaseChatModel } from "@langchain/core/language_models/chat_models";
-/**
- * LLM Provider Factory — creates LangChain ChatModel instances from AIConfig
- *
- * Supports:
- * - OpenAI-compatible endpoints (OpenAI, Ollama, vLLM, DeepSeek, etc.)
- * - Anthropic Claude (native API with extended thinking support)
- * - Google Gemini (native API)
- */
 import type { AIConfig, AIEndpoint } from "../types";
+import { formatApiHost } from "../utils/api";
 
 /**
  * Optional custom fetch for streaming support (e.g. expo/fetch in React Native).
@@ -187,7 +180,7 @@ export async function createChatModelFromEndpoint(
         model,
         apiKey: endpoint.apiKey,
         configuration: {
-          ...(endpoint.baseUrl ? { baseURL: endpoint.baseUrl } : {}),
+          ...(endpoint.baseUrl ? { baseURL: formatApiHost(endpoint.baseUrl) } : {}),
           ...(_streamingFetch ? { fetch: _streamingFetch } : {}),
         },
         temperature,
@@ -197,11 +190,10 @@ export async function createChatModelFromEndpoint(
     }
 
     default: {
-      // Auto-detect DeepSeek from baseUrl or model name
       const isDeepSeek =
         endpoint.baseUrl?.includes("deepseek") ||
-        model.toLowerCase().includes("deepseek") ||
-        model.toLowerCase().includes("reasoner");
+        model?.toLowerCase().includes("deepseek") ||
+        model?.toLowerCase().includes("reasoner");
 
       if (isDeepSeek) {
         const { ChatDeepSeek } = await import("@langchain/deepseek");
@@ -263,7 +255,7 @@ export async function createChatModelFromEndpoint(
           model,
           apiKey: endpoint.apiKey,
           configuration: {
-            ...(endpoint.baseUrl ? { baseURL: endpoint.baseUrl } : {}),
+            ...(endpoint.baseUrl ? { baseURL: formatApiHost(endpoint.baseUrl) } : {}),
             ...(_streamingFetch ? { fetch: _streamingFetch } : {}),
           },
           temperature,
@@ -278,7 +270,7 @@ export async function createChatModelFromEndpoint(
         model,
         apiKey: endpoint.apiKey,
         configuration: {
-          baseURL: endpoint.baseUrl || undefined,
+          baseURL: endpoint.baseUrl ? formatApiHost(endpoint.baseUrl) : undefined,
           ...(_streamingFetch ? { fetch: _streamingFetch } : {}),
         },
         temperature,

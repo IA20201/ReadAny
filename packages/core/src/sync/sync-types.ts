@@ -1,23 +1,6 @@
 /**
- * Cloud sync types — whole-database overwrite sync via WebDAV
+ * Cloud sync types — shared types for database sync via WebDAV/S3/LAN.
  */
-
-/** WebDAV configuration (password stored separately in secure KV under key "sync_password") */
-export interface SyncConfig {
-  url: string;
-  username: string;
-  autoSync: boolean;
-  syncIntervalMins: number;
-  wifiOnly: boolean;
-  notifyOnComplete: boolean;
-}
-
-export const DEFAULT_SYNC_CONFIG: Partial<SyncConfig> = {
-  autoSync: false,
-  syncIntervalMins: 30,
-  wifiOnly: false,
-  notifyOnComplete: true,
-};
 
 /** Sync direction determined by comparing local vs remote DB state */
 export type SyncDirection = "upload" | "download" | "conflict" | "none";
@@ -77,6 +60,7 @@ export const REMOTE_ROOT = "/readany";
 export const REMOTE_DATA = "/readany/data";
 export const REMOTE_DB_FILE = "/readany/data/readany.db";
 export const REMOTE_MANIFEST = "/readany/data/manifest.json";
+export const REMOTE_DELTA_FILE = "/readany/data/delta_latest.json";
 export const REMOTE_FILES = "/readany/data/file";
 export const REMOTE_COVERS = "/readany/data/cover";
 

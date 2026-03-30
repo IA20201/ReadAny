@@ -3,12 +3,13 @@
  * Supports WebDAV, S3, and LAN sync through ISyncBackend interface.
  */
 
-import { getDB } from "../db/database";
+import { ensureNoTransaction, getDB } from "../db/database";
 import { getSyncAdapter } from "./sync-adapter";
 import type { ISyncBackend } from "./sync-backend";
 import {
   REMOTE_COVERS,
   REMOTE_DB_FILE,
+  REMOTE_DELTA_FILE,
   REMOTE_FILES,
   REMOTE_MANIFEST,
   type RemoteSyncManifest,
@@ -29,9 +30,12 @@ async function getSyncMeta(key: string): Promise<string | null> {
 
 /** Set multiple sync metadata values in a single transaction */
 async function batchSetSyncMeta(entries: [string, string][]): Promise<void> {
+  await ensureNoTransaction();
   const db = await getDB();
-  await db.execute("BEGIN TRANSACTION", []);
+  let inTransaction = false;
   try {
+    await db.execute("BEGIN TRANSACTION", []);
+    inTransaction = true;
     for (const [key, value] of entries) {
       await db.execute("INSERT OR REPLACE INTO sync_metadata (key, value) VALUES (?, ?)", [
         key,
@@ -39,8 +43,15 @@ async function batchSetSyncMeta(entries: [string, string][]): Promise<void> {
       ]);
     }
     await db.execute("COMMIT", []);
+    inTransaction = false;
   } catch (e) {
-    await db.execute("ROLLBACK", []);
+    if (inTransaction) {
+      try {
+        await db.execute("ROLLBACK", []);
+      } catch {
+        // Ignore rollback errors
+      }
+    }
     throw e;
   }
 }
@@ -80,6 +91,7 @@ export async function determineSyncDirection(backend: ISyncBackend): Promise<{
   // Get local state
   const storedRemoteModifiedAt = await getSyncMeta(SYNC_META_KEYS.LAST_REMOTE_MODIFIED_AT);
   const storedDbHash = await getSyncMeta(SYNC_META_KEYS.LAST_SYNC_DB_HASH);
+  const storedLastSyncAt = await getSyncMeta(SYNC_META_KEYS.LAST_SYNC_AT);
 
   // No local sync history → first sync on this device, download
   if (!storedDbHash) {
@@ -89,18 +101,23 @@ export async function determineSyncDirection(backend: ISyncBackend): Promise<{
   // Check if remote changed
   const remoteChanged = storedRemoteModifiedAt !== String(remoteManifest.lastModifiedAt);
 
+  // For incremental sync, also check lastSyncAt if available
+  const remoteLastSyncAt = (remoteManifest as { lastSyncAt?: number }).lastSyncAt;
+  const remoteSyncChanged =
+    remoteLastSyncAt && storedLastSyncAt && String(remoteLastSyncAt) !== storedLastSyncAt;
+
   // Check if local DB changed (compare current hash with stored hash)
   const dbPath = await adapter.getDatabasePath();
   const currentDbHash = await adapter.hashFile(dbPath);
   const localChanged = currentDbHash !== storedDbHash;
 
-  if (!remoteChanged && !localChanged) {
+  if (!remoteChanged && !remoteSyncChanged && !localChanged) {
     return { direction: "none", remoteManifest };
   }
-  if (localChanged && !remoteChanged) {
+  if (localChanged && !remoteChanged && !remoteSyncChanged) {
     return { direction: "upload", remoteManifest };
   }
-  if (remoteChanged && !localChanged) {
+  if ((remoteChanged || remoteSyncChanged) && !localChanged) {
     return { direction: "download", remoteManifest };
   }
   // Both changed
@@ -147,25 +164,62 @@ async function executeUpload(
     await backend.put(REMOTE_DB_FILE, data);
     console.log(`[Sync] ✓ Database uploaded in ${Date.now() - uploadStart}ms`);
 
-    // 4. Upload manifest
-    const manifest: RemoteSyncManifest = {
-      lastModifiedAt: Date.now(),
-      uploadedBy: await adapter.getDeviceName(),
-      appVersion: await adapter.getAppVersion(),
-      schemaVersion: SYNC_SCHEMA_VERSION,
-    };
-    await backend.putJSON(REMOTE_MANIFEST, manifest);
+    // 4. Also upload delta file for incremental sync support
+    // This ensures other devices can use incremental sync after first full download
+    try {
+      const { collectLocalChanges, getDeviceId } = await import("./incremental-sync");
+      const deviceId = await getDeviceId();
+      const delta = await collectLocalChanges(0); // Get all records
+      if (delta) {
+        await backend.putJSON(REMOTE_DELTA_FILE, delta);
+        console.log("[Sync] ✓ Delta file uploaded for incremental sync support");
+      }
 
-    // 5. Update local sync metadata (batch write in single transaction)
-    const dbPath = await adapter.getDatabasePath();
-    const dbHash = await adapter.hashFile(dbPath);
-    await batchSetSyncMeta([
-      [SYNC_META_KEYS.LAST_SYNC_DB_HASH, dbHash],
-      [SYNC_META_KEYS.LAST_REMOTE_MODIFIED_AT, String(manifest.lastModifiedAt)],
-      [SYNC_META_KEYS.LAST_SYNC_AT, String(Date.now())],
-    ]);
+      // 5. Upload manifest with lastSyncAt for incremental sync compatibility
+      const now = Date.now();
+      const manifest = {
+        lastModifiedAt: now,
+        lastSyncAt: now, // Important for incremental sync direction detection
+        deviceId,
+        uploadedBy: await adapter.getDeviceName(),
+        appVersion: await adapter.getAppVersion(),
+        schemaVersion: SYNC_SCHEMA_VERSION,
+      };
+      await backend.putJSON(REMOTE_MANIFEST, manifest);
 
-    console.log(`[Sync] ✅ Database upload completed in ${Date.now() - startTime}ms`);
+      // Update local sync metadata
+      const dbPath = await adapter.getDatabasePath();
+      const dbHash = await adapter.hashFile(dbPath);
+      await batchSetSyncMeta([
+        [SYNC_META_KEYS.LAST_SYNC_DB_HASH, dbHash],
+        [SYNC_META_KEYS.LAST_REMOTE_MODIFIED_AT, String(now)],
+        [SYNC_META_KEYS.LAST_SYNC_AT, String(now)],
+      ]);
+
+      console.log(`[Sync] ✅ Database upload completed in ${Date.now() - startTime}ms`);
+    } catch (e) {
+      console.warn("[Sync] Failed to upload delta file:", e);
+      // Fallback to basic manifest
+      const now = Date.now();
+      const manifest: RemoteSyncManifest = {
+        lastModifiedAt: now,
+        uploadedBy: await adapter.getDeviceName(),
+        appVersion: await adapter.getAppVersion(),
+        schemaVersion: SYNC_SCHEMA_VERSION,
+      };
+      await backend.putJSON(REMOTE_MANIFEST, manifest);
+
+      // Update local sync metadata
+      const dbPath = await adapter.getDatabasePath();
+      const dbHash = await adapter.hashFile(dbPath);
+      await batchSetSyncMeta([
+        [SYNC_META_KEYS.LAST_SYNC_DB_HASH, dbHash],
+        [SYNC_META_KEYS.LAST_REMOTE_MODIFIED_AT, String(now)],
+        [SYNC_META_KEYS.LAST_SYNC_AT, String(now)],
+      ]);
+
+      console.log(`[Sync] ✅ Database upload completed in ${Date.now() - startTime}ms`);
+    }
   } finally {
     // Clean up snapshot
     try {
@@ -418,27 +472,23 @@ async function syncFiles(
       });
     }
 
-    // Download if not local but exists on remote
+    // Mark as remote if not local but exists on remote (on-demand download)
+    // This saves bandwidth for first-time sync with many books
+  }
+
+  // Mark books with remote files as "remote" status for on-demand download
+  for (const { book, remoteName } of bookFileInfos) {
+    const localPath = bookFileInfos.find((info) => info.book.id === book.id)?.localPath;
+    const localExists = localPath ? (localExistsMap.get(localPath) ?? false) : false;
+
     if (!localExists && remoteFileNames.has(remoteName)) {
-      downloadTasks.push(async () => {
-        const taskStart = Date.now();
-        try {
-          console.log(`[Sync] 📥 Downloading book: ${remoteName}`);
-          const data = await backend.get(`${REMOTE_FILES}/${remoteName}`);
-          const sizeMB = (data.length / 1024 / 1024).toFixed(2);
-          // Ensure directory exists
-          const dir = localPath.substring(0, localPath.lastIndexOf("/"));
-          if (dir) await adapter.ensureDir(dir);
-          await adapter.writeFileBytes(localPath, data);
-          console.log(
-            `[Sync] ✓ Downloaded ${remoteName} (${sizeMB} MB) in ${Date.now() - taskStart}ms`,
-          );
-          return true;
-        } catch (e) {
-          console.log(`[Sync] ✗ Failed to download ${remoteName}: ${e}`);
-          return false;
-        }
-      });
+      try {
+        const { updateBook } = await import("../db/database");
+        await updateBook(book.id, { syncStatus: "remote" });
+        console.log(`[Sync] Marked book ${book.id} as remote (on-demand download)`);
+      } catch (e) {
+        console.warn(`[Sync] Failed to mark book as remote: ${e}`);
+      }
     }
   }
 
@@ -561,9 +611,12 @@ export async function runSync(
   onProgress?: (progress: import("./sync-types").SyncProgress) => void,
   remoteManifest?: RemoteSyncManifest | null,
   onDatabaseReplaced?: () => Promise<void>,
+  useIncremental?: boolean,
 ): Promise<SyncResult> {
   const startTime = Date.now();
-  console.log(`[Sync] 🚀 Starting sync: direction=${direction}`);
+  console.log(
+    `[Sync] 🚀 Starting sync: direction=${direction}, incremental=${useIncremental ?? false}`,
+  );
 
   try {
     console.log("[Sync] Ensuring remote directory structure...");
@@ -574,6 +627,60 @@ export async function runSync(
     } catch (error) {
       console.warn("[Sync] ⚠️ Failed to create directories (they might already exist):", error);
       console.log("[Sync] Continuing with sync anyway...");
+    }
+
+    if (useIncremental) {
+      const { runIncrementalSync, getLastSyncTimestamp } = await import("./incremental-sync");
+      const lastSync = await getLastSyncTimestamp();
+
+      // For first sync (upload when no remote data exists), use full upload
+      // This ensures the complete database is uploaded for other devices to download
+      if (direction === "upload" && lastSync === 0) {
+        console.log("[Sync] First sync, using full upload");
+        await executeUpload(backend, onProgress);
+        const { filesUploaded, filesDownloaded } = await syncFiles(backend, onProgress);
+        return {
+          success: true,
+          direction,
+          filesUploaded,
+          filesDownloaded,
+          durationMs: Date.now() - startTime,
+        };
+      }
+
+      const result = await runIncrementalSync(backend, direction, (msg) => {
+        onProgress?.({
+          phase: "database",
+          operation: direction === "upload" ? "upload" : "download",
+          completedFiles: 0,
+          totalFiles: 1,
+          message: msg,
+        });
+      });
+
+      if (result.needsFullSync) {
+        console.log("[Sync] Incremental sync not possible, falling back to full sync");
+        if (direction === "upload") {
+          await executeUpload(backend, onProgress);
+        } else {
+          await executeDownload(backend, remoteManifest ?? null, onProgress);
+          if (onDatabaseReplaced) {
+            console.log("[Sync] Running post-download callback...");
+            await onDatabaseReplaced();
+          }
+        }
+      }
+
+      const { filesUploaded, filesDownloaded } = await syncFiles(backend, onProgress);
+
+      return {
+        success: result.success,
+        direction,
+        filesUploaded,
+        filesDownloaded,
+        durationMs: Date.now() - startTime,
+        error: result.error,
+      };
     }
 
     if (direction === "upload") {
@@ -604,5 +711,63 @@ export async function runSync(
       durationMs: Date.now() - startTime,
       error: e instanceof Error ? e.message : String(e),
     };
+  }
+}
+
+/**
+ * Download a single book file on-demand.
+ * Used when user opens a book marked as "remote".
+ */
+export async function downloadBookFile(
+  backend: ISyncBackend,
+  bookId: string,
+  filePath: string,
+  onProgress?: (progress: { downloaded: number; total: number }) => void,
+): Promise<boolean> {
+  const adapter = getSyncAdapter();
+
+  try {
+    // Determine remote name
+    const ext = filePath.split(".").pop() || "epub";
+    const remoteName = `${bookId}.${ext}`;
+
+    // Check if file exists on remote
+    const remotePath = `${REMOTE_FILES}/${remoteName}`;
+    const exists = await backend.exists(remotePath);
+    if (!exists) {
+      console.log(`[Sync] Book file not found on remote: ${remotePath}`);
+      return false;
+    }
+
+    // Download file
+    console.log(`[Sync] Downloading book file: ${remoteName}`);
+    onProgress?.({ downloaded: 0, total: 100 });
+
+    const data = await backend.get(remotePath);
+    const sizeMB = (data.length / 1024 / 1024).toFixed(2);
+    console.log(`[Sync] Downloaded ${remoteName} (${sizeMB} MB)`);
+
+    // Save to local
+    const appDataDir = await adapter.getAppDataDir();
+    const localPath =
+      filePath.startsWith("/") || filePath.startsWith("file://")
+        ? filePath
+        : adapter.joinPath(appDataDir, filePath);
+
+    const dir = localPath.substring(0, localPath.lastIndexOf("/"));
+    if (dir) await adapter.ensureDir(dir);
+    await adapter.writeFileBytes(localPath, data);
+
+    onProgress?.({ downloaded: 100, total: 100 });
+
+    // Update book sync status
+    const { updateBook } = await import("../db/database");
+    await updateBook(bookId, { syncStatus: "local" });
+
+    console.log(`[Sync] ✓ Book ${bookId} downloaded and marked as local`);
+    return true;
+  } catch (e) {
+    console.error(`[Sync] Failed to download book ${bookId}:`, e);
+    return false;
   }
 }

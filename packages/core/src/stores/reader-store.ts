@@ -17,6 +17,7 @@ export interface ReaderTab {
   progress: number;
   chapterIndex: number;
   chapterTitle: string;
+  chapterHref?: string; // Current chapter href for TOC matching
   isLoading: boolean;
   searchQuery: string;
   searchResults: string[];
@@ -35,7 +36,7 @@ export interface ReaderState {
   initTab: (tabId: string, bookId: string) => void;
   removeTab: (tabId: string) => void;
   setProgress: (tabId: string, progress: number, cfi: string) => void;
-  setChapter: (tabId: string, index: number, title: string) => void;
+  setChapter: (tabId: string, index: number, title: string, href?: string) => void;
   setSelectedText: (tabId: string, text: string, cfi: string | null) => void;
   setSearchQuery: (tabId: string, query: string) => void;
   setSearchResults: (tabId: string, results: string[]) => void;
@@ -90,12 +91,12 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
       },
     })),
 
-  setChapter: (tabId, index, title) =>
+  setChapter: (tabId, index, title, href) =>
     set((state) => ({
       tabs: {
         ...state.tabs,
         [tabId]: state.tabs[tabId]
-          ? { ...state.tabs[tabId], chapterIndex: index, chapterTitle: title }
+          ? { ...state.tabs[tabId], chapterIndex: index, chapterTitle: title, chapterHref: href }
           : state.tabs[tabId],
       },
     })),

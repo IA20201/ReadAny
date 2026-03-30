@@ -1,5 +1,4 @@
 import {
-  CheckIcon,
   ChevronLeftIcon,
   EditIcon,
   PlusIcon,
@@ -9,16 +8,14 @@ import {
 import { useVectorModelStore } from "@/stores/vector-model-store";
 import { type ThemeColors, fontSize, fontWeight, radius, useColors, withOpacity } from "@/styles/theme";
 import { useNavigation } from "@react-navigation/native";
-import { BUILTIN_EMBEDDING_MODELS } from "@readany/core/ai/builtin-embedding-models";
 import type { VectorModelConfig } from "@readany/core/types";
 /**
- * VectorModelSettingsScreen — matching Tauri mobile VectorModelSettingsPage exactly.
- * Enable/disable vector models, mode toggle (builtin/remote), model management.
+ * VectorModelSettingsScreen — Mobile version only supports remote embedding APIs.
+ * Local embedding is not supported to reduce APK size by ~100MB.
  */
 import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
-  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -39,19 +36,7 @@ export default function VectorModelSettingsScreen() {
   const { t } = useTranslation();
   const {
     vectorModelEnabled,
-    vectorModelMode,
     setVectorModelEnabled,
-    setVectorModelMode,
-    selectedBuiltinModelId,
-    builtinModelStates,
-    setSelectedBuiltinModelId,
-    updateBuiltinModelState,
-    vectorModels,
-    selectedVectorModelId,
-    addVectorModel,
-    updateVectorModel,
-    deleteVectorModel,
-    setSelectedVectorModelId,
   } = useVectorModelStore();
 
   return (
@@ -66,7 +51,7 @@ export default function VectorModelSettingsScreen() {
 
       <KeyboardAvoidingView
         style={s.keyboardView}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
       >
         <ScrollView
           style={s.scrollView}
@@ -90,173 +75,12 @@ export default function VectorModelSettingsScreen() {
             </View>
           </View>
 
-          {vectorModelEnabled && (
-            <>
-              {/* Mode toggle */}
-              <View style={s.section}>
-                <Text style={s.modeTitle}>{t("settings.vm_modeTitle", "模型来源")}</Text>
-                <View style={s.modeRow}>
-                  <TouchableOpacity
-                    style={[s.modeCard, vectorModelMode === "builtin" && s.modeCardActive]}
-                    onPress={() => setVectorModelMode("builtin")}
-                  >
-                    <Text style={s.modeCardTitle}>{t("settings.vm_modeBuiltin", "内置模型")}</Text>
-                    <Text style={s.modeCardDesc}>
-                      {t("settings.vm_modeBuiltinDesc", "设备端运行，无需联网")}
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[s.modeCard, vectorModelMode === "remote" && s.modeCardActive]}
-                    onPress={() => setVectorModelMode("remote")}
-                  >
-                    <Text style={s.modeCardTitle}>{t("settings.vm_modeRemote", "远程模型")}</Text>
-                    <Text style={s.modeCardDesc}>
-                      {t("settings.vm_modeRemoteDesc", "通过 API 调用")}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-
-              {vectorModelMode === "builtin" ? <BuiltinModelsSection /> : <RemoteModelsSection />}
-            </>
-          )}
+          {vectorModelEnabled && <RemoteModelsSection />}
 
           <View style={{ height: 24 }} />
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
-  );
-}
-
-import { clearModelCache, loadEmbeddingPipeline } from "@readany/core/ai/local-embedding-service";
-
-function BuiltinModelsSection() {
-  const colors = useColors();
-  const s = makeStyles(colors);
-  const { t } = useTranslation();
-  
-  const { builtinModelStates, selectedBuiltinModelId, setSelectedBuiltinModelId } = useVectorModelStore();
-  const [clearingModelId, setClearingModelId] = useState<string | null>(null);
-
-  const handleSelect = useCallback((modelId: string, checked: boolean) => {
-    if (checked) {
-      setSelectedBuiltinModelId(modelId);
-    }
-  }, [setSelectedBuiltinModelId]);
-
-  const handleClearModel = useCallback(async (modelId: string) => {
-    try {
-      setClearingModelId(modelId);
-      await clearModelCache(modelId);
-      useVectorModelStore.getState().updateBuiltinModelState(modelId, { status: "idle", progress: 0 });
-      if (useVectorModelStore.getState().selectedBuiltinModelId === modelId) {
-        useVectorModelStore.getState().setSelectedBuiltinModelId(null);
-      }
-    } catch (e) {
-      console.warn("Failed to clear cache:", e);
-    } finally {
-      setClearingModelId(null);
-    }
-  }, []);
-
-  const handleDownload = useCallback((modelId: string) => {
-    useVectorModelStore.getState().updateBuiltinModelState(modelId, { status: "downloading", progress: 0 });
-    loadEmbeddingPipeline(modelId, (progress) => {
-      useVectorModelStore.getState().updateBuiltinModelState(modelId, {
-        status: "downloading",
-        progress: Math.round(progress),
-      });
-    })
-      .then(() => {
-        useVectorModelStore.getState().updateBuiltinModelState(modelId, { status: "ready" });
-        useVectorModelStore.getState().setSelectedBuiltinModelId(modelId);
-      })
-      .catch((err) => {
-        console.warn("Model load error", err);
-        useVectorModelStore.getState().updateBuiltinModelState(modelId, { status: "error" });
-      });
-  }, []);
-
-  return (
-    <View style={s.section}>
-      <Text style={s.sectionTitle}>{t("settings.vm_builtinModels", "内置模型")}</Text>
-      <Text style={s.sectionDesc}>{t("settings.vm_builtinDesc", "在设备上原生运行的嵌入模型")}</Text>
-      
-      {BUILTIN_EMBEDDING_MODELS.map((model) => {
-        const state = builtinModelStates[model.id];
-        const isReady = state?.status === "ready";
-        const isDownloading = state?.status === "downloading";
-        const isSelected = selectedBuiltinModelId === model.id;
-        
-        return (
-          <View key={model.id} style={[s.modelCard, isSelected && { borderColor: withOpacity(colors.primary, 0.5), backgroundColor: withOpacity(colors.primary, 0.05) }]}>
-            <View style={s.modelCardTop}>
-              <View style={s.modelInfo}>
-                <View style={s.modelNameRow}>
-                  <Text style={s.modelName}>{model.name}</Text>
-                  <Text style={s.modelSize}>{model.size}</Text>
-                  <Text style={s.modelSize}>
-                    {t("settings.vm_dimension", { dim: model.dimension })}
-                  </Text>
-                </View>
-                <View style={s.modelBadges}>
-                  {model.recommended && (
-                    <View style={s.recommendBadge}>
-                      <Text style={s.recommendText}>{t("settings.vm_recommended", "推荐")}</Text>
-                    </View>
-                  )}
-                  {isReady && (
-                    <View style={s.readyBadge}>
-                      <CheckIcon size={12} color="#10b981" />
-                      <Text style={s.readyText}>{t("settings.vm_loaded", "已加载")}</Text>
-                    </View>
-                  )}
-                </View>
-              </View>
-
-              <View style={s.cardActions}>
-                {isDownloading ? (
-                  <View style={s.downloadingRow}>
-                    <ActivityIndicator size="small" color={colors.primary} />
-                    <Text style={[s.downloadingText, { color: colors.mutedForeground }]}>{state?.progress ?? 0}%</Text>
-                  </View>
-                ) : isReady ? (
-                  <View style={s.readyActions}>
-                    <TouchableOpacity
-                      disabled={clearingModelId === model.id}
-                      onPress={() => handleClearModel(model.id)}
-                      style={s.iconBtn}
-                    >
-                      {clearingModelId === model.id ? (
-                        <ActivityIndicator size="small" color={colors.mutedForeground} />
-                      ) : (
-                        <Trash2Icon size={16} color={colors.mutedForeground} />
-                      )}
-                    </TouchableOpacity>
-                    <Switch
-                      value={isSelected}
-                      onValueChange={(val) => handleSelect(model.id, val)}
-                    />
-                  </View>
-                ) : (
-                  <TouchableOpacity
-                    style={[s.downloadBtn, { borderColor: colors.border }]}
-                    onPress={() => handleDownload(model.id)}
-                  >
-                    <Text style={[s.downloadBtnText, { color: colors.foreground }]}>
-                      {t("settings.vm_download", "下载")}
-                    </Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-            </View>
-            <Text style={s.modelDesc}>
-              {t(model.descriptionKey)} · {t(model.languagesKey)}
-            </Text>
-          </View>
-        );
-      })}
-    </View>
   );
 }
 
@@ -271,6 +95,7 @@ function RemoteModelsSection() {
     updateVectorModel,
     deleteVectorModel,
     setSelectedVectorModelId,
+    setVectorModelMode,
   } = useVectorModelStore();
 
   const [showAddForm, setShowAddForm] = useState(false);
@@ -375,7 +200,14 @@ function RemoteModelsSection() {
             </View>
             <Switch
               value={selectedVectorModelId === model.id}
-              onValueChange={(v) => setSelectedVectorModelId(v ? model.id : null)}
+              onValueChange={(v) => {
+                if (v) {
+                  setSelectedVectorModelId(model.id);
+                  setVectorModelMode("remote");
+                } else {
+                  setSelectedVectorModelId(null);
+                }
+              }}
               trackColor={{ false: colors.muted, true: colors.primary }}
               thumbColor={colors.card}
             />

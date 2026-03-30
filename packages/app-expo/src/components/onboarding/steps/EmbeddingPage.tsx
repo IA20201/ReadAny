@@ -3,11 +3,9 @@ import { useVectorModelStore } from "@/stores/vector-model-store";
 import { useTheme } from "@/styles/theme";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { BUILTIN_EMBEDDING_MODELS } from "@readany/core/ai/builtin-embedding-models";
-import { loadEmbeddingPipeline } from "@readany/core/ai/local-embedding-service";
 import { useSettingsStore } from "@readany/core/stores/settings-store";
 import type { VectorModelConfig } from "@readany/core/types";
-import { Check, Cloud, Download, HardDrive, Plus, Trash2, X } from "lucide-react-native";
+import { Check, Cloud, Plus, Trash2, X } from "lucide-react-native";
 import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
@@ -34,13 +32,8 @@ export function EmbeddingPage() {
 
   const {
     vectorModels,
-    vectorModelMode,
-    setVectorModelMode,
     addVectorModel,
     deleteVectorModel,
-    builtinModelStates,
-    updateBuiltinModelState,
-    setSelectedBuiltinModelId,
     setSelectedVectorModelId,
   } = useVectorModelStore();
 
@@ -86,31 +79,6 @@ export function EmbeddingPage() {
     }
   };
 
-  // Default built-in model
-  const model = BUILTIN_EMBEDDING_MODELS[0];
-  const modelState = builtinModelStates[model.id];
-  const isReady = modelState?.status === "ready";
-  const isDownloading = modelState?.status === "downloading";
-  const downloadProgress = modelState?.progress ?? 0;
-
-  const handleDownloadBuiltin = () => {
-    updateBuiltinModelState(model.id, { status: "downloading", progress: 0 });
-    loadEmbeddingPipeline(model.id, (progress) => {
-      updateBuiltinModelState(model.id, {
-        status: "downloading",
-        progress: Math.round(progress),
-      });
-    })
-      .then(() => {
-        updateBuiltinModelState(model.id, { status: "ready" });
-        setSelectedBuiltinModelId(model.id);
-      })
-      .catch((err) => {
-        console.warn("Failed to load model:", err);
-        updateBuiltinModelState(model.id, { status: "error", error: String(err) });
-      });
-  };
-
   const handleNext = () => {
     navigation.navigate("Translation");
   };
@@ -142,16 +110,15 @@ export function EmbeddingPage() {
           </View>
 
           <View style={styles.section}>
-            <Pressable
+            <View
               style={[
                 styles.modeCard,
-                vectorModelMode === "remote" && styles.modeCardActive,
+                styles.modeCardActive,
                 {
                   backgroundColor: colors.card,
-                  borderColor: vectorModelMode === "remote" ? colors.primary : colors.border,
+                  borderColor: colors.primary,
                 },
               ]}
-              onPress={() => setVectorModelMode("remote")}
             >
               <View style={[styles.modeIcon, { backgroundColor: "#6366f120" }]}>
                 <Cloud size={24} color="#6366f1" />
@@ -164,257 +131,179 @@ export function EmbeddingPage() {
                   {t("onboarding.embedding.remoteDesc", "Connect to external embedding API.")}
                 </Text>
               </View>
-              {vectorModelMode === "remote" && <Check size={20} color={colors.primary} />}
-            </Pressable>
-
-            <Pressable
-              style={[
-                styles.modeCard,
-                vectorModelMode === "builtin" && styles.modeCardActive,
-                {
-                  backgroundColor: colors.card,
-                  borderColor: vectorModelMode === "builtin" ? colors.primary : colors.border,
-                },
-              ]}
-              onPress={() => setVectorModelMode("builtin")}
-            >
-              <View style={[styles.modeIcon, { backgroundColor: "#10b98120" }]}>
-                <HardDrive size={24} color="#10b981" />
-              </View>
-              <View style={styles.modeContent}>
-                <Text style={[styles.modeTitle, { color: colors.foreground }]}>
-                  {t("onboarding.embedding.localMode", "Local Built-in Mode")}
-                </Text>
-                <Text style={[styles.modeDesc, { color: colors.mutedForeground }]}>
-                  {t("onboarding.embedding.localDesc", "Run embeddings safely on your device.")}
-                </Text>
-              </View>
-              {vectorModelMode === "builtin" && <Check size={20} color={colors.primary} />}
-            </Pressable>
+              <Check size={20} color={colors.primary} />
+            </View>
           </View>
 
-          {vectorModelMode === "remote" && (
-            <View style={styles.remoteSection}>
-              {!showAddForm && (
-                <Pressable
-                  style={[styles.addBtn, { borderColor: colors.primary }]}
-                  onPress={() => setShowAddForm(true)}
-                >
-                  <Plus size={18} color={colors.primary} />
-                  <Text style={[styles.addBtnText, { color: colors.primary }]}>
-                    {t("settings.vm_addModel", "Add Remote Model")}
+          <View style={styles.remoteSection}>
+            {!showAddForm && (
+              <Pressable
+                style={[styles.addBtn, { borderColor: colors.primary }]}
+                onPress={() => setShowAddForm(true)}
+              >
+                <Plus size={18} color={colors.primary} />
+                <Text style={[styles.addBtnText, { color: colors.primary }]}>
+                  {t("settings.vm_addModel", "Add Remote Model")}
+                </Text>
+              </Pressable>
+            )}
+
+            {showAddForm && (
+              <View
+                style={[
+                  styles.formCard,
+                  { backgroundColor: colors.card, borderColor: colors.border },
+                ]}
+              >
+                <View style={styles.formHeader}>
+                  <Text style={[styles.formTitle, { color: colors.foreground }]}>
+                    {t("settings.vm_addModelTitle", "Add Model")}
                   </Text>
-                </Pressable>
-              )}
+                  <Pressable onPress={() => setShowAddForm(false)}>
+                    <X size={18} color={colors.mutedForeground} />
+                  </Pressable>
+                </View>
 
-              {showAddForm && (
-                <View
-                  style={[
-                    styles.formCard,
-                    { backgroundColor: colors.card, borderColor: colors.border },
-                  ]}
-                >
-                  <View style={styles.formHeader}>
-                    <Text style={[styles.formTitle, { color: colors.foreground }]}>
-                      {t("settings.vm_addModelTitle", "Add Model")}
-                    </Text>
-                    <Pressable onPress={() => setShowAddForm(false)}>
-                      <X size={18} color={colors.mutedForeground} />
-                    </Pressable>
-                  </View>
-
-                  <View style={styles.formField}>
-                    <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>
-                      {t("settings.vm_name", "Name")} *
-                    </Text>
-                    <TextInput
-                      style={[
-                        styles.fieldInput,
-                        {
-                          backgroundColor: colors.background,
-                          borderColor: colors.border,
-                          color: colors.foreground,
-                        },
-                      ]}
-                      value={formData.name}
-                      onChangeText={(text) => setFormData({ ...formData, name: text })}
-                      placeholder="OpenAI Embedding"
-                      placeholderTextColor={colors.mutedForeground}
-                    />
-                  </View>
-
-                  <View style={styles.formField}>
-                    <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>
-                      {t("settings.vm_modelId", "Model ID")} *
-                    </Text>
-                    <TextInput
-                      style={[
-                        styles.fieldInput,
-                        {
-                          backgroundColor: colors.background,
-                          borderColor: colors.border,
-                          color: colors.foreground,
-                        },
-                      ]}
-                      value={formData.modelId}
-                      onChangeText={(text) => setFormData({ ...formData, modelId: text })}
-                      placeholder="text-embedding-3-small"
-                      placeholderTextColor={colors.mutedForeground}
-                    />
-                  </View>
-
-                  <View style={styles.formField}>
-                    <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>
-                      {t("settings.vm_url", "URL")} *
-                    </Text>
-                    <TextInput
-                      style={[
-                        styles.fieldInput,
-                        {
-                          backgroundColor: colors.background,
-                          borderColor: colors.border,
-                          color: colors.foreground,
-                        },
-                      ]}
-                      value={formData.url}
-                      onChangeText={(text) => setFormData({ ...formData, url: text })}
-                      placeholder="https://api.openai.com/v1/embeddings"
-                      placeholderTextColor={colors.mutedForeground}
-                      autoCapitalize="none"
-                    />
-                  </View>
-
-                  <View style={styles.formField}>
-                    <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>
-                      {t("settings.vm_apiKey", "API Key")}
-                    </Text>
-                    <TextInput
-                      style={[
-                        styles.fieldInput,
-                        {
-                          backgroundColor: colors.background,
-                          borderColor: colors.border,
-                          color: colors.foreground,
-                        },
-                      ]}
-                      value={formData.apiKey}
-                      onChangeText={(text) => setFormData({ ...formData, apiKey: text })}
-                      placeholder="sk-..."
-                      placeholderTextColor={colors.mutedForeground}
-                      secureTextEntry
-                      autoCapitalize="none"
-                    />
-                  </View>
-
-                  <Pressable
+                <View style={styles.formField}>
+                  <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>
+                    {t("settings.vm_name", "Name")} *
+                  </Text>
+                  <TextInput
                     style={[
-                      styles.saveBtn,
+                      styles.fieldInput,
                       {
-                        backgroundColor: colors.primary,
-                        opacity: !formData.name || !formData.url || !formData.modelId ? 0.5 : 1,
+                        backgroundColor: colors.background,
+                        borderColor: colors.border,
+                        color: colors.foreground,
                       },
                     ]}
-                    onPress={handleAddModel}
-                    disabled={!formData.name || !formData.url || !formData.modelId}
-                  >
-                    <Text style={[styles.saveBtnText, { color: colors.primaryForeground }]}>
-                      {t("common.save", "Save")}
-                    </Text>
-                  </Pressable>
+                    value={formData.name}
+                    onChangeText={(text) => setFormData({ ...formData, name: text })}
+                    placeholder="OpenAI Embedding"
+                    placeholderTextColor={colors.mutedForeground}
+                  />
                 </View>
-              )}
 
-              {vectorModels.map((m) => (
-                <View
-                  key={m.id}
+                <View style={styles.formField}>
+                  <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>
+                    {t("settings.vm_modelId", "Model ID")} *
+                  </Text>
+                  <TextInput
+                    style={[
+                      styles.fieldInput,
+                      {
+                        backgroundColor: colors.background,
+                        borderColor: colors.border,
+                        color: colors.foreground,
+                      },
+                    ]}
+                    value={formData.modelId}
+                    onChangeText={(text) => setFormData({ ...formData, modelId: text })}
+                    placeholder="text-embedding-3-small"
+                    placeholderTextColor={colors.mutedForeground}
+                  />
+                </View>
+
+                <View style={styles.formField}>
+                  <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>
+                    {t("settings.vm_url", "URL")} *
+                  </Text>
+                  <TextInput
+                    style={[
+                      styles.fieldInput,
+                      {
+                        backgroundColor: colors.background,
+                        borderColor: colors.border,
+                        color: colors.foreground,
+                      },
+                    ]}
+                    value={formData.url}
+                    onChangeText={(text) => setFormData({ ...formData, url: text })}
+                    placeholder="https://api.openai.com/v1/embeddings"
+                    placeholderTextColor={colors.mutedForeground}
+                    autoCapitalize="none"
+                  />
+                </View>
+
+                <View style={styles.formField}>
+                  <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>
+                    {t("settings.vm_apiKey", "API Key")}
+                  </Text>
+                  <TextInput
+                    style={[
+                      styles.fieldInput,
+                      {
+                        backgroundColor: colors.background,
+                        borderColor: colors.border,
+                        color: colors.foreground,
+                      },
+                    ]}
+                    value={formData.apiKey}
+                    onChangeText={(text) => setFormData({ ...formData, apiKey: text })}
+                    placeholder="sk-..."
+                    placeholderTextColor={colors.mutedForeground}
+                    secureTextEntry
+                    autoCapitalize="none"
+                  />
+                </View>
+
+                <Pressable
                   style={[
-                    styles.modelItem,
-                    { backgroundColor: colors.card, borderColor: colors.border },
+                    styles.saveBtn,
+                    {
+                      backgroundColor: colors.primary,
+                      opacity: !formData.name || !formData.url || !formData.modelId ? 0.5 : 1,
+                    },
                   ]}
+                  onPress={handleAddModel}
+                  disabled={!formData.name || !formData.url || !formData.modelId}
                 >
-                  <View style={styles.modelItemInfo}>
-                    <Text style={[styles.modelItemName, { color: colors.foreground }]}>
-                      {m.name}
-                    </Text>
-                    <Text style={[styles.modelItemMeta, { color: colors.mutedForeground }]}>
-                      {m.modelId}
-                    </Text>
-                  </View>
-                  <View style={styles.modelItemActions}>
-                    {testingId === m.id ? (
-                      <ActivityIndicator size="small" color={colors.primary} />
-                    ) : (
-                      <Pressable onPress={() => testRemoteModel(m)} style={styles.testBtnSmall}>
-                        <Text style={[styles.testBtnText, { color: colors.primary }]}>
-                          {t("settings.vm_test", "Test")}
-                        </Text>
-                      </Pressable>
-                    )}
-                    <Pressable onPress={() => deleteVectorModel(m.id)}>
-                      <Trash2 size={16} color={colors.mutedForeground} />
-                    </Pressable>
-                  </View>
-                </View>
-              ))}
-
-              {vectorModels.length === 0 && !showAddForm && (
-                <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
-                  {t("settings.vm_noRemoteModels", "No remote models configured yet.")}
-                </Text>
-              )}
-            </View>
-          )}
-
-          {vectorModelMode === "builtin" && (
-            <View
-              style={[
-                styles.modelCard,
-                isReady && styles.modelCardReady,
-                {
-                  backgroundColor: colors.card,
-                  borderColor: isReady ? colors.primary : colors.border,
-                },
-              ]}
-            >
-              <View style={styles.modelHeader}>
-                <View style={styles.modelInfo}>
-                  <Text style={[styles.modelName, { color: colors.foreground }]}>{model.name}</Text>
-                  <Text style={[styles.modelMeta, { color: colors.mutedForeground }]}>
-                    {model.size}
+                  <Text style={[styles.saveBtnText, { color: colors.primaryForeground }]}>
+                    {t("common.save", "Save")}
                   </Text>
-                  <Text style={[styles.modelMeta, { color: colors.mutedForeground, marginTop: 4 }]}>
-                    {t(model.descriptionKey)}
-                  </Text>
-                </View>
-                {isReady ? (
-                  <View style={styles.readyBadge}>
-                    <Check size={16} color="#10b981" />
-                    <Text style={styles.readyText}>{t("settings.vm_loaded", "Loaded")}</Text>
-                  </View>
-                ) : isDownloading ? (
-                  <View style={styles.progressWrap}>
-                    <ActivityIndicator size="small" color={colors.primary} />
-                    <Text style={[styles.progressText, { color: colors.primary }]}>
-                      {downloadProgress}%
-                    </Text>
-                  </View>
-                ) : (
-                  <Pressable
-                    style={[styles.downloadBtn, { backgroundColor: colors.primary }]}
-                    onPress={handleDownloadBuiltin}
-                  >
-                    <Download size={16} color="#fff" />
-                    <Text style={styles.downloadText}>{t("settings.vm_download", "Download")}</Text>
-                  </Pressable>
-                )}
+                </Pressable>
               </View>
-              {modelState?.status === "error" && (
-                <Text style={styles.errorText}>
-                  {t("onboarding.embedding.downloadError", "Failed to download model.")} {modelState.error}
-                </Text>
-              )}
-            </View>
-          )}
+            )}
+
+            {vectorModels.map((m) => (
+              <View
+                key={m.id}
+                style={[
+                  styles.modelItem,
+                  { backgroundColor: colors.card, borderColor: colors.border },
+                ]}
+              >
+                <View style={styles.modelItemInfo}>
+                  <Text style={[styles.modelItemName, { color: colors.foreground }]}>
+                    {m.name}
+                  </Text>
+                  <Text style={[styles.modelItemMeta, { color: colors.mutedForeground }]}>
+                    {m.modelId}
+                  </Text>
+                </View>
+                <View style={styles.modelItemActions}>
+                  {testingId === m.id ? (
+                    <ActivityIndicator size="small" color={colors.primary} />
+                  ) : (
+                    <Pressable onPress={() => testRemoteModel(m)} style={styles.testBtnSmall}>
+                      <Text style={[styles.testBtnText, { color: colors.primary }]}>
+                        {t("settings.vm_test", "Test")}
+                      </Text>
+                    </Pressable>
+                  )}
+                  <Pressable onPress={() => deleteVectorModel(m.id)}>
+                    <Trash2 size={16} color={colors.mutedForeground} />
+                  </Pressable>
+                </View>
+              </View>
+            ))}
+
+            {vectorModels.length === 0 && !showAddForm && (
+              <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
+                {t("settings.vm_noRemoteModels", "No remote models configured yet.")}
+              </Text>
+            )}
+          </View>
         </ScrollView>
 
         <View
@@ -442,7 +331,6 @@ export function EmbeddingPage() {
                 styles.nextBtn,
                 { backgroundColor: colors.primary, shadowColor: "transparent" },
               ]}
-              disabled={vectorModelMode === "builtin" && isDownloading}
             >
               <Text style={[styles.nextText, { color: colors.primaryForeground }]}>
                 {t("common.next", "Next")} →
@@ -498,100 +386,83 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     justifyContent: "center",
     alignItems: "center",
-    marginRight: 16,
   },
-  modeContent: { flex: 1 },
-  modeTitle: { fontSize: 16, fontWeight: "600", marginBottom: 4 },
-  modeDesc: { fontSize: 13, lineHeight: 18 },
-  remoteSection: { marginTop: 16, gap: 12 },
+  modeContent: { flex: 1, marginLeft: 16 },
+  modeTitle: { fontSize: 16, fontWeight: "600", marginBottom: 2 },
+  modeDesc: { fontSize: 13 },
+  remoteSection: { marginTop: 24, gap: 12 },
   addBtn: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 8,
-    paddingVertical: 14,
+    padding: 16,
     borderRadius: 12,
-    borderWidth: 2,
+    borderWidth: 1.5,
     borderStyle: "dashed",
+    gap: 8,
   },
   addBtnText: { fontSize: 14, fontWeight: "600" },
-  formCard: { padding: 16, borderRadius: 12, borderWidth: 1, gap: 12 },
-  formHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  formTitle: { fontSize: 15, fontWeight: "600" },
-  formField: { gap: 6 },
-  fieldLabel: { fontSize: 12, fontWeight: "500" },
-  fieldInput: {
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 8,
+  formCard: {
+    padding: 20,
+    borderRadius: 16,
     borderWidth: 1,
-    fontSize: 14,
+    gap: 16,
   },
-  saveBtn: { paddingVertical: 12, borderRadius: 10, alignItems: "center" },
-  saveBtnText: { fontSize: 14, fontWeight: "600" },
-  modelItem: {
+  formHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
+  },
+  formTitle: { fontSize: 16, fontWeight: "600" },
+  formField: { gap: 6 },
+  fieldLabel: { fontSize: 12, fontWeight: "500" },
+  fieldInput: {
+    padding: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    fontSize: 14,
+  },
+  saveBtn: {
     padding: 14,
     borderRadius: 10,
+    alignItems: "center",
+    marginTop: 4,
+  },
+  saveBtnText: { fontSize: 14, fontWeight: "600" },
+  modelItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 16,
+    borderRadius: 12,
     borderWidth: 1,
   },
   modelItemInfo: { flex: 1 },
   modelItemName: { fontSize: 14, fontWeight: "600" },
   modelItemMeta: { fontSize: 12, marginTop: 2 },
-  modelItemActions: { flexDirection: "row", alignItems: "center", gap: 16 },
-  testBtnSmall: { paddingVertical: 6, paddingHorizontal: 12 },
-  testBtnText: { fontSize: 13, fontWeight: "500" },
-  emptyText: { fontSize: 13, textAlign: "center", marginTop: 8 },
-  modelCard: { marginTop: 16, padding: 16, borderRadius: 12, borderWidth: 1 },
-  modelCardReady: { borderWidth: 2 },
-  modelHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  modelInfo: { flex: 1 },
-  modelName: { fontSize: 15, fontWeight: "600" },
-  modelMeta: { fontSize: 12, marginTop: 2 },
-  readyBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    backgroundColor: "#10b98115",
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderRadius: 8,
-  },
-  readyText: { fontSize: 12, color: "#10b981", fontWeight: "600" },
-  progressWrap: { flexDirection: "row", alignItems: "center", gap: 8 },
-  progressText: { fontSize: 13, fontWeight: "600" },
-  downloadBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 10,
-  },
-  downloadText: { color: "#fff", fontSize: 13, fontWeight: "600" },
-  errorText: { marginTop: 12, fontSize: 12, color: "#ef4444" },
+  modelItemActions: { flexDirection: "row", alignItems: "center", gap: 12 },
+  testBtnSmall: { paddingVertical: 6, paddingHorizontal: 12, borderRadius: 6 },
+  testBtnText: { fontSize: 12, fontWeight: "600" },
+  emptyText: { fontSize: 14, textAlign: "center", marginTop: 16 },
   footer: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
-    padding: 24,
+    justifyContent: "space-between",
     paddingTop: 16,
+    paddingHorizontal: 24,
     borderTopWidth: 1,
-    borderTopColor: "#e2e8f0",
-    backgroundColor: "#f8fafc",
   },
-  backBtn: { paddingVertical: 12, paddingHorizontal: 4 },
-  backText: { fontSize: 16, color: "#64748b", fontWeight: "500" },
-  rightActions: { flexDirection: "row", gap: 16, alignItems: "center" },
-  skipBtn: { paddingVertical: 12 },
-  skipText: { fontSize: 14, color: "#94a3b8", fontWeight: "500" },
+  backBtn: { padding: 8 },
+  backText: { fontSize: 14, color: "#64748b" },
+  rightActions: { flexDirection: "row", alignItems: "center", gap: 12 },
+  skipBtn: { paddingVertical: 10 },
+  skipText: { fontSize: 14 },
   nextBtn: {
-    backgroundColor: "#6366f1",
-    paddingVertical: 14,
-    paddingHorizontal: 28,
-    borderRadius: 999,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
   },
-  nextText: { color: "#ffffff", fontSize: 16, fontWeight: "600" },
+  nextText: { fontSize: 14, fontWeight: "600" },
 });

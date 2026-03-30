@@ -7,6 +7,7 @@ import {
 import { useTranslation } from "react-i18next";
 import {
   KeyboardAvoidingView,
+  Modal,
   Platform,
   ScrollView,
   StyleSheet,
@@ -25,12 +26,34 @@ import {
   useColors,
 } from "../../styles/theme";
 import { SettingsHeader } from "./SettingsHeader";
+import { useState } from "react";
 
 export default function TranslationSettingsScreen() {
   const colors = useColors();
   const styles = makeStyles(colors);
   const { t } = useTranslation();
   const { translationConfig, updateTranslationConfig, aiConfig } = useSettingsStore();
+  const [showModelPicker, setShowModelPicker] = useState(false);
+
+  const isAIProvider = translationConfig.provider.id === "ai";
+
+  const endpointsWithModels = aiConfig.endpoints.filter((e) => e.models.length > 0);
+  const totalModels = endpointsWithModels.reduce((sum, ep) => sum + ep.models.length, 0);
+  const multipleEndpoints = endpointsWithModels.length > 1;
+
+  const selectedEndpointId = translationConfig.provider.endpointId || aiConfig.activeEndpointId;
+  const selectedModel = translationConfig.provider.model || aiConfig.activeModel;
+
+  const handleModelSelect = (endpointId: string, model: string) => {
+    updateTranslationConfig({
+      provider: {
+        ...translationConfig.provider,
+        model,
+        endpointId,
+      },
+    });
+    setShowModelPicker(false);
+  };
 
   return (
     <SafeAreaView
@@ -44,7 +67,7 @@ export default function TranslationSettingsScreen() {
 
       <KeyboardAvoidingView
         style={styles.keyboardView}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
       >
         <ScrollView
           style={styles.scroll}
@@ -75,7 +98,7 @@ export default function TranslationSettingsScreen() {
                     {p.id === "ai" && (
                       <Text style={styles.listItemSub}>
                         {t("translation.useAIModel", {
-                          model: aiConfig.activeModel || "AI",
+                          model: selectedModel || "AI",
                         })}
                       </Text>
                     )}
@@ -106,6 +129,31 @@ export default function TranslationSettingsScreen() {
                 placeholder={t("translation.deeplApiKeyPlaceholder", "输入 DeepL API Key")}
                 placeholderTextColor={colors.mutedForeground}
               />
+            </View>
+          )}
+
+          {/* AI Model Selection */}
+          {isAIProvider && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>{t("settings.translationModel", "翻译模型")}</Text>
+              {endpointsWithModels.length > 0 ? (
+                <TouchableOpacity
+                  style={styles.modelSelector}
+                  onPress={() => totalModels > 1 && setShowModelPicker(true)}
+                  activeOpacity={totalModels > 1 ? 0.7 : 1}
+                >
+                  <Text style={styles.modelSelectorText} numberOfLines={1}>
+                    {selectedModel || t("settings.selectModel", "选择模型")}
+                  </Text>
+                  {totalModels > 1 && <Text style={styles.chevron}>▾</Text>}
+                </TouchableOpacity>
+              ) : (
+                <View style={styles.modelSelector}>
+                  <Text style={styles.modelSelectorPlaceholder}>
+                    {t("settings.noModelsFetched", "未获取到模型")}
+                  </Text>
+                </View>
+              )}
             </View>
           )}
 
@@ -141,6 +189,52 @@ export default function TranslationSettingsScreen() {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* Model Picker Modal */}
+      <Modal
+        visible={showModelPicker}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowModelPicker(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowModelPicker(false)}
+        >
+          <View style={styles.modalContent} onStartShouldSetResponder={() => true}>
+            <Text style={styles.modalTitle}>{t("settings.selectModel", "选择模型")}</Text>
+            <ScrollView nestedScrollEnabled>
+              {endpointsWithModels.map((ep) => (
+                <View key={ep.id}>
+                  {multipleEndpoints && (
+                    <Text style={styles.endpointLabel}>{ep.name || ep.baseUrl}</Text>
+                  )}
+                  {ep.models.map((model) => {
+                    const isActive = model === selectedModel && ep.id === selectedEndpointId;
+                    return (
+                      <TouchableOpacity
+                        key={`${ep.id}-${model}`}
+                        style={styles.modelItem}
+                        onPress={() => handleModelSelect(ep.id, model)}
+                        activeOpacity={0.7}
+                      >
+                        <Text
+                          style={[styles.modelItemText, isActive && styles.modelItemTextActive]}
+                          numberOfLines={1}
+                        >
+                          {model}
+                        </Text>
+                        {isActive && <Text style={styles.check}>✓</Text>}
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              ))}
+            </ScrollView>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -212,6 +306,81 @@ const makeStyles = (colors: ThemeColors) =>
       color: colors.foreground,
     },
     langTextActive: {
+      color: colors.primary,
+      fontWeight: fontWeight.medium,
+    },
+    modelSelector: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      borderRadius: radius.xl,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.card,
+      paddingHorizontal: spacing.lg,
+      paddingVertical: 12,
+    },
+    modelSelectorText: {
+      flex: 1,
+      fontSize: fontSize.sm,
+      color: colors.foreground,
+    },
+    modelSelectorPlaceholder: {
+      fontSize: fontSize.sm,
+      color: colors.mutedForeground,
+    },
+    chevron: {
+      fontSize: 14,
+      color: colors.mutedForeground,
+      marginLeft: 8,
+    },
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: "rgba(0,0,0,0.4)",
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    modalContent: {
+      width: 280,
+      maxHeight: 400,
+      backgroundColor: colors.background,
+      borderRadius: radius.xl,
+      overflow: "hidden",
+    },
+    modalTitle: {
+      fontSize: fontSize.sm,
+      fontWeight: fontWeight.medium,
+      color: colors.foreground,
+      textAlign: "center",
+      paddingVertical: 12,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border,
+    },
+    endpointLabel: {
+      fontSize: fontSize.xs,
+      fontWeight: fontWeight.medium,
+      color: colors.mutedForeground,
+      textTransform: "uppercase",
+      letterSpacing: 0.5,
+      paddingHorizontal: spacing.lg,
+      paddingTop: 10,
+      paddingBottom: 4,
+    },
+    modelItem: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      paddingHorizontal: spacing.lg,
+      paddingVertical: 12,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border,
+    },
+    modelItemText: {
+      flex: 1,
+      fontSize: fontSize.sm,
+      color: colors.foreground,
+    },
+    modelItemTextActive: {
       color: colors.primary,
       fontWeight: fontWeight.medium,
     },

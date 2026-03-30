@@ -30,6 +30,7 @@ export interface Book {
   vectorizeProgress: number; // 0-1
   tags: string[];
   fileHash?: string;
+  syncStatus: "local" | "remote" | "downloading"; // File availability status
 }
 
 export type ViewMode = "paginated" | "scroll";

@@ -1,5 +1,6 @@
 import { useSettingsStore } from "@/stores";
 import type { AIEndpoint, AIProviderType } from "@readany/core/types";
+import { getDefaultBaseUrl, PROVIDER_CONFIGS } from "@readany/core/utils";
 import type { TFunction } from "i18next";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -30,16 +31,17 @@ import { SettingsHeader } from "./SettingsHeader";
 const PROVIDERS: { id: AIProviderType; label: string }[] = [
   { id: "openai", label: "OpenAI" },
   { id: "anthropic", label: "Anthropic" },
-  { id: "google", label: "Google" },
+  { id: "google", label: "Google Gemini" },
   { id: "deepseek", label: "DeepSeek" },
+  { id: "ollama", label: "Ollama" },
+  { id: "lmstudio", label: "LM Studio" },
+  { id: "openrouter", label: "OpenRouter" },
+  { id: "siliconflow", label: "SiliconFlow" },
+  { id: "moonshot", label: "Moonshot" },
+  { id: "zhipu", label: "智谱 GLM" },
+  { id: "aliyun", label: "阿里云通义" },
+  { id: "custom", label: "Custom" },
 ];
-
-const PROVIDER_DEFAULTS: Record<AIProviderType, { baseUrl: string; name: string }> = {
-  openai: { baseUrl: "https://api.openai.com/v1", name: "OpenAI" },
-  anthropic: { baseUrl: "", name: "Anthropic" },
-  google: { baseUrl: "", name: "Google" },
-  deepseek: { baseUrl: "https://api.deepseek.com/v1", name: "DeepSeek" },
-};
 
 // Individual endpoint editor with local state
 function EndpointEditor({
@@ -141,16 +143,17 @@ function EndpointEditor({
               key={p.id}
               style={[styles.providerBtn, ep.provider === p.id && styles.providerBtnActive]}
               onPress={() => {
-                const defaults = PROVIDER_DEFAULTS[p.id];
+                const config = PROVIDER_CONFIGS[p.id];
+                const defaultBaseUrl = getDefaultBaseUrl(p.id);
                 onUpdate(ep.id, {
                   provider: p.id,
-                  baseUrl: defaults.baseUrl,
-                  name: defaults.name,
+                  baseUrl: defaultBaseUrl,
+                  name: config?.name || p.label,
                   models: [],
                   modelsFetched: false,
                 }).catch(console.error);
-                setBaseUrl(defaults.baseUrl);
-                setName(defaults.name);
+                setBaseUrl(defaultBaseUrl);
+                setName(config?.name || p.label);
               }}
               activeOpacity={0.7}
             >
@@ -301,13 +304,14 @@ export default function AISettingsScreen() {
 
   const handleAddEndpoint = useCallback(async () => {
     const defaultProvider = "openai";
-    const defaults = PROVIDER_DEFAULTS[defaultProvider];
+    const config = PROVIDER_CONFIGS[defaultProvider];
+    const defaultBaseUrl = getDefaultBaseUrl(defaultProvider);
     await addEndpoint({
       id: `${Date.now()}`,
-      name: defaults.name,
+      name: config?.name || "OpenAI",
       provider: defaultProvider,
       apiKey: "",
-      baseUrl: defaults.baseUrl,
+      baseUrl: defaultBaseUrl,
       models: [],
       modelsFetched: false,
     });
@@ -350,7 +354,7 @@ export default function AISettingsScreen() {
 
       <KeyboardAvoidingView
         style={styles.keyboardView}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
       >
         <ScrollView
           style={styles.scroll}
@@ -841,6 +845,8 @@ const makeStyles = (colors: ThemeColors) =>
       backgroundColor: colors.background,
       fontSize: fontSize.sm,
       color: colors.foreground,
-      textAlignVertical: "center",
+      paddingHorizontal: 4,
+      paddingVertical: 6,
+      textAlign: "center",
     },
   });

@@ -4,6 +4,7 @@ import { useSyncStore } from "@readany/core/stores";
 import { type LANQRData, createLANBackend } from "@readany/core/sync/lan-backend";
 import { createLANServer } from "@readany/core/sync/lan-server";
 import type { S3Config, WebDavConfig } from "@readany/core/sync/sync-backend";
+import { SYNC_SECRET_KEYS } from "@readany/core/sync/sync-backend";
 /**
  * SyncSettingsScreen — Multi-backend sync configuration and status panel (mobile).
  * Supports WebDAV, S3, and LAN sync.
@@ -89,6 +90,7 @@ export default function SyncSettingsScreen() {
   const [url, setUrl] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [allowInsecure, setAllowInsecure] = useState(false);
 
   // S3 state
   const [s3Endpoint, setS3Endpoint] = useState("");
@@ -148,8 +150,9 @@ export default function SyncSettingsScreen() {
       if (config.type === "webdav") {
         setUrl(config.url);
         setUsername(config.username);
+        setAllowInsecure(config.allowInsecure ?? false);
         getPlatformService()
-          .kvGetItem("sync_password")
+          .kvGetItem(SYNC_SECRET_KEYS.webdav)
           .then((pw) => {
             if (pw) setPassword(pw);
           });
@@ -172,7 +175,7 @@ export default function SyncSettingsScreen() {
     setTestResult(null);
     try {
       if (selectedBackend === "webdav") {
-        await testWebDavConnection(url, username, password);
+        await testWebDavConnection(url, username, password, allowInsecure);
       } else if (selectedBackend === "s3") {
         await testS3Connection(
           { endpoint: s3Endpoint, region: s3Region, bucket: s3Bucket, accessKeyId: s3AccessKeyId },
@@ -191,6 +194,7 @@ export default function SyncSettingsScreen() {
     url,
     username,
     password,
+    allowInsecure,
     s3Endpoint,
     s3Region,
     s3Bucket,
@@ -204,7 +208,7 @@ export default function SyncSettingsScreen() {
     setSaving(true);
     try {
       if (selectedBackend === "webdav") {
-        await saveWebDavConfig(url, username, password);
+        await saveWebDavConfig(url, username, password, allowInsecure);
       } else if (selectedBackend === "s3") {
         await saveS3Config(
           { endpoint: s3Endpoint, region: s3Region, bucket: s3Bucket, accessKeyId: s3AccessKeyId },
@@ -219,6 +223,7 @@ export default function SyncSettingsScreen() {
     url,
     username,
     password,
+    allowInsecure,
     s3Endpoint,
     s3Region,
     s3Bucket,
@@ -427,7 +432,7 @@ export default function SyncSettingsScreen() {
 
       <KeyboardAvoidingView
         style={styles.keyboardView}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
       >
         <ScrollView
           style={styles.scroll}
@@ -520,6 +525,21 @@ export default function SyncSettingsScreen() {
                     placeholder={t("settings.syncPassword")}
                     placeholderTextColor={colors.mutedForeground}
                   />
+                </View>
+
+                <View style={styles.autoSyncRow}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.autoSyncLabel}>{t("settings.syncAllowInsecure")}</Text>
+                    <Text style={styles.autoSyncDesc}>{t("settings.syncAllowInsecureDescMobile")}</Text>
+                  </View>
+                  <TouchableOpacity
+                    style={[styles.toggle, allowInsecure && styles.toggleActive]}
+                    onPress={() => setAllowInsecure(!allowInsecure)}
+                  >
+                    <View
+                      style={[styles.toggleThumb, allowInsecure && styles.toggleThumbActive]}
+                    />
+                  </TouchableOpacity>
                 </View>
 
                 <View style={styles.btnRow}>

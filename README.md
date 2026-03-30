@@ -303,6 +303,12 @@ This project is open source under the GNU General Public License v3.0. You are f
 
 ---
 
+## Community
+
+Thanks to [linux.do](https://linux.do/) — a vibrant Chinese tech community where you can learn about AI, development, and more.
+
+---
+
 <p align="center">
   Made with ❤️ by the ReadAny Team
 </p>

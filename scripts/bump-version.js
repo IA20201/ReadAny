@@ -5,6 +5,7 @@
  * Usage:
  *   node scripts/bump-version.js 1.0.12      # Set version
  *   node scripts/bump-version.js --check      # Check consistency only
+ *   node scripts/bump-version.js --prebuild   # Run pre-build checks
  *
  * Syncs version across:
  *   - packages/app/package.json
@@ -14,6 +15,7 @@
  */
 const fs = require("fs");
 const path = require("path");
+const { execSync } = require("child_process");
 
 const ROOT = path.resolve(__dirname, "..");
 
@@ -99,6 +101,83 @@ function setVersion(newVersion) {
   console.log(`\nVersion bumped to ${newVersion}`);
 }
 
+function runPrebuildChecks() {
+  console.log("\n🔍 Running pre-build checks...\n");
+
+  console.log("1️⃣  Checking TypeScript compilation for packages/app...");
+  try {
+    execSync("pnpm exec tsc --noEmit", {
+      cwd: path.join(ROOT, "packages/app"),
+      stdio: "inherit",
+    });
+    console.log("   ✅ packages/app: TypeScript OK\n");
+  } catch {
+    console.error("   ❌ packages/app: TypeScript errors found!");
+    process.exit(1);
+  }
+
+  console.log("2️⃣  Checking TypeScript compilation for packages/app-expo...");
+  try {
+    execSync("pnpm exec tsc --noEmit", {
+      cwd: path.join(ROOT, "packages/app-expo"),
+      stdio: "inherit",
+    });
+    console.log("   ✅ packages/app-expo: TypeScript OK\n");
+  } catch {
+    console.error("   ❌ packages/app-expo: TypeScript errors found!");
+    process.exit(1);
+  }
+
+  console.log("3️⃣  Checking TypeScript compilation for packages/core...");
+  try {
+    execSync("pnpm exec tsc --noEmit", {
+      cwd: path.join(ROOT, "packages/core"),
+      stdio: "inherit",
+    });
+    console.log("   ✅ packages/core: TypeScript OK\n");
+  } catch {
+    console.error("   ❌ packages/core: TypeScript errors found!");
+    process.exit(1);
+  }
+
+  console.log("4️⃣  Checking dependencies...");
+  const pkgApp = JSON.parse(
+    fs.readFileSync(path.join(ROOT, "packages/app/package.json"), "utf8")
+  );
+  const pkgAppExpo = JSON.parse(
+    fs.readFileSync(path.join(ROOT, "packages/app-expo/package.json"), "utf8")
+  );
+
+  const depsToCheck = ["pdfjs-dist", "onnxruntime-node", "onnxruntime-web"];
+  const missingDeps = [];
+
+  for (const dep of depsToCheck) {
+    if (pkgApp.dependencies?.[dep]) {
+      const nodeModulesPath = path.join(ROOT, "node_modules", dep);
+      if (!fs.existsSync(nodeModulesPath)) {
+        missingDeps.push(`packages/app needs '${dep}' but not installed`);
+      }
+    }
+    if (pkgAppExpo.dependencies?.[dep]) {
+      const nodeModulesPath = path.join(ROOT, "node_modules", dep);
+      if (!fs.existsSync(nodeModulesPath)) {
+        missingDeps.push(`packages/app-expo needs '${dep}' but not installed`);
+      }
+    }
+  }
+
+  if (missingDeps.length > 0) {
+    console.error("   ❌ Missing dependencies:");
+    missingDeps.forEach((m) => console.error(`      - ${m}`));
+    console.error("\n   Run 'pnpm install' in the root directory.");
+    process.exit(1);
+  }
+
+  console.log("   ✅ All dependencies installed\n");
+
+  console.log("✅ All pre-build checks passed!\n");
+}
+
 // Main
 const arg = process.argv[2];
 
@@ -106,12 +185,17 @@ if (!arg) {
   console.log("Usage:");
   console.log("  node scripts/bump-version.js <version>   # Set version");
   console.log("  node scripts/bump-version.js --check     # Check consistency");
+  console.log("  node scripts/bump-version.js --prebuild  # Run pre-build checks");
   process.exit(0);
 }
 
 if (arg === "--check") {
   checkConsistency();
+} else if (arg === "--prebuild") {
+  runPrebuildChecks();
+  checkConsistency();
 } else {
+  runPrebuildChecks();
   setVersion(arg);
   checkConsistency();
 }

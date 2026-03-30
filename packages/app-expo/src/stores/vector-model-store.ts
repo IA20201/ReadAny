@@ -38,7 +38,7 @@ export const useVectorModelStore = create<VectorModelState>()(
     vectorModels: [],
     selectedVectorModelId: null,
     vectorModelEnabled: true,
-    vectorModelMode: "builtin",
+    vectorModelMode: "remote",
     selectedBuiltinModelId: null,
     builtinModelStates: {},
 
@@ -85,9 +85,8 @@ export const useVectorModelStore = create<VectorModelState>()(
       const { vectorModelEnabled, vectorModelMode } = get();
       if (!vectorModelEnabled) return false;
       if (vectorModelMode === "builtin") {
-        const { selectedBuiltinModelId, builtinModelStates } = get();
-        if (!selectedBuiltinModelId) return false;
-        return builtinModelStates[selectedBuiltinModelId]?.status === "ready";
+        const { selectedBuiltinModelId } = get();
+        return !!selectedBuiltinModelId;
       }
       const selected = get().getSelectedVectorModel();
       return selected != null;

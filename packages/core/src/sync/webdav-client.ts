@@ -9,14 +9,16 @@ import type { DavResource } from "./sync-types";
 export class WebDavClient {
   private baseUrl: string;
   private authHeader: string;
+  private allowInsecure: boolean;
 
-  constructor(url: string, username: string, password: string) {
+  constructor(url: string, username: string, password: string, allowInsecure?: boolean) {
     // Normalize: remove trailing slash
     this.baseUrl = url.replace(/\/+$/, "");
     // Basic auth header
     const credentials = `${username}:${password}`;
     // Use btoa for base64 encoding (available in both environments)
     this.authHeader = `Basic ${btoa(credentials)}`;
+    this.allowInsecure = allowInsecure ?? false;
   }
 
   private buildUrl(path: string): string {
@@ -56,6 +58,7 @@ export class WebDavClient {
         method,
         headers,
         body: options.body as BodyInit | undefined,
+        allowInsecure: this.allowInsecure,
       });
       const elapsed = Date.now() - startTime;
       console.log(

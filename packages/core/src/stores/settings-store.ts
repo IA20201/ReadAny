@@ -1,9 +1,7 @@
 import { create } from "zustand";
-/**
- * Settings store — global reading settings, AI config, translation config
- */
 import type { AIConfig, AIEndpoint, ReadSettings } from "../types";
 import type { TranslationConfig, TranslationTargetLang } from "../types/translation";
+import { formatApiHost } from "../utils/api";
 import { withPersist } from "./persist";
 
 export interface SettingsState {
@@ -95,7 +93,7 @@ async function fetchModelsFromEndpoint(endpoint: AIEndpoint): Promise<string[]> 
 /** OpenAI-compatible /v1/models */
 async function fetchOpenAIModels(endpoint: AIEndpoint): Promise<string[]> {
   if (!endpoint.baseUrl) return [];
-  const baseUrl = endpoint.baseUrl.replace(/\/+$/, "");
+  const baseUrl = formatApiHost(endpoint.baseUrl).replace(/\/+$/, "");
   const response = await fetch(`${baseUrl}/models`, {
     headers: { Authorization: `Bearer ${endpoint.apiKey}` },
   });
@@ -110,8 +108,8 @@ async function fetchOpenAIModels(endpoint: AIEndpoint): Promise<string[]> {
 
 /** Anthropic — list models via /v1/models API */
 async function fetchAnthropicModels(endpoint: AIEndpoint): Promise<string[]> {
-  const baseUrl = (endpoint.baseUrl || "https://api.anthropic.com").replace(/\/+$/, "");
-  const response = await fetch(`${baseUrl}/v1/models`, {
+  const baseUrl = formatApiHost(endpoint.baseUrl || "https://api.anthropic.com").replace(/\/+$/, "");
+  const response = await fetch(`${baseUrl}/models`, {
     headers: {
       "x-api-key": endpoint.apiKey,
       "anthropic-version": "2023-06-01",
@@ -169,7 +167,7 @@ async function fetchGoogleModels(endpoint: AIEndpoint): Promise<string[]> {
 
 /** DeepSeek — uses OpenAI-compatible /models endpoint with fallback */
 async function fetchDeepSeekModels(endpoint: AIEndpoint): Promise<string[]> {
-  const baseUrl = (endpoint.baseUrl || "https://api.deepseek.com/v1").replace(/\/+$/, "");
+  const baseUrl = formatApiHost(endpoint.baseUrl || "https://api.deepseek.com").replace(/\/+$/, "");
   try {
     const response = await fetch(`${baseUrl}/models`, {
       headers: { Authorization: `Bearer ${endpoint.apiKey}` },

@@ -1,21 +1,38 @@
 import { extractBookMetadata } from "@/lib/book/metadata-extractor";
+import { queueBook as queueAutoVectorize } from "@/lib/rag/auto-vectorize-service";
 import * as db from "@readany/core/db/database";
 import { getPlatformService } from "@readany/core/services";
-/**
- * Expo Library Store — book collection CRUD, import, filtering, tags
- * Adapted from app-mobile library-store. Uses core DB + FS persistence.
- */
 import type { Book, LibraryFilter, SortField, SortOrder } from "@readany/core/types";
 import { generateId } from "@readany/core/utils";
 import { create } from "zustand";
 import { debouncedSave, loadFromFS } from "./persist";
+import { useVectorModelStore } from "./vector-model-store";
 
 // Hermes (React Native) only supports UTF-8 in TextDecoder.
-// Use text-encoding polyfill for GBK/GB18030/Shift-JIS etc.
+// text-encoding polyfill detects the native TextDecoder and skips installing
+// its own full-encoding version. Workaround: temporarily hide the native
+// TextDecoder so the polyfill installs unconditionally, then restore native.
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const _nativeTD = globalThis.TextDecoder;
+const _nativeTE = globalThis.TextEncoder;
+// @ts-expect-error — temporarily remove native TextDecoder/TextEncoder
+globalThis.TextDecoder = undefined;
+// @ts-expect-error
+globalThis.TextEncoder = undefined;
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { TextDecoder: PolyfillTextDecoder } = require("text-encoding") as {
   TextDecoder: typeof TextDecoder;
 };
+// Restore native TextDecoder/TextEncoder for rest of the app
+globalThis.TextDecoder = _nativeTD;
+globalThis.TextEncoder = _nativeTE;
+
+// Verify polyfill can decode non-UTF-8 at module load time
+try {
+  new PolyfillTextDecoder("gb18030");
+} catch (e) {
+  console.error("[text-encoding] Polyfill BROKEN: gb18030 not supported!", e);
+}
 
 export type LibraryViewMode = "grid" | "list";
 
@@ -76,7 +93,7 @@ async function saveCoverToAppData(bookId: string, coverBlob: Blob): Promise<stri
 /**
  * Ensure raw bytes are UTF-8 encoded. Hermes (React Native) only supports
  * UTF-8 in TextDecoder — GBK/GB18030/Shift-JIS etc. are NOT supported.
- * If the bytes are not UTF-8, use PolyfillTextDecoder to convert to UTF-8.
+ * If the bytes are not UTF-8, use text-encoding polyfill to convert to UTF-8.
  */
 function ensureUtf8Bytes(bytes: Uint8Array): Uint8Array {
   // Check BOM markers
@@ -84,55 +101,67 @@ function ensureUtf8Bytes(bytes: Uint8Array): Uint8Array {
     return bytes; // UTF-8 with BOM
   }
   if (bytes[0] === 0xff && bytes[1] === 0xfe) {
-    // UTF-16LE → decode via polyfill, re-encode as UTF-8
     const text = new PolyfillTextDecoder("utf-16le").decode(bytes);
     return new TextEncoder().encode(text);
   }
   if (bytes[0] === 0xfe && bytes[1] === 0xff) {
-    // UTF-16BE → decode via polyfill, re-encode as UTF-8
     const text = new PolyfillTextDecoder("utf-16be").decode(bytes);
     return new TextEncoder().encode(text);
   }
 
-  // Try strict UTF-8 validation on a sample
-  const sampleSize = Math.min(bytes.length, 64 * 1024);
+  // Try strict UTF-8 validation on a sample.
+  // IMPORTANT: must align the sample end to a UTF-8 character boundary,
+  // otherwise a multi-byte char split at the boundary causes a false failure.
+  let sampleEnd = Math.min(bytes.length, 64 * 1024);
+  // Back up past any UTF-8 continuation bytes (10xxxxxx = 0x80-0xBF) at the end
+  while (sampleEnd > 0 && sampleEnd < bytes.length && (bytes[sampleEnd]! & 0xC0) === 0x80) {
+    sampleEnd--;
+  }
   try {
-    new TextDecoder("utf-8", { fatal: true }).decode(bytes.subarray(0, sampleSize));
-    // Also check a mid-section for large files
-    if (bytes.length > sampleSize * 2) {
-      const midStart = Math.floor(bytes.length / 2);
-      const midEnd = Math.min(midStart + 8192, bytes.length);
+    new TextDecoder("utf-8", { fatal: true }).decode(bytes.subarray(0, sampleEnd));
+    if (bytes.length > sampleEnd * 2) {
+      let midStart = Math.floor(bytes.length / 2);
+      // Align mid-sample start to a UTF-8 character boundary
+      while (midStart < bytes.length && (bytes[midStart]! & 0xC0) === 0x80) {
+        midStart++;
+      }
+      let midEnd = Math.min(midStart + 8192, bytes.length);
+      while (midEnd > midStart && midEnd < bytes.length && (bytes[midEnd]! & 0xC0) === 0x80) {
+        midEnd--;
+      }
       new TextDecoder("utf-8", { fatal: true }).decode(bytes.subarray(midStart, midEnd));
     }
+    console.log(`[ensureUtf8Bytes] passed UTF-8 validation`);
     return bytes; // Valid UTF-8
   } catch {
     // Not valid UTF-8 — detect which encoding it is
   }
 
-  // Check if high bytes suggest GBK/GB18030 or Shift-JIS
-  const sample = bytes.subarray(0, Math.min(1024, bytes.length));
+  // Disambiguate GBK/GB18030 vs Shift-JIS by counting distinctive byte patterns.
+  // GBK double-byte: lead 0xA1-0xFE, trail 0xA1-0xFE (dominant in Chinese text)
+  // Shift-JIS distinctive: lead 0x81-0x9F (below GBK lead range)
+  const sample = bytes.subarray(0, Math.min(4096, bytes.length));
   let highBytes = 0;
   for (let i = 0; i < sample.length; i++) {
     if (sample[i]! >= 0x80) highBytes++;
   }
   const highRatio = sample.length > 0 ? highBytes / sample.length : 0;
 
-  // Check for Shift-JIS patterns
-  let isShiftJIS = false;
-  if (highRatio > 0.1) {
-    for (let i = 0; i < sample.length - 1; i++) {
-      const b1 = sample[i]!;
-      const b2 = sample[i + 1]!;
-      if (
-        ((b1 >= 0x81 && b1 <= 0x9f) || (b1 >= 0xe0 && b1 <= 0xfc)) &&
-        ((b2 >= 0x40 && b2 <= 0x7e) || (b2 >= 0x80 && b2 <= 0xfc))
-      ) {
-        isShiftJIS = true;
-        break;
-      }
+  let gbkPairs = 0;
+  let sjisDistinctPairs = 0;
+  for (let i = 0; i < sample.length - 1; i++) {
+    const b1 = sample[i]!;
+    const b2 = sample[i + 1]!;
+    if (b1 >= 0xA1 && b1 <= 0xFE && b2 >= 0xA1 && b2 <= 0xFE) {
+      gbkPairs++;
+      i++;
+    } else if (b1 >= 0x81 && b1 <= 0x9F && ((b2 >= 0x40 && b2 <= 0x7E) || (b2 >= 0x80 && b2 <= 0xFC))) {
+      sjisDistinctPairs++;
+      i++;
     }
   }
 
+  const isShiftJIS = sjisDistinctPairs > 0 && sjisDistinctPairs > gbkPairs;
   const encoding = isShiftJIS ? "shift_jis" : highRatio > 0.1 ? "gb18030" : "gbk";
   console.log(`[ensureUtf8Bytes] Detected non-UTF-8 encoding: ${encoding}, converting to UTF-8`);
 
@@ -314,7 +343,7 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
               const rawBytes = await platform.readFile(filePath);
 
               // Hermes only supports UTF-8 in TextDecoder. Convert GBK/GB18030
-              // etc. to UTF-8 using iconv-lite before passing to the converter.
+              // etc. to UTF-8 using text-encoding polyfill before passing to converter.
               const bytes = ensureUtf8Bytes(rawBytes);
 
               // React Native Blob/File constructor doesn't support ArrayBuffer/Uint8Array.
@@ -361,12 +390,20 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
                 isVectorized: false,
                 vectorizeProgress: 0,
                 tags: [],
+                syncStatus: "local",
                 addedAt: Date.now(),
                 updatedAt: Date.now(),
                 lastOpenedAt: Date.now(),
               };
               await get().addBook(book);
               console.log(`[importBooks] TXT imported as EPUB: ${title}`);
+              
+              // Auto-vectorize if enabled
+              const vmState = useVectorModelStore.getState();
+              if (vmState.vectorModelEnabled && vmState.hasVectorCapability()) {
+                const base64 = btoa(String.fromCharCode(...result.epubBytes));
+                queueAutoVectorize(book, base64, "application/epub+zip");
+              }
               continue;
             } catch (convErr) {
               console.error(`[importBooks] TXT conversion failed:`, convErr);
@@ -430,11 +467,32 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
             isVectorized: false,
             vectorizeProgress: 0,
             tags: [],
+            syncStatus: "local",
             addedAt: Date.now(),
             updatedAt: Date.now(),
             lastOpenedAt: Date.now(),
           };
           await get().addBook(book);
+          
+          // Auto-vectorize if enabled
+          const vmState = useVectorModelStore.getState();
+          if (vmState.vectorModelEnabled && vmState.hasVectorCapability()) {
+            const base64 = btoa(String.fromCharCode(...fileBytes));
+            const mimeTypes: Record<string, string> = {
+              epub: "application/epub+zip",
+              pdf: "application/pdf",
+              mobi: "application/x-mobipocket-ebook",
+              azw: "application/vnd.amazon.ebook",
+              azw3: "application/vnd.amazon.ebook",
+              cbz: "application/vnd.comicbook+zip",
+              cbr: "application/vnd.comicbook+zip",
+              fb2: "application/x-fictionbook+xml",
+              fbz: "application/x-zip-compressed-fb2",
+              txt: "text/plain",
+            };
+            const mimeType = mimeTypes[format] || "application/epub+zip";
+            queueAutoVectorize(book, base64, mimeType);
+          }
         } catch (err) {
           console.error(`Failed to import ${fileInfo.uri}:`, err);
         }

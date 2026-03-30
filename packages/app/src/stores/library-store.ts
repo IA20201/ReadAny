@@ -1,11 +1,8 @@
 import * as db from "@/lib/db/database";
+import { triggerVectorizeBook } from "@/lib/rag/vectorize-trigger";
 import { debouncedSave, loadFromFS } from "@readany/core/stores/persist";
+import { useVectorModelStore } from "@readany/core/stores/vector-model-store";
 import type { Book, LibraryFilter, SortField, SortOrder } from "@readany/core/types";
-/**
- * Library store — book collection CRUD, import, filtering
- * Connected to SQLite for persistence.
- * Uses FS-level JSON cache for fast startup (avoids re-querying SQLite every launch).
- */
 import { create } from "zustand";
 
 interface EpubMeta {
@@ -645,11 +642,20 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
             vectorizeProgress: 0,
             tags: [],
             fileHash,
+            syncStatus: "local",
             addedAt: Date.now(),
             updatedAt: Date.now(),
             lastOpenedAt: Date.now(),
           };
           get().addBook(book);
+          
+          // Auto-vectorize if enabled
+          const vmState = useVectorModelStore.getState();
+          if (vmState.vectorModelEnabled && vmState.hasVectorCapability()) {
+            triggerVectorizeBook(book.id, relativePath).catch((err) => {
+              console.warn(`[importBooks] Auto-vectorize failed for ${title}:`, err);
+            });
+          }
         } catch (err) {
           console.error(`Failed to import ${filePath}:`, err);
         }

@@ -72,7 +72,7 @@ export const useVectorModelStore = create<VectorModelState>()(
     selectedVectorModelId: null,
     vectorModelEnabled: true,
     vectorModelMode: "builtin",
-    selectedBuiltinModelId: null,
+    selectedBuiltinModelId: "all-MiniLM-L6-v2",
     builtinModelStates: {},
 
     setVectorModelEnabled: (vectorModelEnabled) => set({ vectorModelEnabled }),
@@ -121,9 +121,8 @@ export const useVectorModelStore = create<VectorModelState>()(
       const { vectorModelEnabled, vectorModelMode } = get();
       if (!vectorModelEnabled) return false;
       if (vectorModelMode === "builtin") {
-        const { selectedBuiltinModelId, builtinModelStates } = get();
-        if (!selectedBuiltinModelId) return false;
-        return builtinModelStates[selectedBuiltinModelId]?.status === "ready";
+        const { selectedBuiltinModelId } = get();
+        return !!selectedBuiltinModelId;
       }
       const selected = get().getSelectedVectorModel();
       return selected != null;

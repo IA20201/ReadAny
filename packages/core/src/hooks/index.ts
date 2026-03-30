@@ -7,6 +7,11 @@ export { useThrottledValue, useThrottledCallback, useStreamingText } from "./use
 export { useKeyboard } from "./use-keyboard";
 export { useTranslator, type UseTranslatorOptions } from "./useTranslator";
 export {
+  useChapterTranslation,
+  type ChapterTranslationState,
+  type UseChapterTranslationOptions,
+} from "./useChapterTranslation";
+export {
   useReadingSession,
   setSessionEventSource,
   webSessionEventSource,

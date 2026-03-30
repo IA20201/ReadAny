@@ -7,6 +7,7 @@
  * All Tauri imports are dynamic so the module graph stays clean in SSR/test contexts.
  */
 import type {
+  FetchOptions,
   FilePickerOptions,
   IDatabase,
   IPlatformService,
@@ -124,9 +125,16 @@ export class TauriPlatformService implements IPlatformService {
 
   // ---- Network ----
 
-  async fetch(url: string, options?: RequestInit): Promise<Response> {
+  async fetch(url: string, options?: FetchOptions): Promise<Response> {
     const { fetch: tauriFetch } = await import("@tauri-apps/plugin-http");
-    return tauriFetch(url, options);
+    const { allowInsecure, ...fetchOptions } = options ?? {};
+    if (allowInsecure) {
+      return tauriFetch(url, {
+        ...fetchOptions,
+        danger: { acceptInvalidCerts: true, acceptInvalidHostnames: true },
+      } as any);
+    }
+    return tauriFetch(url, fetchOptions);
   }
 
   async createWebSocket(url: string, options?: WebSocketOptions): Promise<IWebSocket> {
@@ -248,6 +256,11 @@ export class TauriPlatformService implements IPlatformService {
   }
 
   // ---- LAN Sync ----
+
+  async isOnWifi(): Promise<boolean> {
+    // Desktop is always considered "on WiFi"
+    return true;
+  }
 
   async getLocalIP(): Promise<string> {
     // Try Rust-side detection first (most reliable)

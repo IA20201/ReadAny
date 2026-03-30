@@ -42,6 +42,7 @@ import { SearchBar } from "./SearchBar";
 import { SelectionPopover } from "./SelectionPopover";
 import { TOCPanel } from "./TOCPanel";
 import { TranslationPopover } from "./TranslationPopover";
+import { useChapterTranslation } from "@readany/core/hooks";
 
 // --- Tauri file loading ---
 async function loadFileAsBlob(filePath: string): Promise<Blob> {
@@ -243,16 +244,34 @@ export function ReaderView({ bookId, tabId }: ReaderViewProps) {
   // Ref to FoliateViewer imperative handle
   const foliateRef = useRef<FoliateViewerHandle>(null);
 
-  // Track which highlights have been rendered (id -> {cfi, note}) to detect changes
-  const renderedHighlightsRef = useRef<Map<string, { cfi: string; hasNote: boolean }>>(new Map());
+  // Current section index for chapter translation
+  const [currentSectionIndex, setCurrentSectionIndex] = useState(0);
 
   // Track when foliate is ready to receive annotations
   const [foliateReady, setFoliateReady] = useState(false);
+  // Separate delayed ready for chapter translation (avoids DOM conflict with CFI navigation)
+  const [translationReady, setTranslationReady] = useState(false);
+
+  // Chapter translation hook
+  const chapterTranslation = useChapterTranslation({
+    bookId,
+    sectionIndex: currentSectionIndex,
+    ready: translationReady,
+    getParagraphs: () => foliateRef.current?.getChapterParagraphs() ?? [],
+    injectTranslations: (results) => foliateRef.current?.injectChapterTranslations(results),
+    removeTranslations: () => foliateRef.current?.removeChapterTranslations(),
+    applyVisibility: (originalVisible, translationVisible) =>
+      foliateRef.current?.applyChapterTranslationVisibility(originalVisible, translationVisible),
+  });
+
+  // Track which highlights have been rendered (id -> {cfi, note}) to detect changes
+  const renderedHighlightsRef = useRef<Map<string, { cfi: string; hasNote: boolean }>>(new Map());
 
   // Reset rendered highlights tracking when book changes
   useEffect(() => {
     renderedHighlightsRef.current.clear();
     setFoliateReady(false);
+    setTranslationReady(false);
   }, [bookId]);
 
   // Ref to track if we've already handled the initialCfi for this mount
@@ -261,7 +280,14 @@ export function ReaderView({ bookId, tabId }: ReaderViewProps) {
   // Unified navigation function that records history
   const navigateToCfi = useCallback(
     (cfi: string) => {
-      if (!foliateRef.current || !readerTab) return;
+      if (!foliateRef.current || !readerTab) {
+        console.warn("[ReaderView] navigateToCfi aborted:", {
+          hasFoliate: !!foliateRef.current,
+          hasReaderTab: !!readerTab,
+          tabId,
+        });
+        return;
+      }
 
       // Push CURRENT location to history before jumping
       if (readerTab.currentCfi) {
@@ -478,7 +504,7 @@ export function ReaderView({ bookId, tabId }: ReaderViewProps) {
 
       // Update chapter info
       if (detail.tocItem?.label) {
-        setChapter(tabId, detail.section?.current ?? 0, detail.tocItem.label);
+        setChapter(tabId, detail.section?.current ?? 0, detail.tocItem.label, detail.tocItem.href);
       }
 
       // Track pages (reference: Readest progressRelocateHandler)
@@ -501,8 +527,11 @@ export function ReaderView({ bookId, tabId }: ReaderViewProps) {
 
       // Throttled save to DB
       throttledSaveProgress(bookId, progress, cfi);
+
+      // Mark translation ready after first successful relocate (CFI navigation done)
+      if (!translationReady) setTranslationReady(true);
     },
-    [tabId, bookId, bookFormat, setProgress, setChapter, throttledSaveProgress],
+    [tabId, bookId, bookFormat, setProgress, setChapter, throttledSaveProgress, translationReady],
   );
 
   const handleTocReady = useCallback((toc: TOCItem[]) => {
@@ -521,6 +550,11 @@ export function ReaderView({ bookId, tabId }: ReaderViewProps) {
   // We need to re-add all highlights for the current book.
   const handleSectionLoad = useCallback(
     (sectionIndex: number) => {
+      // Reset chapter translation on section change
+      setCurrentSectionIndex(sectionIndex);
+      setTranslationReady(false);
+      chapterTranslation.reset();
+
       // Delay slightly to ensure foliate view is ready
       setTimeout(() => {
         if (!foliateRef.current) return;
@@ -549,13 +583,39 @@ export function ReaderView({ bookId, tabId }: ReaderViewProps) {
         );
       }, 100);
     },
-    [highlights, bookId],
+    [highlights, bookId, chapterTranslation.reset],
   );
 
   const handleError = useCallback((err: Error) => {
     setError(err.message);
     setIsLoading(false);
   }, []);
+
+  // Sync chapter translation visibility with DOM
+  useEffect(() => {
+    if (chapterTranslation.state.status !== "complete") return;
+    try {
+      const renderer = foliateRef.current?.getView()?.renderer;
+      const contents = renderer?.getContents?.();
+      if (!contents?.[0]?.doc) return;
+      const doc = contents[0].doc as Document;
+      const { originalVisible, translationVisible } = chapterTranslation.state;
+      // Translation elements
+      const translationEls = doc.querySelectorAll(".readany-translation");
+      translationEls.forEach((el) => {
+        (el as HTMLElement).setAttribute("data-hidden", String(!translationVisible));
+        // When original is hidden, show translation in original style
+        (el as HTMLElement).setAttribute("data-solo", String(!originalVisible && translationVisible));
+      });
+      // Original text elements
+      const originalEls = doc.querySelectorAll("[data-translate-id]");
+      originalEls.forEach((el) => {
+        (el as HTMLElement).setAttribute("data-original-hidden", String(!originalVisible));
+      });
+    } catch {
+      // Ignore
+    }
+  }, [chapterTranslation.state]);
 
   const handleSelection = useCallback(
     (sel: BookSelection | null) => {
@@ -658,13 +718,10 @@ export function ReaderView({ bookId, tabId }: ReaderViewProps) {
   }, []);
 
   const handleGoToChapter = useCallback(
-    (index: number) => {
-      const item = tocItems[index];
-      if (item?.href) {
-        foliateRef.current?.goToHref(item.href);
-      }
+    (href: string) => {
+      foliateRef.current?.goToHref(href);
     },
-    [tocItems],
+    [],
   );
 
   // --- Selection actions ---
@@ -1004,7 +1061,7 @@ export function ReaderView({ bookId, tabId }: ReaderViewProps) {
       setSearchIndex(0);
       navigateToCfi(results[0].cfi);
     }
-  }, []);
+  }, [navigateToCfi, setSearchResults, setSearchIndex]);
 
   const navigateSearchResult = useCallback((direction: "next" | "prev") => {
     const results = searchResultsListRef.current;
@@ -1018,7 +1075,7 @@ export function ReaderView({ bookId, tabId }: ReaderViewProps) {
       navigateToCfi(results[next].cfi);
       return next;
     });
-  }, []);
+  }, [navigateToCfi]);
 
   const handleNavigateToCitation = useCallback((citation: CitationPart) => {
     if (!citation.cfi || citation.cfi.trim() === "") {
@@ -1083,7 +1140,7 @@ export function ReaderView({ bookId, tabId }: ReaderViewProps) {
     } catch (error) {
       console.error("[handleNavigateToCitation] Failed to navigate to citation:", error, citation);
     }
-  }, []);
+  }, [navigateToCfi]);
 
   if (!readerTab) {
     return <div className="flex h-full items-center justify-center">{t("common.loading")}</div>;
@@ -1250,6 +1307,12 @@ export function ReaderView({ bookId, tabId }: ReaderViewProps) {
             onToggleSettings={handleToggleSettings}
             onToggleChat={handleToggleChat}
             onToggleTTS={handleToggleTTS}
+            chapterTranslationState={chapterTranslation.state}
+            onChapterTranslationStart={chapterTranslation.startTranslation}
+            onChapterTranslationCancel={chapterTranslation.cancelTranslation}
+            onToggleOriginalVisible={chapterTranslation.toggleOriginalVisible}
+            onToggleTranslationVisible={chapterTranslation.toggleTranslationVisible}
+            onChapterTranslationReset={chapterTranslation.reset}
             isChatOpen={showChat}
             isTTSActive={showTTS || ttsPlayState !== "stopped"}
             isFixedLayout={isFixedLayoutFormat(bookFormat)}
@@ -1293,8 +1356,8 @@ export function ReaderView({ bookId, tabId }: ReaderViewProps) {
             <div className="absolute top-2 bottom-2 left-0 z-50 flex animate-in slide-in-from-left duration-200">
               <TOCPanel
                 tocItems={tocItems}
-                onGoToChapter={(index) => {
-                  handleGoToChapter(index);
+                onGoToChapter={(href) => {
+                  handleGoToChapter(href);
                   setShowToc(false);
                 }}
                 onGoToCfi={(cfi) => {

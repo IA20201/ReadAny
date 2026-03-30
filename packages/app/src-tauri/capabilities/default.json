@@ -42,7 +42,12 @@
     "http:default",
     {
       "identifier": "http:allow-fetch",
-      "allow": [{ "url": "https://**" }]
+      "allow": [
+        { "url": "https://**" },
+        { "url": "http://**" },
+        { "url": "http://localhost:*" },
+        { "url": "http://127.0.0.1:*" }
+      ]
     },
     "websocket:default"
   ]

@@ -239,6 +239,7 @@ function rrfFusion(
 /** Find highlight snippets around matching terms */
 function findHighlightSnippets(content: string, terms: string[], contextChars = 50): string[] {
   const snippets: string[] = [];
+  if (!content) return snippets;
   const lowerContent = content.toLowerCase();
 
   for (const term of terms) {

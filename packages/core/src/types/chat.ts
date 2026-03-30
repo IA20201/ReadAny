@@ -111,7 +111,29 @@ export interface SemanticContext {
   operationType: "reading" | "highlighting" | "searching" | "navigating";
 }
 
-export type AIProviderType = "openai" | "anthropic" | "google" | "deepseek";
+export type AIProviderType =
+  | "openai"
+  | "anthropic"
+  | "google"
+  | "deepseek"
+  | "ollama"
+  | "lmstudio"
+  | "openrouter"
+  | "siliconflow"
+  | "moonshot"
+  | "zhipu"
+  | "aliyun"
+  | "volces"
+  | "baichuan"
+  | "minimax"
+  | "groq"
+  | "together"
+  | "fireworks"
+  | "xai"
+  | "mistral"
+  | "perplexity"
+  | "aihubmix"
+  | "custom";
 
 export interface AIEndpoint {
   id: string;

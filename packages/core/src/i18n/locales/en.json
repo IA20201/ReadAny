@@ -253,7 +253,19 @@
     "useAIModel": "Using {{model}}",
     "deeplApiKey": "DeepL API Key",
     "deeplApiKeyPlaceholder": "Enter DeepL API Key...",
-    "targetLanguage": "Target Language"
+    "targetLanguage": "Target Language",
+    "selectLanguage": "Select Language",
+    "translateChapter": "Translate Chapter",
+    "translatingProgress": "Translating... {{count}}/{{total}}",
+    "chapterTranslated": "Chapter Translated",
+    "showTranslations": "Show Translations",
+    "hideTranslations": "Hide Translations",
+    "showOriginal": "Show Original",
+    "hideOriginal": "Hide Original",
+    "showTranslation": "Show Translation",
+    "hideTranslation": "Hide Translation",
+    "cancelTranslation": "Cancel Translation",
+    "noTextToTranslate": "No text to translate"
   },
   "highlights": {
     "yellow": "Yellow",
@@ -582,6 +594,9 @@
     "syncFilesDown": "Downloaded {{count}} files",
     "syncAutoSync": "自动同步",
     "syncAutoSyncDesc": "在后台自动同步数据",
+    "syncAllowInsecure": "Allow Insecure Connection",
+    "syncAllowInsecureDesc": "Skip TLS certificate verification (for self-signed certificates)",
+    "syncAllowInsecureDescMobile": "Use HTTP instead of HTTPS for self-signed certificate servers",
     "syncNotConfigured": "Not configured",
     "syncAdvanced": "Advanced Options",
     "syncDeviceId": "Device ID",
@@ -918,8 +933,8 @@
       },
       "title": "Welcome to ReadAny",
       "subtitle": "Your intelligent reading companion. Let's set up the perfect reading environment.",
-      "translate": "即时双语翻译",
-      "translateDesc": "无缝对照，流畅阅读",
+      "translate": "Instant Bilingual Translation",
+      "translateDesc": "Seamless side-by-side reading",
       "start": "Start Experience"
     },
     "ai": {

@@ -3,6 +3,7 @@
  */
 import type { AIConfig, AIEndpoint, ReadSettings } from "@readany/core/types";
 import type { TranslationConfig, TranslationTargetLang } from "@readany/core/types/translation";
+import { formatApiHost } from "@readany/core/utils/api";
 import { create } from "zustand";
 import { deleteSecure, loadSecure, saveSecure, withPersist } from "./persist";
 
@@ -65,41 +66,152 @@ const defaultAIConfig: AIConfig = {
 };
 
 async function fetchModelsFromEndpoint(endpoint: AIEndpoint): Promise<string[]> {
-  if (!endpoint.apiKey) return [];
+  if (!endpoint.apiKey && endpoint.provider !== "ollama" && endpoint.provider !== "lmstudio") {
+    return [];
+  }
 
   try {
     switch (endpoint.provider) {
       case "anthropic":
-        return [
-          "claude-sonnet-4-20250514",
-          "claude-opus-4-20250514",
-          "claude-3-7-sonnet-20250219",
-          "claude-3-5-sonnet-20241022",
-          "claude-3-5-haiku-20241022",
-        ];
+        return await fetchAnthropicModels(endpoint);
       case "google":
-        return [
-          "gemini-2.5-pro",
-          "gemini-2.5-flash",
-          "gemini-2.0-flash",
-          "gemini-1.5-pro",
-          "gemini-1.5-flash",
-        ];
+        return await fetchGoogleModels(endpoint);
       case "deepseek":
-        return ["deepseek-chat", "deepseek-reasoner"];
-      default: {
-        const baseUrl = endpoint.baseUrl.replace(/\/+$/, "");
-        const response = await fetch(`${baseUrl}/models`, {
-          headers: { Authorization: `Bearer ${endpoint.apiKey}` },
-        });
-        if (!response.ok) return [];
-        const data = await response.json();
-        return (data.data || []).map((m: { id: string }) => m.id).sort();
-      }
+        return await fetchDeepSeekModels(endpoint);
+      case "ollama":
+        return await fetchOllamaModels(endpoint);
+      case "lmstudio":
+        return await fetchLMStudioModels(endpoint);
+      default:
+        return await fetchOpenAIModels(endpoint);
     }
-  } catch {
+  } catch (error) {
+    console.error(`[fetchModels] Failed for ${endpoint.provider}:`, error);
     return [];
   }
+}
+
+async function fetchOpenAIModels(endpoint: AIEndpoint): Promise<string[]> {
+  if (!endpoint.baseUrl) return [];
+  const baseUrl = formatApiHost(endpoint.baseUrl).replace(/\/+$/, "");
+  const response = await fetch(`${baseUrl}/models`, {
+    headers: { Authorization: `Bearer ${endpoint.apiKey}` },
+  });
+  if (!response.ok) {
+    throw new Error(`Failed to fetch models: ${response.status} ${response.statusText}`);
+  }
+  const data = await response.json();
+  return (data.data || [])
+    .map((m: { id: string }) => m.id)
+    .sort((a: string, b: string) => a.localeCompare(b));
+}
+
+async function fetchAnthropicModels(endpoint: AIEndpoint): Promise<string[]> {
+  const baseUrl = formatApiHost(endpoint.baseUrl || "https://api.anthropic.com").replace(/\/+$/, "");
+  const response = await fetch(`${baseUrl}/models`, {
+    headers: {
+      "x-api-key": endpoint.apiKey,
+      "anthropic-version": "2023-06-01",
+      "anthropic-dangerous-direct-browser-access": "true",
+    },
+  });
+  if (!response.ok) {
+    if (response.status === 404 || response.status === 405) {
+      return [
+        "claude-sonnet-4-20250514",
+        "claude-opus-4-20250514",
+        "claude-3-7-sonnet-20250219",
+        "claude-3-5-sonnet-20241022",
+        "claude-3-5-haiku-20241022",
+        "claude-3-opus-20240229",
+        "claude-3-haiku-20240307",
+      ];
+    }
+    throw new Error(`Failed to fetch Anthropic models: ${response.status}`);
+  }
+  const data = await response.json();
+  return (data.data || [])
+    .map((m: { id: string }) => m.id)
+    .sort((a: string, b: string) => a.localeCompare(b));
+}
+
+async function fetchGoogleModels(endpoint: AIEndpoint): Promise<string[]> {
+  const baseUrl = (endpoint.baseUrl || "https://generativelanguage.googleapis.com").replace(
+    /\/+$/,
+    "",
+  );
+  const response = await fetch(`${baseUrl}/v1beta/models?key=${endpoint.apiKey}`);
+  if (!response.ok) {
+    if (response.status === 404 || response.status === 403) {
+      return [
+        "gemini-2.5-pro",
+        "gemini-2.5-flash",
+        "gemini-2.0-flash",
+        "gemini-2.0-flash-lite",
+        "gemini-1.5-pro",
+        "gemini-1.5-flash",
+      ];
+    }
+    throw new Error(`Failed to fetch Google models: ${response.status}`);
+  }
+  const data = await response.json();
+  return (data.models || [])
+    .filter((m: { name: string; supportedGenerationMethods?: string[] }) =>
+      m.supportedGenerationMethods?.includes("generateContent"),
+    )
+    .map((m: { name: string }) => m.name.replace("models/", ""))
+    .sort((a: string, b: string) => a.localeCompare(b));
+}
+
+async function fetchDeepSeekModels(endpoint: AIEndpoint): Promise<string[]> {
+  const baseUrl = formatApiHost(endpoint.baseUrl || "https://api.deepseek.com").replace(/\/+$/, "");
+  try {
+    const response = await fetch(`${baseUrl}/models`, {
+      headers: { Authorization: `Bearer ${endpoint.apiKey}` },
+    });
+    if (response.ok) {
+      const data = await response.json();
+      const models = (data.data || [])
+        .map((m: { id: string }) => m.id)
+        .sort((a: string, b: string) => a.localeCompare(b));
+      if (models.length > 0) return models;
+    }
+  } catch {
+    // Fall through to fallback
+  }
+  return ["deepseek-chat", "deepseek-reasoner"];
+}
+
+async function fetchOllamaModels(endpoint: AIEndpoint): Promise<string[]> {
+  const baseUrl = (endpoint.baseUrl || "http://localhost:11434").replace(/\/+$/, "");
+  try {
+    const response = await fetch(`${baseUrl}/api/tags`);
+    if (response.ok) {
+      const data = await response.json();
+      return (data.models || [])
+        .map((m: { name: string }) => m.name)
+        .sort((a: string, b: string) => a.localeCompare(b));
+    }
+  } catch (error) {
+    console.error("[fetchOllamaModels] Failed:", error);
+  }
+  return [];
+}
+
+async function fetchLMStudioModels(endpoint: AIEndpoint): Promise<string[]> {
+  const baseUrl = (endpoint.baseUrl || "http://localhost:1234").replace(/\/+$/, "");
+  try {
+    const response = await fetch(`${baseUrl}/v1/models`);
+    if (response.ok) {
+      const data = await response.json();
+      return (data.data || [])
+        .map((m: { id: string }) => m.id)
+        .sort((a: string, b: string) => a.localeCompare(b));
+    }
+  } catch (error) {
+    console.error("[fetchLMStudioModels] Failed:", error);
+  }
+  return [];
 }
 
 // Helper to get secure key for endpoint

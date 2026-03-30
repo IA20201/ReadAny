@@ -15,3 +15,11 @@ export {
   formatRelativeTimeShort,
 } from "./time-group";
 export type { TimeGroup, GroupedThreads } from "./time-group";
+export {
+  formatApiHost,
+  getProviderConfig,
+  getDefaultBaseUrl,
+  detectProviderFromUrl,
+  PROVIDER_CONFIGS,
+} from "./api";
+export type { ProviderConfig } from "./api";

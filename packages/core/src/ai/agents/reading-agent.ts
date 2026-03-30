@@ -1,5 +1,6 @@
 import { AIMessage, HumanMessage } from "@langchain/core/messages";
 import type { BaseMessage } from "@langchain/core/messages";
+import { createReactAgent } from "@langchain/langgraph/prebuilt";
 import { z } from "zod";
 /**
  * Reading Agent — AI-powered reading assistant using LangGraph ReAct agent
@@ -55,6 +56,8 @@ export interface ReadingAgentOptions {
     isVectorized: boolean;
     enabledSkills: Skill[];
   }) => ToolDefinition[];
+  /** Abort signal for immediate cancellation */
+  signal?: AbortSignal;
 }
 
 // --- Build Zod schema from ToolDefinition.parameters ---
@@ -117,9 +120,16 @@ export async function* streamReadingAgent(
     deepThinking,
     spoilerFree,
     getAvailableTools,
+    signal,
   } = options;
 
+  // Helper to check if aborted
+  const isAborted = () => signal?.aborted ?? false;
+
   try {
+    // Early abort check
+    if (isAborted()) return;
+
     // Create chat model
     const model = await createChatModel(aiConfig, {
       temperature: deepThinking ? 1 : 0.7,
@@ -127,6 +137,9 @@ export async function* streamReadingAgent(
       streaming: true,
       deepThinking,
     });
+
+    // Check abort after async operation
+    if (isAborted()) return;
 
     // Register ALL tools via injected getAvailableTools
     const tools = getAvailableTools({
@@ -201,7 +214,6 @@ export async function* streamReadingAgent(
     });
 
     // Create LangGraph ReAct agent — handles tool-calling loop automatically
-    const { createReactAgent } = await import("@langchain/langgraph/prebuilt");
     const agent = createReactAgent({
       llm: model,
       tools: langChainTools,
@@ -224,65 +236,87 @@ export async function* streamReadingAgent(
     // Key: chunk index, Value: { name accumulated so far, args accumulated so far }
     const streamingToolCalls = new Map<number, { name: string; args: string; emitted: boolean }>();
 
-    for await (const event of eventStream) {
+    // Helper to race iterator next() against abort signal
+    const raceNext = async (iterator: AsyncIterator<unknown>): Promise<IteratorResult<unknown>> => {
+      if (isAborted()) {
+        return { done: true, value: undefined };
+      }
+      const abortPromise = new Promise<IteratorResult<unknown>>((resolve) => {
+        const onAbort = () => {
+          signal?.removeEventListener("abort", onAbort);
+          resolve({ done: true, value: undefined });
+        };
+        signal?.addEventListener("abort", onAbort);
+      });
+      return Promise.race([iterator.next(), abortPromise]);
+    };
+
+    const iterator = eventStream[Symbol.asyncIterator]();
+    let eventResult = await raceNext(iterator);
+
+    while (!eventResult.done) {
+      const event = eventResult.value as any;
+      // Check for abort at each iteration
+      if (isAborted()) return;
+
       // Token streaming from model
       if (event.event === "on_chat_model_stream") {
         const chunk = event.data?.chunk;
-        if (!chunk) continue;
+        if (chunk) {
+          const content = chunk.content;
 
-        const content = chunk.content;
-
-        // Always extract text content, even when the chunk also contains tool_call_chunks.
-        // OpenAI models often send text (the "reason" before calling a tool) and
-        // tool_call_chunks in the same stream of chunks.
-        if (typeof content === "string" && content) {
-          yield { type: "token", content };
-        } else if (Array.isArray(content)) {
-          // Handle Anthropic-style content blocks (text + thinking)
-          for (const block of content) {
-            if (block.type === "text" && block.text) {
-              yield { type: "token", content: block.text };
-            } else if (block.type === "thinking") {
-              // Anthropic may return thinking content in different fields
-              // Try block.text first (most common), then block.thinking, then block.content
-              const thinkingContent = block.text || block.thinking || block.content;
-              if (thinkingContent) {
-                yield { type: "reasoning", content: thinkingContent, stepType: "thinking" };
+          // Always extract text content, even when the chunk also contains tool_call_chunks.
+          // OpenAI models often send text (the "reason" before calling a tool) and
+          // tool_call_chunks in the same stream of chunks.
+          if (typeof content === "string" && content) {
+            yield { type: "token", content };
+          } else if (Array.isArray(content)) {
+            // Handle Anthropic-style content blocks (text + thinking)
+            for (const block of content) {
+              if (block.type === "text" && block.text) {
+                yield { type: "token", content: block.text };
+              } else if (block.type === "thinking") {
+                // Anthropic may return thinking content in different fields
+                // Try block.text first (most common), then block.thinking, then block.content
+                const thinkingContent = block.text || block.thinking || block.content;
+                if (thinkingContent) {
+                  yield { type: "reasoning", content: thinkingContent, stepType: "thinking" };
+                }
               }
             }
           }
-        }
 
-        // Handle DeepSeek reasoning_content from @langchain/deepseek
-        // ChatDeepSeek puts reasoning_content in additional_kwargs.reasoning_content
-        const reasoningContent = chunk.additional_kwargs?.reasoning_content;
-        if (typeof reasoningContent === "string" && reasoningContent) {
-          yield { type: "reasoning", content: reasoningContent, stepType: "thinking" };
-        }
+          // Handle DeepSeek reasoning_content from @langchain/deepseek
+          // ChatDeepSeek puts reasoning_content in additional_kwargs.reasoning_content
+          const reasoningContent = chunk.additional_kwargs?.reasoning_content;
+          if (typeof reasoningContent === "string" && reasoningContent) {
+            yield { type: "reasoning", content: reasoningContent, stepType: "thinking" };
+          }
 
-        // Detect tool_call_chunks in streaming and emit tool_call as soon as we have the name.
-        // This eliminates the delay between the last text token and on_chat_model_end.
-        const toolCallChunks = chunk.tool_call_chunks;
-        if (Array.isArray(toolCallChunks)) {
-          for (const tcc of toolCallChunks) {
-            const idx = tcc.index ?? 0;
-            let entry = streamingToolCalls.get(idx);
-            if (!entry) {
-              entry = { name: "", args: "", emitted: false };
-              streamingToolCalls.set(idx, entry);
-            }
-            if (tcc.name) entry.name += tcc.name;
-            if (tcc.args) entry.args += tcc.args;
+          // Detect tool_call_chunks in streaming and emit tool_call as soon as we have the name.
+          // This eliminates the delay between the last text token and on_chat_model_end.
+          const toolCallChunks = chunk.tool_call_chunks;
+          if (Array.isArray(toolCallChunks)) {
+            for (const tcc of toolCallChunks) {
+              const idx = tcc.index ?? 0;
+              let entry = streamingToolCalls.get(idx);
+              if (!entry) {
+                entry = { name: "", args: "", emitted: false };
+                streamingToolCalls.set(idx, entry);
+              }
+              if (tcc.name) entry.name += tcc.name;
+              if (tcc.args) entry.args += tcc.args;
 
-            // Emit as soon as we have a tool name (don't wait for full args)
-            if (entry.name && !entry.emitted) {
-              entry.emitted = true;
-              pendingEarlyToolCalls++;
-              yield {
-                type: "tool_call" as const,
-                name: entry.name,
-                args: {}, // args will arrive later; show pending UI immediately
-              };
+              // Emit as soon as we have a tool name (don't wait for full args)
+              if (entry.name && !entry.emitted) {
+                entry.emitted = true;
+                pendingEarlyToolCalls++;
+                yield {
+                  type: "tool_call" as const,
+                  name: entry.name,
+                  args: {}, // args will arrive later; show pending UI immediately
+                };
+              }
             }
           }
         }
@@ -374,8 +408,15 @@ export async function* streamReadingAgent(
 
         yield { type: "tool_result", name: event.name, result };
       }
+
+      // Get next event
+      eventResult = await raceNext(iterator);
     }
   } catch (error) {
+    console.error("[ReadingAgent] Error:", error);
+    if (error instanceof Error) {
+      console.error("[ReadingAgent] Stack:", error.stack);
+    }
     yield { type: "error", error: error instanceof Error ? error.message : String(error) };
   }
 }

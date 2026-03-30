@@ -26,6 +26,11 @@ const migrations: Migration[] = [
     description: "Add segment_cfis column to chunks",
     up: "ALTER TABLE chunks ADD COLUMN segment_cfis TEXT",
   },
+  {
+    version: 4,
+    description: "Add sync_status column to books for on-demand download",
+    up: "ALTER TABLE books ADD COLUMN sync_status TEXT NOT NULL DEFAULT 'local'",
+  },
 ];
 
 /** Run pending migrations */

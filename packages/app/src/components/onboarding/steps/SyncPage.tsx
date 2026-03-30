@@ -2,6 +2,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { getPlatformService } from "@readany/core/services";
 import { useSyncStore } from "@readany/core/stores/sync-store";
+import { SYNC_SECRET_KEYS } from "@readany/core/sync/sync-backend";
 import { AlertCircle, CheckCircle2, Eye, EyeOff, Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -26,7 +27,7 @@ export function SyncPage({ onNext, onPrev, step, totalSteps }: any) {
       }
 
       const platform = getPlatformService();
-      const savedPassword = await platform.kvGetItem("sync_password");
+      const savedPassword = await platform.kvGetItem(SYNC_SECRET_KEYS.webdav);
       if (savedPassword) setPassword(savedPassword);
     };
     loadExistingConfig();

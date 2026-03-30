@@ -10,6 +10,7 @@
  * - expo-constants for app version
  */
 import type {
+  FetchOptions,
   FilePickerOptions,
   IDatabase,
   IPlatformService,
@@ -18,7 +19,6 @@ import type {
 } from "@readany/core/services";
 import * as Clipboard from "expo-clipboard";
 import Constants from "expo-constants";
-import * as Crypto from "expo-crypto";
 import * as DocumentPicker from "expo-document-picker";
 import { Directory, File, Paths } from "expo-file-system";
 import * as Network from "expo-network";
@@ -162,18 +162,14 @@ export class ExpoPlatformService implements IPlatformService {
 
   // ---- Network ----
 
-  async fetch(url: string, options?: RequestInit): Promise<Response> {
-    const method = options?.method?.toUpperCase() || "GET";
-    const standardMethods = ["GET", "POST", "PUT", "DELETE", "HEAD", "OPTIONS", "PATCH"];
+  async fetch(url: string, options?: FetchOptions): Promise<Response> {
+    const { allowInsecure, ...fetchOptions } = options ?? {};
+    const effectiveUrl = allowInsecure ? url.replace(/^https:\/\//i, "http://") : url;
+    const method = fetchOptions?.method?.toUpperCase() || "GET";
 
-    // Use XMLHttpRequest for custom WebDAV methods (MKCOL, PROPFIND, etc.)
-    // React Native's fetch doesn't properly support custom HTTP methods
-    if (!standardMethods.includes(method)) {
-      return this._fetchWithXHR(url, options);
-    }
-
-    // Use standard fetch for standard HTTP methods
-    return globalThis.fetch(url, options);
+    // Always use XHR for WebDAV to handle large binary files properly
+    // React Native's fetch has issues with large arrayBuffer responses
+    return this._fetchWithXHR(effectiveUrl, fetchOptions);
   }
 
   private _fetchWithXHR(url: string, options?: RequestInit): Promise<Response> {
@@ -182,6 +178,8 @@ export class ExpoPlatformService implements IPlatformService {
       const method = options?.method || "GET";
 
       xhr.open(method, url, true);
+      xhr.responseType = "arraybuffer";
+      xhr.timeout = 120000; // 2 minute timeout for large file downloads
 
       // Set headers
       if (options?.headers) {
@@ -192,21 +190,44 @@ export class ExpoPlatformService implements IPlatformService {
       }
 
       xhr.onload = () => {
-        // Create a Response-like object
-        const response = {
-          status: xhr.status,
-          statusText: xhr.statusText,
-          ok: xhr.status >= 200 && xhr.status < 300,
-          headers: new Headers(),
-          text: async () => xhr.responseText,
-          json: async () => JSON.parse(xhr.responseText),
-          arrayBuffer: async () => {
-            const encoder = new TextEncoder();
-            return encoder.encode(xhr.responseText).buffer;
-          },
-        } as Response;
+        try {
+          const buffer = xhr.response as ArrayBuffer;
 
-        resolve(response);
+          // Create a Response-like object
+          const response = {
+            status: xhr.status,
+            statusText: xhr.statusText,
+            ok: xhr.status >= 200 && xhr.status < 300,
+            headers: new Headers(),
+            text: async () => {
+              // Use chunked decoding for large buffers to avoid string length limits
+              const CHUNK_SIZE = 65536; // 64KB chunks
+              if (buffer.byteLength <= CHUNK_SIZE) {
+                return new TextDecoder().decode(buffer);
+              }
+              const chunks: string[] = [];
+              const decoder = new TextDecoder();
+              let offset = 0;
+              while (offset < buffer.byteLength) {
+                const end = Math.min(offset + CHUNK_SIZE, buffer.byteLength);
+                chunks.push(
+                  decoder.decode(buffer.slice(offset, end), { stream: end < buffer.byteLength }),
+                );
+                offset = end;
+              }
+              return chunks.join("");
+            },
+            json: async () => {
+              const text = await response.text();
+              return JSON.parse(text);
+            },
+            arrayBuffer: async () => buffer,
+          } as Response;
+
+          resolve(response);
+        } catch (error) {
+          reject(new Error(`Failed to process XHR response for ${method} ${url}: ${error}`));
+        }
       };
 
       xhr.onerror = () => {
@@ -214,7 +235,7 @@ export class ExpoPlatformService implements IPlatformService {
       };
 
       xhr.ontimeout = () => {
-        reject(new Error(`XHR request timeout: ${method} ${url}`));
+        reject(new Error(`XHR request timeout (120s): ${method} ${url}`));
       };
 
       // Send request
@@ -263,14 +284,55 @@ export class ExpoPlatformService implements IPlatformService {
     return Constants.expoConfig?.version ?? "1.0.0";
   }
 
-  // ---- Update (noop — mobile uses app stores) ----
+  // ---- Update (GitHub releases) ----
 
   async checkUpdate() {
-    return null;
+    try {
+      const response = await fetch(
+        "https://api.github.com/repos/codedogQBY/ReadAny/releases/latest"
+      );
+      if (!response.ok) return null;
+
+      const release = await response.json();
+      const latestVersion = release.tag_name.replace(/^v/, "");
+      const currentVersion = await this.getAppVersion();
+
+      if (this._compareVersions(latestVersion, currentVersion) > 0) {
+        const apkAsset = release.assets.find(
+          (a: { name: string }) => a.name === "ReadAny.apk"
+        );
+        if (apkAsset) {
+          return {
+            version: latestVersion,
+            notes: release.body || undefined,
+            date: release.published_at || undefined,
+            downloadUrl: apkAsset.browser_download_url,
+          };
+        }
+      }
+      return null;
+    } catch (e) {
+      console.error("[Updater] Check failed:", e);
+      return null;
+    }
   }
 
-  async installUpdate() {
-    // noop
+  async installUpdate(downloadUrl?: string) {
+    if (!downloadUrl) return;
+    const { Linking } = await import("react-native");
+    await Linking.openURL(downloadUrl);
+  }
+
+  private _compareVersions(a: string, b: string): number {
+    const pa = a.split(".").map(Number);
+    const pb = b.split(".").map(Number);
+    for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+      const na = pa[i] || 0;
+      const nb = pb[i] || 0;
+      if (na > nb) return 1;
+      if (na < nb) return -1;
+    }
+    return 0;
   }
 
   // ---- KV Storage (backed by expo-secure-store) ----
@@ -302,17 +364,32 @@ export class ExpoPlatformService implements IPlatformService {
   }
 
   async kvGetItem(key: string): Promise<string | null> {
-    return SecureStore.getItemAsync(key);
+    try {
+      return await SecureStore.getItemAsync(key);
+    } catch (e) {
+      console.error(`[SecureStore] getItem failed for key "${key}":`, e);
+      return null;
+    }
   }
 
   async kvSetItem(key: string, value: string): Promise<void> {
-    await SecureStore.setItemAsync(key, value);
-    await this._addKeyToIndex(key);
+    try {
+      await SecureStore.setItemAsync(key, value);
+      await this._addKeyToIndex(key);
+      console.log(`[SecureStore] Saved key "${key}" successfully`);
+    } catch (e) {
+      console.error(`[SecureStore] setItem failed for key "${key}":`, e);
+      throw e;
+    }
   }
 
   async kvRemoveItem(key: string): Promise<void> {
-    await SecureStore.deleteItemAsync(key);
-    await this._removeKeyFromIndex(key);
+    try {
+      await SecureStore.deleteItemAsync(key);
+      await this._removeKeyFromIndex(key);
+    } catch (e) {
+      console.error(`[SecureStore] deleteItem failed for key "${key}":`, e);
+    }
   }
 
   async kvGetAllKeys(): Promise<string[]> {
@@ -342,6 +419,15 @@ export class ExpoPlatformService implements IPlatformService {
 
   // ---- LAN Sync ----
 
+  async isOnWifi(): Promise<boolean> {
+    try {
+      const state = await Network.getNetworkStateAsync();
+      return state.type === Network.NetworkStateType.WIFI;
+    } catch {
+      return false;
+    }
+  }
+
   async getLocalIP(): Promise<string> {
     try {
       const ip = await Network.getIpAddressAsync();
@@ -359,9 +445,12 @@ export class ExpoPlatformService implements IPlatformService {
       headers: Record<string, string>,
     ) => Promise<{ status: number; body?: Uint8Array; headers?: Record<string, string> }>,
   ): Promise<{ port: number; server: unknown }> {
-    const isExpoGo = Constants.executionEnvironment === "storeClient" || Constants.appOwnership === "expo";
+    const isExpoGo =
+      Constants.executionEnvironment === "storeClient" || Constants.appOwnership === "expo";
     if (isExpoGo) {
-      throw new Error("由于需要底层原生 TCP 模块，局域网服务端不支持在原味 Expo Go 中运行。请使用自定义 Dev Client (expo run) 或桌面版进行互传。");
+      throw new Error(
+        "由于需要底层原生 TCP 模块，局域网服务端不支持在原味 Expo Go 中运行。请使用自定义 Dev Client (expo run) 或桌面版进行互传。",
+      );
     }
 
     let TcpSocket: any;
@@ -387,7 +476,7 @@ export class ExpoPlatformService implements IPlatformService {
             if (lines.length === 0) return;
 
             const [method, path] = lines[0].split(" ");
-            
+
             const reqHeaders: Record<string, string> = {};
             for (let i = 1; i < lines.length; i++) {
               const line = lines[i];
@@ -403,7 +492,7 @@ export class ExpoPlatformService implements IPlatformService {
 
             try {
               const response = await handler(method, path, reqHeaders);
-              
+
               let resHead = `HTTP/1.1 ${response.status} OK\r\n`;
               if (response.headers) {
                 for (const [k, v] of Object.entries(response.headers)) {
@@ -411,7 +500,7 @@ export class ExpoPlatformService implements IPlatformService {
                 }
               }
               resHead += "Connection: close\r\n\r\n";
-              
+
               socket.write(resHead);
               if (response.body) {
                 socket.write(BufferMod.from(response.body));

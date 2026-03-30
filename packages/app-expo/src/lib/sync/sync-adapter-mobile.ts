@@ -74,11 +74,6 @@ export class MobileSyncAdapter implements ISyncAdapter {
   async hashFile(filePath: string): Promise<string> {
     const file = new File(filePath);
     const data = await file.bytes();
-    const hash = await Crypto.digestStringAsync(
-      Crypto.CryptoDigestAlgorithm.SHA256,
-      arrayBufferToBase64(data),
-      { encoding: Crypto.CryptoEncoding.BASE64 },
-    );
     return Crypto.digestStringAsync(
       Crypto.CryptoDigestAlgorithm.SHA256,
       arrayBufferToBase64(data),

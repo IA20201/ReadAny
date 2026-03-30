@@ -215,6 +215,21 @@ export const BookCard = memo(function BookCard({
             </View>
           )}
 
+          {/* Remote status overlay (on-demand download) */}
+          {book.syncStatus === "remote" && (
+            <View style={s.remoteOverlay}>
+              <Text style={s.remoteOverlayText}>{t("home.remote", "需下载")}</Text>
+            </View>
+          )}
+
+          {/* Downloading status overlay */}
+          {book.syncStatus === "downloading" && (
+            <View style={s.downloadingOverlay}>
+              <AnimatedLoader />
+              <Text style={s.downloadingOverlayText}>{t("home.downloading", "下载中")}</Text>
+            </View>
+          )}
+
           {/* Vectorized badge */}
           {book.isVectorized && !isVectorizing && (
             <View style={s.vecBadge}>
@@ -536,6 +551,45 @@ const makeStyles = (colors: ThemeColors) =>
     queuedOverlayText: {
       marginTop: 4,
       fontSize: 12,
+      fontWeight: fontWeight.medium,
+      color: "#fff",
+    },
+    // Remote status overlay (on-demand download)
+    remoteOverlay: {
+      position: "absolute",
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      backgroundColor: "rgba(59, 130, 246, 0.6)", // Blue tint
+      borderRadius: radius.sm,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    remoteOverlayText: {
+      fontSize: 12,
+      fontWeight: fontWeight.medium,
+      color: "#fff",
+      backgroundColor: "rgba(0,0,0,0.4)",
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      borderRadius: radius.sm,
+    },
+    // Downloading overlay
+    downloadingOverlay: {
+      position: "absolute",
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      backgroundColor: "rgba(0,0,0,0.5)",
+      borderRadius: radius.sm,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    downloadingOverlayText: {
+      marginTop: 6,
+      fontSize: 14,
       fontWeight: fontWeight.medium,
       color: "#fff",
     },

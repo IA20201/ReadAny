@@ -12,6 +12,7 @@ import {
   Trash2Icon,
   XIcon,
 } from "@/components/ui/Icon";
+import { setCallback, setExtractorRef } from "@/lib/rag/auto-vectorize-service";
 import { triggerVectorizeBook } from "@/lib/rag/vectorize-trigger";
 import type { RootStackParamList } from "@/navigation/RootNavigator";
 import { useLibraryStore } from "@/stores/library-store";
@@ -153,6 +154,20 @@ export function LibraryScreen() {
     loadBooks();
   }, [loadBooks]);
 
+  // Connect auto-vectorize service
+  useEffect(() => {
+    setExtractorRef(extractorRef.current);
+    setCallback((bookId, progress) => {
+      console.log(
+        `[AutoVectorize] Book ${bookId}: ${progress.status} (${Math.round(progress.progress * 100)}%)`,
+      );
+    });
+    return () => {
+      setExtractorRef(null);
+      setCallback(null);
+    };
+  }, []);
+
   // Refresh library when AI tools modify books/tags
   useEffect(() => {
     return onLibraryChanged((deletedTags) => loadBooks(deletedTags));
@@ -241,10 +256,61 @@ export function LibraryScreen() {
   }, [importBooks, t]);
 
   const handleOpen = useCallback(
-    (book: Book) => {
+    async (book: Book) => {
+      // Check if book needs to be downloaded (on-demand download)
+      if (book.syncStatus === "remote") {
+        try {
+          const { useSyncStore } = await import("@readany/core/stores/sync-store");
+          const { downloadBookFile } = await import("@readany/core/sync");
+
+          const syncStore = useSyncStore.getState();
+          if (!syncStore.config) {
+            Alert.alert(t("common.error", "错误"), t("library.syncNotConfigured", "请先配置同步"));
+            return;
+          }
+
+          // Get password from secure storage
+          const platform = getPlatformService();
+          const secretKey =
+            syncStore.config.type === "webdav" ? "sync_webdav_password" : "sync_s3_secret_key";
+          const password = await platform.kvGetItem(secretKey);
+          if (!password) {
+            Alert.alert(
+              t("common.error", "错误"),
+              t("library.passwordNotFound", "未找到同步密码，请重新配置"),
+            );
+            return;
+          }
+
+          // Create backend
+          const { createSyncBackend } = await import("@readany/core/sync/sync-backend-factory");
+          const backend = createSyncBackend(syncStore.config, password);
+
+          // Show downloading alert
+          Alert.alert(
+            t("library.downloading", "下载中"),
+            t("library.downloadingBook", "正在下载《{title}》...", { title: book.meta.title }),
+          );
+
+          // Download book
+          const success = await downloadBookFile(backend, book.id, book.filePath);
+
+          if (!success) {
+            Alert.alert(t("common.error", "错误"), t("library.downloadFailed", "下载失败，请重试"));
+            return;
+          }
+
+          console.log(`[LibraryScreen] Book ${book.id} downloaded successfully`);
+        } catch (err) {
+          console.error("Download failed:", err);
+          Alert.alert(t("common.error", "错误"), t("library.downloadFailed", "下载失败，请重试"));
+          return;
+        }
+      }
+
       nav.navigate("Reader", { bookId: book.id });
     },
-    [nav],
+    [nav, t],
   );
 
   const handleManageTags = useCallback((book: Book) => {
@@ -254,44 +320,41 @@ export function LibraryScreen() {
   }, []);
 
   // Process a single book vectorization
-  const processOneBook = useCallback(
-    async (book: Book) => {
-      setVectorizingBookId(book.id);
-      setVectorizingBookTitle(book.meta.title);
-      setVectorProgress({ status: "chunking", processedChunks: 0, totalChunks: 0 });
+  const processOneBook = useCallback(async (book: Book) => {
+    setVectorizingBookId(book.id);
+    setVectorizingBookTitle(book.meta.title);
+    setVectorProgress({ status: "chunking", processedChunks: 0, totalChunks: 0 });
 
-      try {
-        if (!extractorRef.current) {
-          throw new Error("Extractor WebView not ready");
-        }
-
-        const platform = getPlatformService();
-        const appData = await platform.getAppDataDir();
-        const absPath = await platform.joinPath(appData, book.filePath);
-
-        const base64 = await FileSystem.readAsStringAsync(absPath, {
-          encoding: FileSystem.EncodingType.Base64,
-        });
-
-        const chapters = await extractorRef.current.extractChapters(base64, "application/epub+zip");
-        if (!chapters || chapters.length === 0) {
-          throw new Error("No chapters extracted from book");
-        }
-
-        await triggerVectorizeBook(book.id, book.filePath, chapters, (progress) => {
-          setVectorProgress(progress);
-        });
-
-        setVectorProgress({ status: "completed", processedChunks: 1, totalChunks: 1 });
-        await new Promise((resolve) => setTimeout(resolve, 800));
-      } catch (err) {
-        console.error(`[LibraryScreen] Vectorization failed for "${book.meta.title}":`, err);
-        setVectorProgress({ status: "error", processedChunks: 0, totalChunks: 0 });
-        await new Promise((resolve) => setTimeout(resolve, 1500));
+    try {
+      if (!extractorRef.current) {
+        throw new Error("Extractor WebView not ready");
       }
-    },
-    [],
-  );
+
+      const platform = getPlatformService();
+      const appData = await platform.getAppDataDir();
+      const absPath = await platform.joinPath(appData, book.filePath);
+
+      const base64 = await FileSystem.readAsStringAsync(absPath, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+
+      const chapters = await extractorRef.current.extractChapters(base64, "application/epub+zip");
+      if (!chapters || chapters.length === 0) {
+        throw new Error("No chapters extracted from book");
+      }
+
+      await triggerVectorizeBook(book.id, book.filePath, chapters, (progress) => {
+        setVectorProgress(progress);
+      });
+
+      setVectorProgress({ status: "completed", processedChunks: 1, totalChunks: 1 });
+      await new Promise((resolve) => setTimeout(resolve, 800));
+    } catch (err) {
+      console.error(`[LibraryScreen] Vectorization failed for "${book.meta.title}":`, err);
+      setVectorProgress({ status: "error", processedChunks: 0, totalChunks: 0 });
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+    }
+  }, []);
 
   // Process the vectorization queue serially
   const processQueue = useCallback(async () => {
@@ -384,7 +447,15 @@ export function LibraryScreen() {
         />
       </View>
     ),
-    [handleOpen, removeBook, handleManageTags, handleVectorize, vectorizingBookId, vectorQueue, vectorProgress],
+    [
+      handleOpen,
+      removeBook,
+      handleManageTags,
+      handleVectorize,
+      vectorizingBookId,
+      vectorQueue,
+      vectorProgress,
+    ],
   );
 
   return (

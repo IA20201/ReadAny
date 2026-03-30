@@ -66,28 +66,19 @@ const moduleRedirects = {
   punycode: path.resolve(monorepoRoot, "node_modules/punycode/punycode.js"),
 };
 
-// Redirect @readany/core modules that pull in LangChain (Node.js-only) to RN stubs
-const coreRedirects = {
-  "@readany/core/hooks/use-streaming-chat": path.resolve(
-    projectRoot,
-    "src/hooks/use-streaming-chat.rn.ts",
-  ),
-};
+// Stub path for ONNX runtime modules (mobile doesn't use local embedding)
+const onnxStubPath = path.resolve(projectRoot, "src/stubs/onnxruntime-stub.js");
 
 const originalResolveRequest = config.resolver.resolveRequest;
 config.resolver.resolveRequest = (context, moduleName, platform) => {
-  // Alias Transformers.js ONNX runtimes to react-native native module
+  // Redirect ONNX runtime modules to empty stub (mobile uses remote embedding APIs only)
   if (moduleName.startsWith("onnxruntime-node") || moduleName.startsWith("onnxruntime-web")) {
-    return context.resolveRequest(context, "onnxruntime-react-native", platform);
+    return { type: "sourceFile", filePath: onnxStubPath };
   }
 
   // Redirect Node built-in polyfills
   if (moduleRedirects[moduleName]) {
     return { type: "sourceFile", filePath: moduleRedirects[moduleName] };
-  }
-  // Redirect @readany/core modules that depend on LangChain / Node APIs
-  if (coreRedirects[moduleName]) {
-    return { type: "sourceFile", filePath: coreRedirects[moduleName] };
   }
   if (originalResolveRequest) {
     return originalResolveRequest(context, moduleName, platform);

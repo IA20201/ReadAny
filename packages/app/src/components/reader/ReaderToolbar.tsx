@@ -5,6 +5,7 @@ import { useAppStore } from "@/stores/app-store";
 import { useNotebookStore } from "@/stores/notebook-store";
 import { useReaderStore } from "@/stores/reader-store";
 import { generateId } from "@readany/core/utils";
+import type { ChapterTranslationState } from "@readany/core/hooks";
 import {
   ArrowLeft,
   Bookmark,
@@ -18,6 +19,7 @@ import {
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
+import { ChapterTranslationMenu } from "./ChapterTranslationBar";
 import type { TOCItem } from "./FoliateViewer";
 
 interface ReaderToolbarProps {
@@ -26,12 +28,18 @@ interface ReaderToolbarProps {
   onPrev?: () => void;
   onNext?: () => void;
   tocItems?: TOCItem[];
-  onGoToChapter?: (index: number) => void;
+  onGoToChapter?: (href: string) => void;
   onToggleSearch?: () => void;
   onToggleToc?: () => void;
   onToggleSettings?: () => void;
   onToggleChat?: () => void;
   onToggleTTS?: () => void;
+  chapterTranslationState: ChapterTranslationState;
+  onChapterTranslationStart: (targetLang?: string) => void;
+  onChapterTranslationCancel: () => void;
+  onToggleOriginalVisible: () => void;
+  onToggleTranslationVisible: () => void;
+  onChapterTranslationReset: () => void;
   isChatOpen?: boolean;
   isTTSActive?: boolean;
   isFixedLayout?: boolean;
@@ -52,6 +60,12 @@ export function ReaderToolbar({
   onToggleSettings,
   onToggleChat,
   onToggleTTS,
+  chapterTranslationState,
+  onChapterTranslationStart,
+  onChapterTranslationCancel,
+  onToggleOriginalVisible,
+  onToggleTranslationVisible,
+  onChapterTranslationReset,
   isChatOpen,
   isTTSActive,
   isFixedLayout = false,
@@ -179,8 +193,16 @@ export function ReaderToolbar({
         </span>
       </div>
 
-      {/* Right: TTS + search + AI chat + settings */}
+      {/* Right: translate + TTS + search + AI chat + settings */}
       <div className="flex items-center gap-0.5">
+        <ChapterTranslationMenu
+          state={chapterTranslationState}
+          onStart={onChapterTranslationStart}
+          onCancel={onChapterTranslationCancel}
+          onToggleOriginalVisible={onToggleOriginalVisible}
+          onToggleTranslationVisible={onToggleTranslationVisible}
+          onReset={onChapterTranslationReset}
+        />
         <Button
           variant="ghost"
           size="icon"

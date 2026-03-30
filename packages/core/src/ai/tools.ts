@@ -11,6 +11,7 @@ import {
   updateBook,
 } from "../db/database";
 import { emitLibraryChanged } from "../events/library-events";
+import { estimateTokens } from "../rag/chunker";
 import { search } from "../rag/search";
 import { debouncedSave, loadFromFS } from "../stores/persist";
 /**
@@ -29,6 +30,9 @@ import type { ToolDefinition, ToolParameter } from "./tool-types";
 
 /** Create RAG search tool for a specific book */
 function createRagSearchTool(bookId: string): ToolDefinition {
+  const MAX_TOTAL_TOKENS = 4000; // Token budget for all results combined
+  const MIN_CONTENT_TOKENS = 100; // Minimum tokens per result
+
   return {
     name: "ragSearch",
     description:
@@ -57,17 +61,53 @@ function createRagSearchTool(bookId: string): ToolDefinition {
 
       const results = await search(query);
 
-      return {
-        results: results.map((r) => ({
+      // Smart truncation with token budget
+      let totalTokens = 0;
+      const truncatedResults = [];
+
+      for (const r of results) {
+        const fullContent = r.chunk.content;
+        const fullTokens = estimateTokens(fullContent);
+
+        // Calculate remaining budget
+        const remainingBudget = MAX_TOTAL_TOKENS - totalTokens;
+
+        if (remainingBudget <= MIN_CONTENT_TOKENS) {
+          // Budget exhausted, stop adding results
+          break;
+        }
+
+        let content = fullContent;
+        let contentTokens = fullTokens;
+
+        // Truncate if exceeds remaining budget
+        if (contentTokens > remainingBudget) {
+          // Estimate character limit based on remaining tokens
+          const charLimit = remainingBudget * 4; // ~4 chars per token
+          content = fullContent.slice(0, charLimit);
+          contentTokens = estimateTokens(content);
+        }
+
+        totalTokens += contentTokens;
+
+        truncatedResults.push({
           chapter: r.chunk.chapterTitle,
           chapterIndex: r.chunk.chapterIndex,
-          content: r.chunk.content.slice(0, 500), // Truncate for context window
+          content,
           score: Math.round(r.score * 1000) / 1000,
           matchType: r.matchType,
           highlights: r.highlights,
           cfi: r.chunk.startCfi || "",
-        })),
+          truncated: fullTokens > contentTokens,
+        });
+      }
+
+      return {
+        results: truncatedResults,
         totalResults: results.length,
+        returnedResults: truncatedResults.length,
+        totalTokens,
+        tokenBudget: MAX_TOTAL_TOKENS,
       };
     },
   };
@@ -103,6 +143,8 @@ function createRagTocTool(bookId: string): ToolDefinition {
 
 /** Create RAG context tool for a specific book */
 function createRagContextTool(bookId: string): ToolDefinition {
+  const MAX_TOTAL_TOKENS = 3000;
+
   return {
     name: "ragContext",
     description:
@@ -121,18 +163,39 @@ function createRagContextTool(bookId: string): ToolDefinition {
       const chunks = await getChunks(bookId);
       const chapterChunks = chunks.filter((c) => c.chapterIndex === chapterIndex);
 
-      // Get surrounding chunks
-      const contextChunks = chapterChunks.slice(0, range * 2 + 1);
+      // Get surrounding chunks with token budget
+      const contextChunks: Array<{ content: string; cfi: string }> = [];
+      let totalTokens = 0;
+
+      for (const c of chapterChunks.slice(0, range * 2 + 1)) {
+        const chunkTokens = estimateTokens(c.content);
+        if (totalTokens + chunkTokens > MAX_TOTAL_TOKENS) {
+          // Truncate to fit budget
+          const remaining = MAX_TOTAL_TOKENS - totalTokens;
+          if (remaining > 100) {
+            const charLimit = remaining * 4;
+            contextChunks.push({
+              content: c.content.slice(0, charLimit),
+              cfi: c.startCfi || "",
+            });
+          }
+          break;
+        }
+        contextChunks.push({
+          content: c.content,
+          cfi: c.startCfi || "",
+        });
+        totalTokens += chunkTokens;
+      }
 
       return {
         chapterTitle: chapterChunks[0]?.chapterTitle || "Unknown",
         chapterIndex: chapterIndex,
         context: contextChunks.map((c) => c.content).join("\n\n"),
-        chunks: contextChunks.map((c) => ({
-          content: c.content,
-          cfi: c.startCfi || "",
-        })),
+        chunks: contextChunks,
         chunksIncluded: contextChunks.length,
+        totalTokens,
+        tokenBudget: MAX_TOTAL_TOKENS,
       };
     },
   };
@@ -144,6 +207,11 @@ function createRagContextTool(bookId: string): ToolDefinition {
 
 /** Create summarize tool for a specific book */
 function createSummarizeTool(bookId: string): ToolDefinition {
+  const MAX_CHAPTER_TOKENS_BRIEF = 1000;
+  const MAX_CHAPTER_TOKENS_DETAILED = 2500;
+  const MAX_BOOK_TOKENS_BRIEF = 1500;
+  const MAX_BOOK_TOKENS_DETAILED = 3500;
+
   return {
     name: "summarize",
     description:
@@ -175,21 +243,47 @@ function createSummarizeTool(bookId: string): ToolDefinition {
         if (chapterChunks.length === 0) {
           return { error: `Chapter ${chapterIndex} not found` };
         }
-        const content = chapterChunks.map((c) => c.content).join("\n\n");
-        const truncatedContent =
-          style === "brief" ? content.slice(0, 3000) : content.slice(0, 8000);
+
+        const maxTokens = style === "brief" ? MAX_CHAPTER_TOKENS_BRIEF : MAX_CHAPTER_TOKENS_DETAILED;
+        const truncatedChunks: Array<{
+          content: string;
+          cfi: string;
+          chapterTitle: string;
+          chapterIndex: number;
+        }> = [];
+        let totalTokens = 0;
+
+        for (const c of chapterChunks) {
+          const chunkTokens = estimateTokens(c.content);
+          if (totalTokens + chunkTokens > maxTokens) {
+            const remaining = maxTokens - totalTokens;
+            if (remaining > 100) {
+              truncatedChunks.push({
+                content: c.content.slice(0, remaining * 4),
+                cfi: c.startCfi || "",
+                chapterTitle: c.chapterTitle,
+                chapterIndex: c.chapterIndex,
+              });
+            }
+            break;
+          }
+          truncatedChunks.push({
+            content: c.content,
+            cfi: c.startCfi || "",
+            chapterTitle: c.chapterTitle,
+            chapterIndex: c.chapterIndex,
+          });
+          totalTokens += chunkTokens;
+        }
 
         return {
           scope: "chapter",
           chapterTitle: chapterChunks[0]?.chapterTitle,
           chapterIndex: chapterIndex,
-          content: truncatedContent,
-          chunks: chapterChunks.map((c) => ({
-            content: c.content,
-            cfi: c.startCfi || "",
-            chapterTitle: c.chapterTitle,
-            chapterIndex: c.chapterIndex,
-          })),
+          content: truncatedChunks.map((c) => c.content).join("\n\n"),
+          chunks: truncatedChunks,
+          totalTokens,
+          tokenBudget: maxTokens,
           instruction:
             style === "brief"
               ? "Generate a concise summary (2-3 sentences) of this chapter content. Use the 'chunks' array to extract CFI for citations."
@@ -206,32 +300,45 @@ function createSummarizeTool(bookId: string): ToolDefinition {
           }
         }
 
+        const maxTokens = style === "brief" ? MAX_BOOK_TOKENS_BRIEF : MAX_BOOK_TOKENS_DETAILED;
         const sampledContent: string[] = [];
-        const chapterList = Array.from(chapters.entries()).sort((a, b) => a[0] - b[0]);
         const chapterCfiMap: Array<{
           chapterIndex: number;
           chapterTitle: string;
           firstChunkCfi: string;
         }> = [];
+        let totalTokens = 0;
+
+        const chapterList = Array.from(chapters.entries()).sort((a, b) => a[0] - b[0]);
 
         for (const [idx, title] of chapterList) {
           const chapterChunks = chunks.filter((c) => c.chapterIndex === idx);
           const firstChunk = chapterChunks[0];
-          if (firstChunk) {
-            sampledContent.push(`\n## Chapter: ${title}\n${firstChunk.content.slice(0, 500)}`);
-            chapterCfiMap.push({
-              chapterIndex: idx,
-              chapterTitle: title,
-              firstChunkCfi: firstChunk.startCfi || "",
-            });
+          if (!firstChunk) continue;
+
+          const chunkPreview = `\n## Chapter: ${title}\n${firstChunk.content.slice(0, 500)}`;
+          const chunkTokens = estimateTokens(chunkPreview);
+
+          if (totalTokens + chunkTokens > maxTokens) {
+            break;
           }
+
+          sampledContent.push(chunkPreview);
+          chapterCfiMap.push({
+            chapterIndex: idx,
+            chapterTitle: title,
+            firstChunkCfi: firstChunk.startCfi || "",
+          });
+          totalTokens += chunkTokens;
         }
 
         return {
           scope: "book",
           totalChapters: chapters.size,
-          content: sampledContent.join("\n").slice(0, style === "brief" ? 4000 : 10000),
+          content: sampledContent.join("\n"),
           chapters: chapterCfiMap,
+          totalTokens,
+          tokenBudget: maxTokens,
           instruction:
             style === "brief"
               ? "Generate a concise book summary (1-2 paragraphs) covering the main theme and key points. Use the 'chapters' array to extract CFI for citations."
@@ -246,6 +353,9 @@ function createSummarizeTool(bookId: string): ToolDefinition {
 
 /** Create extract entities tool for a specific book */
 function createExtractEntitiesTool(bookId: string): ToolDefinition {
+  const MAX_TOKENS_CHAPTER = 2000;
+  const MAX_TOKENS_BOOK = 3000;
+
   return {
     name: "extractEntities",
     description:
@@ -274,38 +384,53 @@ function createExtractEntitiesTool(bookId: string): ToolDefinition {
         return { error: "No content found" };
       }
 
-      // Sample content from across the book (take first chunk from each chapter for broader coverage)
-      let sampledChunks: typeof targetChunks;
+      const maxTokens = chapterIndex !== undefined ? MAX_TOKENS_CHAPTER : MAX_TOKENS_BOOK;
+      const sampledChunks: typeof targetChunks = [];
+      let totalTokens = 0;
+
       if (chapterIndex !== undefined) {
-        // Single chapter: take up to 10 chunks
-        sampledChunks = targetChunks.slice(0, 10);
+        // Single chapter: take chunks until budget exhausted
+        for (const c of targetChunks) {
+          const chunkTokens = estimateTokens(c.content);
+          if (totalTokens + chunkTokens > maxTokens) break;
+          sampledChunks.push(c);
+          totalTokens += chunkTokens;
+        }
       } else {
-        // Whole book: take first 2 chunks from each chapter for breadth
+        // Whole book: sample from each chapter
         const byChapter = new Map<number, typeof targetChunks>();
         for (const c of targetChunks) {
           const list = byChapter.get(c.chapterIndex) || [];
-          if (list.length < 2) list.push(c);
+          list.push(c);
           byChapter.set(c.chapterIndex, list);
         }
-        sampledChunks = Array.from(byChapter.values()).flat();
-      }
 
-      const content = sampledChunks
-        .map((c) => `[${c.chapterTitle}]\n${c.content}`)
-        .join("\n\n")
-        .slice(0, 5000);
+        for (const [, chapterChunks] of byChapter) {
+          for (const c of chapterChunks.slice(0, 2)) {
+            const chunkTokens = estimateTokens(c.content);
+            if (totalTokens + chunkTokens > maxTokens) break;
+            sampledChunks.push(c);
+            totalTokens += chunkTokens;
+          }
+          if (totalTokens >= maxTokens) break;
+        }
+      }
 
       return {
         entityType,
         chapterIndex,
         chapterTitle: targetChunks[0]?.chapterTitle,
-        content,
+        content: sampledChunks
+          .map((c) => `[${c.chapterTitle}]\n${c.content}`)
+          .join("\n\n"),
         chunks: sampledChunks.map((c) => ({
           content: c.content,
           cfi: c.startCfi || "",
           chapterTitle: c.chapterTitle,
           chapterIndex: c.chapterIndex,
         })),
+        totalTokens,
+        tokenBudget: maxTokens,
         instruction: `The above is raw book content. Read through it carefully and identify all ${entityType === "all" ? "named entities (characters, places, organizations, key concepts)" : entityType}. List each entity with a brief description based ONLY on what appears in this text. Use the 'chunks' array to extract CFI for citations. This is all the data you need — do NOT call any more tools.`,
       };
     },
@@ -314,6 +439,8 @@ function createExtractEntitiesTool(bookId: string): ToolDefinition {
 
 /** Create analyze arguments tool for a specific book */
 function createAnalyzeArgumentsTool(bookId: string): ToolDefinition {
+  const MAX_TOKENS = 3000;
+
   return {
     name: "analyzeArguments",
     description:
@@ -337,16 +464,21 @@ function createAnalyzeArgumentsTool(bookId: string): ToolDefinition {
       const targetChunks =
         chapterIndex !== undefined
           ? chunks.filter((c) => c.chapterIndex === chapterIndex)
-          : chunks.slice(0, 15);
+          : chunks;
 
       if (targetChunks.length === 0) {
         return { error: "No content found" };
       }
 
-      const content = targetChunks
-        .map((c) => `[${c.chapterTitle}]\n${c.content}`)
-        .join("\n\n")
-        .slice(0, 10000);
+      const sampledChunks: typeof targetChunks = [];
+      let totalTokens = 0;
+
+      for (const c of targetChunks) {
+        const chunkTokens = estimateTokens(c.content);
+        if (totalTokens + chunkTokens > MAX_TOKENS) break;
+        sampledChunks.push(c);
+        totalTokens += chunkTokens;
+      }
 
       const focusInstructions: Record<string, string> = {
         main: "Identify and explain the main arguments or thesis presented. What is the author trying to prove or convey?",
@@ -361,13 +493,17 @@ function createAnalyzeArgumentsTool(bookId: string): ToolDefinition {
         focusType,
         chapterIndex,
         chapterTitle: targetChunks[0]?.chapterTitle,
-        content,
-        chunks: targetChunks.map((c) => ({
+        content: sampledChunks
+          .map((c) => `[${c.chapterTitle}]\n${c.content}`)
+          .join("\n\n"),
+        chunks: sampledChunks.map((c) => ({
           content: c.content,
           cfi: c.startCfi || "",
           chapterTitle: c.chapterTitle,
           chapterIndex: c.chapterIndex,
         })),
+        totalTokens,
+        tokenBudget: MAX_TOKENS,
         instruction:
           (focusInstructions[focusType] || focusInstructions.all) +
           " Use the 'chunks' array to extract CFI for citations.",
@@ -378,6 +514,8 @@ function createAnalyzeArgumentsTool(bookId: string): ToolDefinition {
 
 /** Create find quotes tool for a specific book */
 function createFindQuotesTool(bookId: string): ToolDefinition {
+  const MAX_TOKENS = 4000;
+
   return {
     name: "findQuotes",
     description:
@@ -410,11 +548,15 @@ function createFindQuotesTool(bookId: string): ToolDefinition {
         return { error: "No content found" };
       }
 
-      const content = targetChunks
-        .slice(0, 30)
-        .map((c) => `[${c.chapterTitle}]\n${c.content}`)
-        .join("\n\n")
-        .slice(0, 12000);
+      const sampledChunks: typeof targetChunks = [];
+      let totalTokens = 0;
+
+      for (const c of targetChunks) {
+        const chunkTokens = estimateTokens(c.content);
+        if (totalTokens + chunkTokens > MAX_TOKENS) break;
+        sampledChunks.push(c);
+        totalTokens += chunkTokens;
+      }
 
       const quoteInstructions: Record<string, string> = {
         insightful:
@@ -430,13 +572,17 @@ function createFindQuotesTool(bookId: string): ToolDefinition {
         quoteType,
         maxQuotes,
         chapterIndex,
-        content,
-        chunks: targetChunks.slice(0, 30).map((c) => ({
+        content: sampledChunks
+          .map((c) => `[${c.chapterTitle}]\n${c.content}`)
+          .join("\n\n"),
+        chunks: sampledChunks.map((c) => ({
           content: c.content,
           cfi: c.startCfi || "",
           chapterTitle: c.chapterTitle,
           chapterIndex: c.chapterIndex,
         })),
+        totalTokens,
+        tokenBudget: MAX_TOKENS,
         instruction: `${quoteInstructions[quoteType] || quoteInstructions.all} Return at most ${maxQuotes} quotes with their locations. Use the 'chunks' array to extract CFI for citations.`,
       };
     },
@@ -627,6 +773,8 @@ function createAddCitationTool(bookId: string): ToolDefinition {
 
 /** Create compare sections tool for a specific book */
 function createCompareSectionsTool(bookId: string): ToolDefinition {
+  const MAX_TOKENS_PER_CHAPTER = 1500;
+
   return {
     name: "compareSections",
     description:
@@ -662,14 +810,32 @@ function createCompareSectionsTool(bookId: string): ToolDefinition {
         return { error: "One or both chapters not found" };
       }
 
-      const content1 = chapter1Chunks
-        .map((c) => c.content)
-        .join("\n\n")
-        .slice(0, 4000);
-      const content2 = chapter2Chunks
-        .map((c) => c.content)
-        .join("\n\n")
-        .slice(0, 4000);
+      // Sample content with token budget for each chapter
+      const sampleChapter = (chapterChunks: typeof chapter1Chunks) => {
+        const sampled: typeof chapterChunks = [];
+        let totalTokens = 0;
+
+        for (const c of chapterChunks) {
+          const chunkTokens = estimateTokens(c.content);
+          if (totalTokens + chunkTokens > MAX_TOKENS_PER_CHAPTER) break;
+          sampled.push(c);
+          totalTokens += chunkTokens;
+        }
+
+        return {
+          content: sampled.map((c) => c.content).join("\n\n"),
+          chunks: sampled.map((c) => ({
+            content: c.content,
+            cfi: c.startCfi || "",
+            chapterTitle: c.chapterTitle,
+            chapterIndex: c.chapterIndex,
+          })),
+          totalTokens,
+        };
+      };
+
+      const chapter1Sample = sampleChapter(chapter1Chunks);
+      const chapter2Sample = sampleChapter(chapter2Chunks);
 
       const compareInstructions: Record<string, string> = {
         themes:
@@ -684,26 +850,19 @@ function createCompareSectionsTool(bookId: string): ToolDefinition {
         chapter1: {
           index: chapterIndex1,
           title: chapter1Chunks[0]?.chapterTitle,
-          content: content1,
-          chunks: chapter1Chunks.map((c) => ({
-            content: c.content,
-            cfi: c.startCfi || "",
-            chapterTitle: c.chapterTitle,
-            chapterIndex: c.chapterIndex,
-          })),
+          content: chapter1Sample.content,
+          chunks: chapter1Sample.chunks,
+          totalTokens: chapter1Sample.totalTokens,
         },
         chapter2: {
           index: chapterIndex2,
           title: chapter2Chunks[0]?.chapterTitle,
-          content: content2,
-          chunks: chapter2Chunks.map((c) => ({
-            content: c.content,
-            cfi: c.startCfi || "",
-            chapterTitle: c.chapterTitle,
-            chapterIndex: c.chapterIndex,
-          })),
+          content: chapter2Sample.content,
+          chunks: chapter2Sample.chunks,
+          totalTokens: chapter2Sample.totalTokens,
         },
         compareType,
+        tokenBudgetPerChapter: MAX_TOKENS_PER_CHAPTER,
         instruction:
           (compareInstructions[compareType] || compareInstructions.all) +
           " Use the 'chunks' arrays in chapter1 and chapter2 to extract CFI for citations.",
@@ -752,8 +911,8 @@ function createListBooksTool(): ToolDefinition {
       if (searchTerm) {
         books = books.filter(
           (b) =>
-            b.meta.title.toLowerCase().includes(searchTerm) ||
-            (b.meta.author && b.meta.author.toLowerCase().includes(searchTerm)),
+            b.meta.title?.toLowerCase().includes(searchTerm) ||
+            (b.meta.author?.toLowerCase().includes(searchTerm)),
         );
       }
 
@@ -899,7 +1058,7 @@ function createSearchAllNotesTool(): ToolDefinition {
       if (bookTitleSearch) {
         allNotes = allNotes.filter((n) => {
           const title = bookMap.get(n.bookId)?.toLowerCase() || "";
-          return title.includes(bookTitleSearch);
+          return title?.includes(bookTitleSearch);
         });
       }
 
@@ -1215,7 +1374,7 @@ function createManageBookTagsTool(): ToolDefinition {
         const books = await getBooks();
         let affectedCount = 0;
         for (const book of books) {
-          if (book.tags.includes(oldTag)) {
+          if (book.tags?.includes(oldTag)) {
             const updated = book.tags.map((t) => (t === oldTag ? newTag : t));
             const deduped = [...new Set(updated)];
             await updateBook(book.id, { tags: deduped });
@@ -1240,9 +1399,9 @@ function createManageBookTagsTool(): ToolDefinition {
         const books = await getBooks();
         let affectedCount = 0;
         for (const book of books) {
-          const hasAnyTag = tagsToDelete.some((tag) => book.tags.includes(tag));
+          const hasAnyTag = tagsToDelete.some((tag) => book.tags?.includes(tag));
           if (hasAnyTag) {
-            const updated = book.tags.filter((t) => !tagsToDelete.includes(t));
+            const updated = book.tags?.filter((t) => !tagsToDelete.includes(t)) || [];
             await updateBook(book.id, { tags: updated });
             affectedCount++;
           }
@@ -1266,7 +1425,7 @@ function createManageBookTagsTool(): ToolDefinition {
         if (!book) {
           return { success: false, error: "Book not found" };
         }
-        const updated = book.tags.filter((t) => !tagsToRemove.includes(t));
+        const updated = book.tags?.filter((t) => !tagsToRemove.includes(t)) || [];
         await updateBook(bookId, { tags: updated });
         emitLibraryChanged();
         return {
@@ -1340,7 +1499,7 @@ function createGetSkillsTool(): ToolDefinition {
       },
     },
     execute: async (args) => {
-      const task = (args.task as string).toLowerCase();
+      const task = (args.task as string)?.toLowerCase() || "";
 
       // Merge builtin and custom skills
       const builtins = getBuiltinSkills();
@@ -1356,9 +1515,9 @@ function createGetSkillsTool(): ToolDefinition {
       // Fuzzy match by name or description
       const matched = allSkills.filter(
         (s) =>
-          s.name.toLowerCase().includes(task) ||
-          s.description.toLowerCase().includes(task) ||
-          s.id.toLowerCase().includes(task),
+          s.name?.toLowerCase().includes(task) ||
+          s.description?.toLowerCase().includes(task) ||
+          s.id?.toLowerCase().includes(task),
       );
 
       if (matched.length > 0) {

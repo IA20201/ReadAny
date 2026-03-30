@@ -1,9 +1,9 @@
 export { WebDavClient } from "./webdav-client";
-export { determineSyncDirection, runSync } from "./sync-engine";
+export { determineSyncDirection, runSync, downloadBookFile } from "./sync-engine";
+export { runSimpleSync, collectChanges, applyChanges } from "./simple-sync";
 export { setSyncAdapter, getSyncAdapter } from "./sync-adapter";
 export type { ISyncAdapter } from "./sync-adapter";
 export type {
-  SyncConfig,
   SyncDirection,
   SyncStatusType,
   SyncResult,
@@ -12,7 +12,6 @@ export type {
   SyncProgressCallback,
 } from "./sync-types";
 export {
-  DEFAULT_SYNC_CONFIG,
   REMOTE_ROOT,
   REMOTE_DATA,
   REMOTE_DB_FILE,
@@ -22,3 +21,5 @@ export {
   SYNC_META_KEYS,
   SYNC_SCHEMA_VERSION,
 } from "./sync-types";
+export type { SyncConfig, WebDavConfig, S3Config, LANConfig, ISyncBackend } from "./sync-backend";
+export { DEFAULT_SYNC_CONFIG, SYNC_CONFIG_KEY, SYNC_SECRET_KEYS } from "./sync-backend";

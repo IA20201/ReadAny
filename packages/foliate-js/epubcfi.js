@@ -335,6 +335,16 @@ export const toRange = (doc, parts, filter) => {
 
   const range = doc.createRange();
 
+  if (!start?.node) {
+    range.selectNodeContents(doc.body);
+    return range;
+  }
+
+  if (!end?.node) {
+    range.selectNodeContents(start.node);
+    return range;
+  }
+
   if (start.before) range.setStartBefore(start.node);
   else if (start.after) range.setStartAfter(start.node);
   else range.setStart(start.node, start.offset);

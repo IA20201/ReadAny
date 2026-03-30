@@ -40,7 +40,11 @@
       "Bash(/tmp/code_evidence.md:*)",
       "Bash(/tmp/analyze_persist.md:*)",
       "Bash(/tmp/issue_analysis.md:*)",
-      "Bash(/tmp/final_report.sh:*)"
+      "Bash(/tmp/final_report.sh:*)",
+      "Bash(xargs basename:*)",
+      "WebFetch(domain:deepwiki.com)",
+      "WebFetch(domain:daviddaytw.github.io)",
+      "WebFetch(domain:docs.rs)"
     ]
   }
 }

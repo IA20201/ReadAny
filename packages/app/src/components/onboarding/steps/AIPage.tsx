@@ -8,6 +8,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useSettingsStore } from "@readany/core/stores/settings-store";
+import type { AIProviderType } from "@readany/core/types";
+import { getDefaultBaseUrl, PROVIDER_CONFIGS } from "@readany/core/utils";
 import { AlertCircle, CheckCircle2, Eye, EyeOff, Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -16,30 +18,29 @@ import { OnboardingLayout } from "../OnboardingLayout";
 
 const ONBOARDING_ENDPOINT_ID = "onboarding-ai-endpoint";
 
+const PROVIDER_OPTIONS: { id: AIProviderType; name: string }[] = [
+  { id: "openai", name: "OpenAI" },
+  { id: "anthropic", name: "Anthropic" },
+  { id: "google", name: "Google Gemini" },
+  { id: "deepseek", name: "DeepSeek" },
+  { id: "ollama", name: "Ollama" },
+  { id: "lmstudio", name: "LM Studio" },
+  { id: "openrouter", name: "OpenRouter" },
+  { id: "siliconflow", name: "SiliconFlow" },
+  { id: "custom", name: "Custom" },
+];
+
 export function AIPage({ onNext, onPrev, step, totalSteps }: any) {
   const { t } = useTranslation();
   const { addEndpoint, updateEndpoint, setActiveEndpoint, aiConfig, _hasHydrated } =
     useSettingsStore();
 
-  const [provider, setProvider] = useState("openai");
+  const [provider, setProvider] = useState<AIProviderType>("openai");
   const [apiKey, setApiKey] = useState("");
-  const [baseUrl, setBaseUrl] = useState("https://api.openai.com/v1");
+  const [baseUrl, setBaseUrl] = useState(getDefaultBaseUrl("openai"));
   const [status, setStatus] = useState<"idle" | "testing" | "success" | "error">("idle");
   const [showApiKey, setShowApiKey] = useState(false);
 
-  const providers = [
-    { id: "openai", name: "OpenAI", defaultUrl: "https://api.openai.com/v1" },
-    { id: "anthropic", name: "Anthropic", defaultUrl: "https://api.anthropic.com" },
-    {
-      id: "google",
-      name: "Google (Gemini)",
-      defaultUrl: "https://generativelanguage.googleapis.com",
-    },
-    { id: "deepseek", name: "DeepSeek", defaultUrl: "https://api.deepseek.com/v1" },
-    { id: "ollama", name: "Ollama (Local)", defaultUrl: "http://localhost:11434" },
-  ];
-
-  // Get the endpoint ID to use for syncing
   const syncEndpointId =
     aiConfig.endpoints.find((ep) => ep.apiKey && ep.apiKey.length > 0)?.id ||
     aiConfig.activeEndpointId ||
@@ -49,7 +50,6 @@ export function AIPage({ onNext, onPrev, step, totalSteps }: any) {
   useEffect(() => {
     if (!_hasHydrated || aiConfig.endpoints.length === 0) return;
 
-    // Find endpoint with API key first, then active, then first
     const endpointWithKey = aiConfig.endpoints.find((ep) => ep.apiKey && ep.apiKey.length > 0);
     const activeEndpoint = aiConfig.endpoints.find((ep) => ep.id === aiConfig.activeEndpointId);
     const endpointToUse = endpointWithKey || activeEndpoint || aiConfig.endpoints[0];
@@ -57,60 +57,48 @@ export function AIPage({ onNext, onPrev, step, totalSteps }: any) {
     if (endpointToUse) {
       const newProvider = endpointToUse.provider || "openai";
       const newApiKey = endpointToUse.apiKey || "";
-      const newBaseUrl = endpointToUse.baseUrl || "https://api.openai.com/v1";
+      const newBaseUrl = endpointToUse.baseUrl || getDefaultBaseUrl(newProvider);
 
       setProvider((prev) => (prev === newProvider ? prev : newProvider));
       setApiKey((prev) => (prev === newApiKey ? prev : newApiKey));
       setBaseUrl((prev) => (prev === newBaseUrl ? prev : newBaseUrl));
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aiConfig.endpoints.length, aiConfig.activeEndpointId, _hasHydrated]);
 
-  const syncToStore = (p: string, key: string, url: string) => {
-    const providerInfo = providers.find((x) => x.id === p);
-    // Check if the configured endpoint exists, update it; otherwise create new
+  const syncToStore = (p: AIProviderType, key: string, url: string) => {
+    const config = PROVIDER_CONFIGS[p];
     const existingEndpoint = aiConfig.endpoints.find((ep) => ep.id === syncEndpointId);
     const endpointId = existingEndpoint ? syncEndpointId : ONBOARDING_ENDPOINT_ID;
 
-    console.log(
-      "[AIPage-Desktop] syncToStore - existingEndpoint:",
-      !!existingEndpoint,
-      "endpointId:",
-      endpointId,
-    );
-    console.log("[AIPage-Desktop] syncToStore - provider:", p, "baseUrl:", url);
-
     if (existingEndpoint) {
       updateEndpoint(endpointId, {
-        provider: p as any,
-        name: existingEndpoint.name || providerInfo?.name || p,
+        provider: p,
+        name: existingEndpoint.name || config?.name || p,
         apiKey: key,
         baseUrl: url,
       });
     } else {
       addEndpoint({
         id: endpointId,
-        name: providerInfo?.name || p,
-        provider: p as any,
+        name: config?.name || p,
+        provider: p,
         apiKey: key,
         baseUrl: url,
         models: [],
         modelsFetched: false,
       });
     }
-    // Always set as active endpoint
     setActiveEndpoint(endpointId);
-    console.log("[AIPage-Desktop] syncToStore - setActiveEndpoint called with:", endpointId);
   };
 
   const handleProviderChange = (val: string) => {
-    setProvider(val);
-    const p = providers.find((x) => x.id === val);
-    const newUrl = p?.defaultUrl || "";
-    if (p) setBaseUrl(newUrl);
+    const newProvider = val as AIProviderType;
+    setProvider(newProvider);
+    const newUrl = getDefaultBaseUrl(newProvider);
+    setBaseUrl(newUrl);
     setApiKey("");
     setStatus("idle");
-    syncToStore(val, "", newUrl);
+    syncToStore(newProvider, "", newUrl);
   };
 
   const handleApiKeyChange = (key: string) => {
@@ -210,7 +198,7 @@ export function AIPage({ onNext, onPrev, step, totalSteps }: any) {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {providers.map((p) => (
+                {PROVIDER_OPTIONS.map((p) => (
                   <SelectItem key={p.id} value={p.id}>
                     {p.name}
                   </SelectItem>

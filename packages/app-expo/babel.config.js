@@ -18,6 +18,7 @@ module.exports = (api) => {
           },
         },
       ],
+      "babel-plugin-transform-import-meta",
       "react-native-reanimated/plugin",
     ],
   };

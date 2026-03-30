@@ -11,6 +11,7 @@ import {
 import { Slider } from "@/components/ui/slider";
 import { useSettingsStore } from "@/stores/settings-store";
 import type { AIEndpoint, AIProviderType } from "@readany/core/types";
+import { getDefaultBaseUrl, PROVIDER_CONFIGS } from "@readany/core/utils";
 import { Loader2, Plus, RefreshCw, Trash2, X } from "lucide-react";
 import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -19,32 +20,20 @@ function createEndpointId(): string {
   return `ep-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
 }
 
-/** Default base URLs per provider */
-const PROVIDER_DEFAULTS: Record<
-  AIProviderType,
-  { baseUrl: string; placeholder: string; keyPlaceholder: string }
-> = {
-  openai: {
-    baseUrl: "https://api.openai.com/v1",
-    placeholder: "https://api.openai.com/v1",
-    keyPlaceholder: "sk-...",
-  },
-  anthropic: {
-    baseUrl: "",
-    placeholder: "https://api.anthropic.com",
-    keyPlaceholder: "sk-ant-...",
-  },
-  google: {
-    baseUrl: "",
-    placeholder: "https://generativelanguage.googleapis.com",
-    keyPlaceholder: "AIza...",
-  },
-  deepseek: {
-    baseUrl: "https://api.deepseek.com/v1",
-    placeholder: "https://api.deepseek.com/v1",
-    keyPlaceholder: "sk-...",
-  },
-};
+const PROVIDER_OPTIONS: { value: AIProviderType; label: string }[] = [
+  { value: "openai", label: "OpenAI" },
+  { value: "anthropic", label: "Anthropic" },
+  { value: "google", label: "Google Gemini" },
+  { value: "deepseek", label: "DeepSeek" },
+  { value: "ollama", label: "Ollama" },
+  { value: "lmstudio", label: "LM Studio" },
+  { value: "openrouter", label: "OpenRouter" },
+  { value: "siliconflow", label: "SiliconFlow" },
+  { value: "moonshot", label: "Moonshot (Kimi)" },
+  { value: "zhipu", label: "智谱 GLM" },
+  { value: "aliyun", label: "阿里云通义" },
+  { value: "custom", label: "Custom (OpenAI Compatible)" },
+];
 
 function EndpointCard({
   endpoint,
@@ -159,6 +148,23 @@ function EndpointCard({
       {/* Collapsible Content */}
       {isExpanded && (
         <div className="p-3 pt-0 space-y-3 border-t border-border/50">
+          {/* Name input */}
+          <div>
+            <label
+              htmlFor={`name-${endpoint.id}`}
+              className="mb-1 block text-xs text-muted-foreground"
+            >
+              {t("settings.ai_name", "名称")}
+            </label>
+            <Input
+              id={`name-${endpoint.id}`}
+              value={endpoint.name}
+              onChange={(e) => onUpdate(endpoint.id, { name: e.target.value })}
+              placeholder={t("settings.ai_namePlaceholder", "例如：我的 OpenAI")}
+              className="h-8 text-sm"
+            />
+          </div>
+
           {/* Provider selector */}
           <div>
             <label
@@ -171,10 +177,12 @@ function EndpointCard({
               value={endpoint.provider || "openai"}
               onValueChange={(v) => {
                 const provider = v as AIProviderType;
-                const defaults = PROVIDER_DEFAULTS[provider];
+                const config = PROVIDER_CONFIGS[provider];
+                const defaultBaseUrl = getDefaultBaseUrl(provider);
                 onUpdate(endpoint.id, {
                   provider,
-                  baseUrl: defaults.baseUrl,
+                  name: config?.name || provider,
+                  baseUrl: defaultBaseUrl,
                   models: [],
                   modelsFetched: false,
                 });
@@ -184,10 +192,11 @@ function EndpointCard({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="openai">{t("settings.ai_provider_openai")}</SelectItem>
-                <SelectItem value="anthropic">{t("settings.ai_provider_anthropic")}</SelectItem>
-                <SelectItem value="google">{t("settings.ai_provider_google")}</SelectItem>
-                <SelectItem value="deepseek">{t("settings.ai_provider_deepseek")}</SelectItem>
+                {PROVIDER_OPTIONS.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
@@ -204,7 +213,7 @@ function EndpointCard({
               id={`apiKey-${endpoint.id}`}
               value={endpoint.apiKey}
               onChange={(e) => onUpdate(endpoint.id, { apiKey: e.target.value })}
-              placeholder={PROVIDER_DEFAULTS[endpoint.provider || "openai"].keyPlaceholder}
+              placeholder={PROVIDER_CONFIGS[endpoint.provider || "openai"]?.keyPlaceholder || "sk-..."}
               className="h-8 text-sm"
             />
           </div>
@@ -223,7 +232,7 @@ function EndpointCard({
               id={`baseUrl-${endpoint.id}`}
               value={endpoint.baseUrl}
               onChange={(e) => onUpdate(endpoint.id, { baseUrl: e.target.value })}
-              placeholder={PROVIDER_DEFAULTS[endpoint.provider || "openai"].placeholder}
+              placeholder={PROVIDER_CONFIGS[endpoint.provider || "openai"]?.placeholder || "https://api.example.com"}
               className="h-8 text-sm"
             />
           </div>
@@ -333,12 +342,14 @@ export function AISettings() {
   const activeEndpoint = aiConfig.endpoints.find((ep) => ep.id === aiConfig.activeEndpointId);
 
   const handleAddEndpoint = useCallback(() => {
+    const defaultProvider: AIProviderType = "openai";
+    const config = PROVIDER_CONFIGS[defaultProvider];
     const ep: AIEndpoint = {
       id: createEndpointId(),
-      name: "",
-      provider: "openai",
+      name: config?.name || "OpenAI",
+      provider: defaultProvider,
       apiKey: "",
-      baseUrl: "https://api.openai.com/v1",
+      baseUrl: getDefaultBaseUrl(defaultProvider),
       models: [],
       modelsFetched: false,
     };

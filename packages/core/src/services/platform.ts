@@ -17,10 +17,17 @@ export interface WebSocketOptions {
   headers?: Record<string, string>;
 }
 
+/** Extended fetch options with insecure certificate support */
+export interface FetchOptions extends RequestInit {
+  /** When true, skip TLS certificate verification (for self-signed certs) */
+  allowInsecure?: boolean;
+}
+
 export interface UpdateInfo {
   version: string;
   notes?: string;
   date?: string;
+  downloadUrl?: string;
 }
 
 export interface IDatabase {
@@ -66,7 +73,7 @@ export interface IPlatformService {
   loadDatabase(path: string): Promise<IDatabase>;
 
   // ---- Network (for scenarios requiring custom headers) ----
-  fetch(url: string, options?: RequestInit): Promise<Response>;
+  fetch(url: string, options?: FetchOptions): Promise<Response>;
   createWebSocket(url: string, options?: WebSocketOptions): Promise<IWebSocket>;
 
   // ---- App info ----
@@ -92,6 +99,8 @@ export interface IPlatformService {
   shareOrDownloadFile(content: string, filename: string, mimeType: string): Promise<void>;
 
   // ---- LAN Sync ----
+  // Check if device is on WiFi (returns true on desktop)
+  isOnWifi?(): Promise<boolean>;
   // Get local IP address for LAN sync
   getLocalIP?(): Promise<string>;
   // Start a local HTTP server for LAN sync

@@ -14,6 +14,14 @@ if (typeof AbortSignal !== "undefined" && !AbortSignal.prototype.throwIfAborted)
   };
 }
 
+// Polyfill navigator.userAgent for LangChain — React Native doesn't have userAgent
+if (typeof navigator !== "undefined" && !navigator.userAgent) {
+  Object.defineProperty(navigator, "userAgent", {
+    get: () => "ReactNative",
+    configurable: true,
+  });
+}
+
 import { DarkTheme, DefaultTheme, NavigationContainer } from "@react-navigation/native";
 import { StatusBar } from "expo-status-bar";
 import * as SecureStore from "expo-secure-store";
@@ -37,10 +45,11 @@ import { I18nextProvider } from "react-i18next";
 
 import { ExpoPlatformService } from "@/lib/platform/expo-platform-service";
 import { MobileSyncAdapter } from "@/lib/sync/sync-adapter-mobile";
-import { RNEmbeddingEngine } from "@/lib/ai/rn-embedding-engine";
 import { UpdateDialog } from "@/components/update/UpdateDialog";
 import { useUpdateChecker } from "@/hooks/use-update-checker";
 import { RootNavigator } from "@/navigation/RootNavigator";
+import { useLibraryStore } from "@/stores/library-store";
+import { useAutoSync } from "@readany/core/hooks/use-auto-sync";
 
 /** Legacy SecureStore key used by the old ThemeContext */
 const LEGACY_THEME_KEY = "readany-theme";
@@ -98,9 +107,8 @@ export default function App() {
       const { fetch: expoFetch } = await import("expo/fetch");
       setStreamingFetch(expoFetch as typeof globalThis.fetch);
 
-      // 8. Inject React Native local embedding engine
-      const { setLocalEmbeddingEngine } = await import("@readany/core/ai/local-embedding-service");
-      setLocalEmbeddingEngine(new RNEmbeddingEngine());
+      // Note: Mobile app only supports remote embedding APIs (OpenAI, DeepSeek, etc.)
+      // Local embedding is not supported to reduce APK size by ~100MB
 
       // 9. Migrate legacy theme selection (one-time)
       await migrateLegacyThemeIfNeeded();
@@ -134,7 +142,9 @@ export default function App() {
 
 function AppInner() {
   const { colors, isDark, mode } = useAppTheme();
+  const loadBooks = useLibraryStore((s) => s.loadBooks);
   useUpdateChecker();
+  useAutoSync(loadBooks);
 
   const navTheme = useMemo(
     () => ({
