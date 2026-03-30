@@ -22,6 +22,7 @@ export type SettingsTab =
   | "general"
   | "appearance"
   | "reading"
+  | "fonts"
   | "ai"
   | "vectorModel"
   | "tts"

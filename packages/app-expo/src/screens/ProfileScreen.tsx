@@ -6,6 +6,7 @@ import {
   CloudIcon,
   CpuIcon,
   DatabaseIcon,
+  FileTextIcon,
   FlameIcon,
   HelpCircleIcon,
   InfoIcon,
@@ -13,6 +14,7 @@ import {
   PaletteIcon,
   PuzzleIcon,
   TrendingUpIcon,
+  TypeIcon,
   Volume2Icon,
 } from "@/components/ui/Icon";
 import type { RootStackParamList } from "@/navigation/RootNavigator";
@@ -303,6 +305,11 @@ export function ProfileScreen() {
             icon: LanguagesIcon,
             label: t("settings.languageTitle", "语言"),
             route: "LanguageSettings" as const,
+          },
+          {
+            icon: TypeIcon,
+            label: t("fonts.title", "字体"),
+            route: "FontSettings" as const,
           },
           { icon: CloudIcon, label: t("settings.sync", "同步"), route: "SyncSettings" as const },
         ],

@@ -6,17 +6,19 @@
  * - Color levels (L0-L3, functional, reader) per mode
  * - Typography (font families)
  * - Background image upload with overlay opacity
- * - Icon SVG overrides (8 slots)
+ * - Icon SVG/PNG overrides (8 slots)
  * - Theme sharing (export/import code, QR)
  */
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
-import { useThemeStore } from "@readany/core/stores";
-import { applyThemeToDOM, encodeThemeCode, processBackgroundImage, validateSvgString } from "@readany/core/theme";
+import { useThemeStore, useFontStore } from "@readany/core/stores";
+import { applyThemeToDOM, encodeThemeCode, processBackgroundImage, validateSvgDetailed } from "@readany/core/theme";
 import type { IconSlot, ThemeConfig, ThemeModeColors } from "@readany/core/types";
-import { Check, Copy, ImagePlus, Trash2, Upload, X } from "lucide-react";
+import { Check, ChevronDown, Copy, ImagePlus, Trash2, Upload, X, FileUp } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ThemeColorPicker } from "./ThemeColorPicker";
+
+const ICON_SIZE_LIMIT = 50 * 1024; // 50KB
 
 interface ThemeEditorProps {
   open: boolean;
@@ -72,6 +74,88 @@ const ICON_SLOTS: { slot: IconSlot; labelKey: string }[] = [
 ];
 
 type EditingMode = "light" | "dark";
+
+function FontSelect({
+  label,
+  value,
+  onChange,
+  placeholder,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  placeholder: string;
+}) {
+  const { t } = useTranslation();
+  const customFonts = useFontStore((s) => s.fonts);
+  const [isOpen, setIsOpen] = useState(false);
+  const [inputValue, setInputValue] = useState(value);
+
+  useEffect(() => {
+    setInputValue(value);
+  }, [value]);
+
+  const handleSelectFont = (fontFamily: string) => {
+    setInputValue(fontFamily);
+    onChange(fontFamily);
+    setIsOpen(false);
+  };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setInputValue(e.target.value);
+    onChange(e.target.value);
+  };
+
+  return (
+    <div className="relative">
+      <label className="text-xs font-medium text-muted-foreground">{label}</label>
+      <div className="relative mt-1">
+        <input
+          type="text"
+          value={inputValue}
+          onChange={handleInputChange}
+          placeholder={placeholder}
+          className="w-full rounded-md border bg-background px-3 py-1.5 pr-8 text-sm font-mono"
+        />
+        <button
+          type="button"
+          onClick={() => setIsOpen(!isOpen)}
+          className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 text-muted-foreground hover:text-foreground"
+        >
+          <ChevronDown className={`h-4 w-4 transition-transform ${isOpen ? "rotate-180" : ""}`} />
+        </button>
+      </div>
+      {isOpen && (
+        <div className="absolute z-50 mt-1 w-full rounded-md border bg-popover shadow-lg">
+          <div className="max-h-48 overflow-y-auto p-1">
+            {customFonts.length === 0 ? (
+              <div className="px-3 py-2 text-xs text-muted-foreground">
+                {t("fonts.noFonts", "暂无自定义字体")}
+              </div>
+            ) : (
+              customFonts.map((font) => (
+                <button
+                  key={font.id}
+                  type="button"
+                  onClick={() => handleSelectFont(`'${font.fontFamily}'`)}
+                  className={`w-full rounded px-3 py-1.5 text-left text-sm hover:bg-muted ${
+                    value === `'${font.fontFamily}'` ? "bg-muted/50" : ""
+                  }`}
+                  style={{ fontFamily: `'${font.fontFamily}'` }}
+                >
+                  {font.name}
+                  {font.source === "remote" && (
+                    <span className="ml-2 text-xs text-muted-foreground">({t("fonts.online", "在线")})</span>
+                  )}
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export function ThemeEditor({ open, onClose, themeId }: ThemeEditorProps) {
   const { t } = useTranslation();
@@ -223,10 +307,47 @@ export function ThemeEditor({ open, onClose, themeId }: ThemeEditorProps) {
       });
       return;
     }
-    if (validateSvgString(svg)) {
+    const result = validateSvgDetailed(svg);
+    if (result.valid) {
       setIcons((prev) => ({ ...prev, [slot]: svg }));
+    } else {
+      alert(`${t("theme.invalidSvg", "无效的 SVG")}: ${result.error}`);
     }
-  }, []);
+  }, [t]);
+
+  // ── Icon file upload ──
+  const handleIconUpload = useCallback(async (slot: IconSlot, file: File) => {
+    if (file.size > ICON_SIZE_LIMIT) {
+      alert(t("theme.iconTooLarge", "图标文件过大（最大 50KB）"));
+      return;
+    }
+
+    const ext = file.name.split(".").pop()?.toLowerCase();
+    
+    if (ext === "svg") {
+      const text = await file.text();
+      const result = validateSvgDetailed(text);
+      if (result.valid) {
+        setIcons((prev) => ({ ...prev, [slot]: text }));
+      } else {
+        alert(`${t("theme.invalidSvg", "无效的 SVG")}: ${result.error}`);
+      }
+    } else if (ext === "png") {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const dataUri = reader.result as string;
+        const img = new Image();
+        img.onload = () => {
+          const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${img.width}" height="${img.height}" viewBox="0 0 ${img.width} ${img.height}"><image href="${dataUri}" width="${img.width}" height="${img.height}"/></svg>`;
+          setIcons((prev) => ({ ...prev, [slot]: svg }));
+        };
+        img.src = dataUri;
+      };
+      reader.readAsDataURL(file);
+    } else {
+      alert(t("theme.unsupportedIconFormat", "不支持的图标格式，请使用 SVG 或 PNG"));
+    }
+  }, [t]);
 
   // ── Share code generation ──
   const handleGenerateCode = useCallback(async () => {
@@ -408,36 +529,24 @@ export function ThemeEditor({ open, onClose, themeId }: ThemeEditorProps) {
             {/* ── Typography Section ── */}
             {activeSection === "typography" && (
               <div className="space-y-4">
-                <div>
-                  <label className="text-xs font-medium text-muted-foreground">{t("theme.fontSans")}</label>
-                  <input
-                    type="text"
-                    value={fontSans}
-                    onChange={(e) => setFontSans(e.target.value)}
-                    placeholder="Inter, system-ui, sans-serif"
-                    className="mt-1 w-full rounded-md border bg-background px-3 py-1.5 text-sm font-mono"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs font-medium text-muted-foreground">{t("theme.fontSerif")}</label>
-                  <input
-                    type="text"
-                    value={fontSerif}
-                    onChange={(e) => setFontSerif(e.target.value)}
-                    placeholder="Georgia, serif"
-                    className="mt-1 w-full rounded-md border bg-background px-3 py-1.5 text-sm font-mono"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs font-medium text-muted-foreground">{t("theme.fontMono")}</label>
-                  <input
-                    type="text"
-                    value={fontMono}
-                    onChange={(e) => setFontMono(e.target.value)}
-                    placeholder="JetBrains Mono, monospace"
-                    className="mt-1 w-full rounded-md border bg-background px-3 py-1.5 text-sm font-mono"
-                  />
-                </div>
+                <FontSelect
+                  label={t("theme.fontSans")}
+                  value={fontSans}
+                  onChange={setFontSans}
+                  placeholder="Inter, system-ui, sans-serif"
+                />
+                <FontSelect
+                  label={t("theme.fontSerif")}
+                  value={fontSerif}
+                  onChange={setFontSerif}
+                  placeholder="Georgia, serif"
+                />
+                <FontSelect
+                  label={t("theme.fontMono")}
+                  value={fontMono}
+                  onChange={setFontMono}
+                  placeholder="JetBrains Mono, monospace"
+                />
               </div>
             )}
 
@@ -497,7 +606,7 @@ export function ThemeEditor({ open, onClose, themeId }: ThemeEditorProps) {
             {/* ── Icons Section ── */}
             {activeSection === "icons" && (
               <div className="space-y-3">
-                <p className="text-xs text-muted-foreground">{t("theme.uploadSVG")}</p>
+                <p className="text-xs text-muted-foreground">{t("theme.iconUploadHint", "支持上传 SVG/PNG 文件（最大 50KB）或粘贴 SVG 代码")}</p>
                 {ICON_SLOTS.map(({ slot, labelKey }) => (
                   <div key={slot} className="flex items-center gap-3">
                     <span className="w-24 text-sm text-foreground">{t(labelKey)}</span>
@@ -508,6 +617,19 @@ export function ThemeEditor({ open, onClose, themeId }: ThemeEditorProps) {
                       placeholder="<svg ...>...</svg>"
                       className="flex-1 rounded-md border bg-background px-2 py-1 text-xs font-mono"
                     />
+                    <label className="cursor-pointer rounded-md border px-2 py-1 text-xs text-muted-foreground hover:bg-muted hover:text-foreground">
+                      <FileUp className="h-3.5 w-3.5" />
+                      <input
+                        type="file"
+                        accept=".svg,.png"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) handleIconUpload(slot, file);
+                          e.target.value = "";
+                        }}
+                      />
+                    </label>
                     {icons[slot] && (
                       <div className="flex items-center gap-1">
                         <span

@@ -44,3 +44,7 @@ export type { ReadingSessionState } from "./reading-session-store";
 // Sync store
 export { useSyncStore } from "./sync-store";
 export type { SyncState } from "./sync-store";
+
+// Font store
+export { useFontStore, generateFontId, getFontFormat, saveFontFile, deleteFontFile, getCSSFontFace, getFontFamilyCSS, getFontsDir } from "./font-store";
+export type { FontState } from "./font-store";

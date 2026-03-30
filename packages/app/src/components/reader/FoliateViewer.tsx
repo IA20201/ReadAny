@@ -8,12 +8,13 @@ import type { BookDoc, BookFormat } from "@/lib/reader/document-loader";
 import { getDirection, isFixedLayoutFormat } from "@/lib/reader/document-loader";
 import { getFontTheme } from "@/lib/reader/font-themes";
 import { registerIframeEventHandlers } from "@/lib/reader/iframe-event-handlers";
-import { useThemeStore } from "@readany/core/stores";
+import { useThemeStore, useFontStore, getCSSFontFace, getFontsDir } from "@readany/core/stores";
 import type {
   ChapterParagraph,
   ChapterTranslationResult,
 } from "@readany/core/translation/chapter-translator";
 import type { ViewSettings } from "@readany/core/types";
+import { getPlatformService } from "@readany/core/services";
 import { Overlayer } from "foliate-js/overlayer.js";
 import { marked } from "marked";
 /**
@@ -199,6 +200,15 @@ export const FoliateViewer = forwardRef<FoliateViewerHandle, FoliateViewerProps>
 
     // Track app theme for reader styling — use a counter to trigger re-renders on theme change
     const [themeVersion, setThemeVersion] = useState(0);
+    const [customFontsBaseUrl, setCustomFontsBaseUrl] = useState<string>("");
+
+    // Fetch custom fonts base URL on mount
+    useEffect(() => {
+      getFontsDir().then((dir) => {
+        const platform = getPlatformService();
+        setCustomFontsBaseUrl(platform.convertFileSrc(dir));
+      });
+    }, []);
 
     // Listen for theme changes (data-theme attribute or CSS variable changes)
     useEffect(() => {
@@ -208,7 +218,7 @@ export const FoliateViewer = forwardRef<FoliateViewerHandle, FoliateViewerProps>
           // Theme changed, re-apply styles
           const view = viewRef.current;
           if (view && viewReady) {
-            applyRendererStyles(view, viewSettings, isFixedLayout);
+            applyRendererStyles(view, viewSettings, isFixedLayout, customFontsBaseUrl);
           }
           return next;
         });
@@ -220,7 +230,7 @@ export const FoliateViewer = forwardRef<FoliateViewerHandle, FoliateViewerProps>
       });
 
       return () => observer.disconnect();
-    }, [viewSettings, isFixedLayout, viewReady]);
+    }, [viewSettings, isFixedLayout, viewReady, customFontsBaseUrl]);
 
     // --- Imperative handle for parent ---
     useImperativeHandle(
@@ -1003,7 +1013,7 @@ export const FoliateViewer = forwardRef<FoliateViewerHandle, FoliateViewerProps>
           }
 
           // Apply renderer settings
-          applyRendererSettings(view, viewSettings, isFixedLayout);
+          applyRendererSettings(view, viewSettings, isFixedLayout, customFontsBaseUrl);
 
           // IMPORTANT: Register event listeners BEFORE navigation to avoid race condition.
           // React's useFoliateEvents relies on viewReady state, but setState + re-render
@@ -1060,7 +1070,7 @@ export const FoliateViewer = forwardRef<FoliateViewerHandle, FoliateViewerProps>
       if (!view?.renderer) return;
       // Fixed layout (PDF/CBZ): don't override font/size/lineHeight
       if (isFixedLayout) return;
-      applyRendererStyles(view, viewSettings, false);
+      applyRendererStyles(view, viewSettings, false, customFontsBaseUrl);
     }, [
       viewSettings.fontSize,
       viewSettings.lineHeight,
@@ -1068,6 +1078,7 @@ export const FoliateViewer = forwardRef<FoliateViewerHandle, FoliateViewerProps>
       viewSettings.paragraphSpacing,
       isFixedLayout,
       themeVersion,
+      customFontsBaseUrl,
     ]);
 
     // --- Apply view mode changes ---
@@ -1125,6 +1136,7 @@ function applyRendererSettings(
   view: FoliateView,
   settings: ViewSettings,
   isFixedLayout: boolean,
+  customFontsBaseUrl?: string,
 ) {
   const renderer = view.renderer;
   if (!renderer) return;
@@ -1149,28 +1161,38 @@ function applyRendererSettings(
   renderer.setAttribute("animated", "");
 
   // Apply CSS styles (skip font overrides for fixed layout)
-  applyRendererStyles(view, settings, isFixedLayout);
+  applyRendererStyles(view, settings, isFixedLayout, customFontsBaseUrl);
 }
 
 /** Generate CSS string for renderer styles */
-function getRendererStyles(settings: ViewSettings): string {
+function getRendererStyles(settings: ViewSettings, customFontsBaseUrl?: string): string {
   const colors = getReaderColors();
   const bgColor = colors.bg;
   const fgColor = colors.fg;
   const linkColor = colors.link;
 
-  // Get font theme
-  const fontTheme = getFontTheme(settings.fontTheme);
+  const customFonts = useFontStore.getState().fonts;
+  let fontFaceCSS = "";
+  let fontFamily: string;
 
-  // Use CJK font for Chinese/Japanese/Korean text, serif for others
-  const fontFamily = `'${fontTheme.cjk}', '${fontTheme.serif}', serif`;
+  const customFont = customFonts.find((f) => f.id === settings.fontTheme);
+  if (customFont) {
+    fontFaceCSS = getCSSFontFace(customFont, customFontsBaseUrl);
+    fontFamily = `'${customFont.fontFamily}', sans-serif`;
+  } else {
+    const fontTheme = getFontTheme(settings.fontTheme);
+    fontFamily = `'${fontTheme.cjk}', '${fontTheme.serif}', serif`;
+  }
 
   return `
+/* Custom font faces */
+${fontFaceCSS}
+
 /* Font styles */
 html {
-  --serif-font: "${fontTheme.serif}";
-  --sans-serif-font: "${fontTheme.sansSerif}";
-  --cjk-font: "${fontTheme.cjk}";
+  --serif-font: "${fontFamily.includes('serif') ? fontFamily : 'Georgia, serif'}";
+  --sans-serif-font: "${fontFamily.includes('sans-serif') ? fontFamily : 'Arial, sans-serif'}";
+  --cjk-font: "${fontFamily}";
 }
 
 html, body {
@@ -1239,6 +1261,7 @@ function applyRendererStyles(
   view: FoliateView,
   settings: ViewSettings,
   isFixedLayout: boolean,
+  customFontsBaseUrl?: string,
 ) {
   const renderer = view.renderer;
   if (!renderer?.setStyles) return;
@@ -1258,7 +1281,7 @@ function applyRendererStyles(
   }
 
   // Apply CSS string styles
-  const styles = getRendererStyles(settings);
+  const styles = getRendererStyles(settings, customFontsBaseUrl);
   renderer.setStyles(styles);
 }
 

@@ -8,6 +8,7 @@ import { useTranslation } from "react-i18next";
 import { AISettings } from "./AISettings";
 import { AboutSettings } from "./AboutSettings";
 import { AppearanceSettings } from "./AppearanceSettings";
+import { FontSettings } from "./FontSettings";
 import { GeneralSettings } from "./GeneralSettings";
 import { ReadSettingsPanel } from "./ReadSettings";
 import { SyncSettings } from "./SyncSettings";
@@ -24,6 +25,7 @@ const TAB_IDS: SettingsTab[] = [
   "general",
   "appearance",
   "reading",
+  "fonts",
   "ai",
   "vectorModel",
   "tts",
@@ -35,6 +37,7 @@ const TAB_KEYS: Record<SettingsTab, string> = {
   general: "settings.general",
   appearance: "settings.appearance",
   reading: "settings.reading",
+  fonts: "fonts.title",
   ai: "settings.ai",
   vectorModel: "settings.vectorModel",
   tts: "settings.tts",
@@ -87,6 +90,7 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
             {settingsTab === "general" && <GeneralSettings />}
             {settingsTab === "appearance" && <AppearanceSettings />}
             {settingsTab === "reading" && <ReadSettingsPanel />}
+            {settingsTab === "fonts" && <FontSettings />}
             {settingsTab === "ai" && <AISettings />}
             {settingsTab === "vectorModel" && <VectorModelSettings />}
             {settingsTab === "tts" && <TTSSettings />}

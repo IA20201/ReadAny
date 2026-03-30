@@ -38,5 +38,6 @@ export * from "./rag";
 export * from "./reading";
 export * from "./skill";
 export * from "./translation";
+export * from "./font";
 export * from "./theme";
 export * from "./user";

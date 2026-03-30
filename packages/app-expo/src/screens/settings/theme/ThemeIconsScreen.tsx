@@ -1,8 +1,8 @@
 /**
- * ThemeIconsScreen — manage 8 SVG icon overrides.
+ * ThemeIconsScreen — manage 8 SVG/PNG icon overrides.
  *
  * Each row: preview (default or custom icon) + slot name + edit/reset buttons.
- * Edit opens a modal with TextInput for pasting SVG + live preview.
+ * Edit opens a modal with TextInput for pasting SVG + live preview + file upload.
  */
 import {
   BookOpenIcon,
@@ -18,7 +18,7 @@ import {
 import { useRoute } from "@react-navigation/native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useThemeStore } from "@readany/core/stores";
-import { getIconOverride, validateSvgString } from "@readany/core/theme/icon-overrides";
+import { getIconOverride, validateSvgDetailed } from "@readany/core/theme/icon-overrides";
 import type { IconSlot, ThemeIcons } from "@readany/core/types";
 import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -35,10 +35,14 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { SvgXml } from "react-native-svg";
+import * as DocumentPicker from "expo-document-picker";
+import * as FileSystem from "expo-file-system";
 import type { RootStackParamList } from "@/navigation/RootNavigator";
 import { SettingsHeader } from "@/screens/settings/SettingsHeader";
 import { useColors } from "@/styles/theme";
 import { fontSize, fontWeight, radius, spacing } from "@/styles/theme";
+
+const ICON_SIZE_LIMIT = 50 * 1024; // 50KB
 
 type Props = NativeStackScreenProps<RootStackParamList, "ThemeIcons">;
 
@@ -102,12 +106,15 @@ export function ThemeIconsScreen() {
   const handleSave = () => {
     if (!editSlot || isBuiltIn) return;
     const trimmed = svgInput.trim();
-    if (trimmed && !validateSvgString(trimmed)) {
-      Alert.alert(
-        t("theme.invalidSvg", "无效的 SVG"),
-        t("theme.invalidSvgDesc", "请粘贴有效的 SVG 字符串（须以 <svg> 开头，最大 10KB）。"),
-      );
-      return;
+    if (trimmed) {
+      const result = validateSvgDetailed(trimmed);
+      if (!result.valid) {
+        Alert.alert(
+          t("theme.invalidSvg", "无效的 SVG"),
+          result.error || t("theme.invalidSvgDesc", "请粘贴有效的 SVG 字符串。"),
+        );
+        return;
+      }
     }
     const updated: ThemeIcons = { ...icons, [editSlot]: trimmed || undefined };
     updateTheme(theme.id, { icons: updated });
@@ -119,6 +126,49 @@ export function ThemeIconsScreen() {
     const updated: ThemeIcons = { ...icons };
     delete updated[slot];
     updateTheme(theme.id, { icons: updated });
+  };
+
+  const handleUpload = async () => {
+    if (!editSlot || isBuiltIn) return;
+    
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ["image/svg+xml", "image/png"],
+        copyToCacheDirectory: true,
+      });
+      
+      if (result.canceled || !result.assets?.[0]) return;
+      
+      const file = result.assets[0];
+      
+      if (file.size && file.size > ICON_SIZE_LIMIT) {
+        Alert.alert(t("theme.iconTooLarge", "图标文件过大"), t("theme.iconSizeLimit", "最大支持 50KB"));
+        return;
+      }
+      
+      const ext = file.name?.split(".").pop()?.toLowerCase();
+      
+      if (ext === "svg") {
+        const content = await FileSystem.readAsStringAsync(file.uri);
+        const validationResult = validateSvgDetailed(content);
+        if (validationResult.valid) {
+          setSvgInput(content);
+        } else {
+          Alert.alert(t("theme.invalidSvg", "无效的 SVG"), validationResult.error);
+        }
+      } else if (ext === "png") {
+        const base64 = await FileSystem.readAsStringAsync(file.uri, {
+          encoding: "base64",
+        });
+        const dataUri = `data:image/png;base64,${base64}`;
+        const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><image href="${dataUri}" width="24" height="24"/></svg>`;
+        setSvgInput(svg);
+      } else {
+        Alert.alert(t("theme.unsupportedIconFormat", "不支持的格式"), t("theme.useSvgOrPng", "请使用 SVG 或 PNG 文件"));
+      }
+    } catch (err) {
+      console.error("Icon upload error:", err);
+    }
   };
 
   const renderSlotRow = (slot: IconSlot, labelKey: string, fallback: string, idx: number, total: number) => {
@@ -212,7 +262,7 @@ export function ThemeIconsScreen() {
             {/* Custom preview */}
             <View style={styles.previewColumn}>
               <View style={[styles.previewBox, { backgroundColor: colors.muted, borderColor: colors.border }]}>
-                {svgInput.trim() && validateSvgString(svgInput.trim()) ? (
+                {svgInput.trim() && validateSvgDetailed(svgInput.trim()).valid ? (
                   <SvgXml xml={svgInput.trim()} width={36} height={36} color={colors.foreground} />
                 ) : svgInput.trim() ? (
                   <Text style={{ color: colors.destructive, fontSize: 20 }}>✕</Text>
@@ -244,6 +294,15 @@ export function ThemeIconsScreen() {
             autoCapitalize="none"
             autoCorrect={false}
           />
+
+          <TouchableOpacity
+            style={[styles.uploadBtn, { borderColor: colors.border, borderWidth: 1 }]}
+            onPress={handleUpload}
+          >
+            <Text style={{ color: colors.primary, fontWeight: fontWeight.medium }}>
+              {t("theme.uploadIcon", "上传文件 (SVG/PNG)")}
+            </Text>
+          </TouchableOpacity>
 
           <View style={styles.sheetActions}>
             <TouchableOpacity
@@ -331,6 +390,11 @@ const styles = StyleSheet.create({
     fontSize: fontSize.sm,
     minHeight: 100,
     textAlignVertical: "top",
+  },
+  uploadBtn: {
+    borderRadius: radius.md,
+    paddingVertical: 10,
+    alignItems: "center",
   },
   sheetActions: { flexDirection: "row", gap: 12 },
   sheetBtn: {

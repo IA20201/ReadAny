@@ -7,6 +7,7 @@ import StatsScreen from "@/screens/StatsScreen";
 import AISettingsScreen from "@/screens/settings/AISettingsScreen";
 import AboutScreen from "@/screens/settings/AboutScreen";
 import AppearanceSettingsScreen from "@/screens/settings/AppearanceSettingsScreen";
+import FontSettingsScreen from "@/screens/settings/FontSettingsScreen";
 import LanguageSettingsScreen from "@/screens/settings/LanguageSettingsScreen";
 import SyncSettingsScreen from "@/screens/settings/SyncSettingsScreen";
 import TTSSettingsScreen from "@/screens/settings/TTSSettingsScreen";
@@ -35,6 +36,7 @@ export type RootStackParamList = {
   Skills: undefined;
   VectorModelSettings: undefined;
   AppearanceSettings: undefined;
+  FontSettings: undefined;
   LanguageSettings: undefined;
   AISettings: undefined;
   TTSSettings: undefined;
@@ -93,6 +95,7 @@ export function RootNavigator() {
             options={{ animation: "slide_from_right" }}
           />
           <Stack.Screen name="AppearanceSettings" component={AppearanceSettingsScreen} />
+          <Stack.Screen name="FontSettings" component={FontSettingsScreen} />
           <Stack.Screen name="LanguageSettings" component={LanguageSettingsScreen} />
           <Stack.Screen name="AISettings" component={AISettingsScreen} />
           <Stack.Screen name="TTSSettings" component={TTSSettingsScreen} />

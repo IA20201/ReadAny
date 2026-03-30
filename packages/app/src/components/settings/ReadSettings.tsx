@@ -11,11 +11,26 @@ import {
 import { Slider } from "@/components/ui/slider";
 import { FONT_THEMES } from "@/lib/reader/font-themes";
 import { useSettingsStore } from "@/stores/settings-store";
+import { useFontStore } from "@readany/core/stores";
 import { useTranslation } from "react-i18next";
 
 export function ReadSettingsPanel() {
   const { t, i18n } = useTranslation();
   const { readSettings, updateReadSettings } = useSettingsStore();
+  const customFonts = useFontStore((s) => s.fonts);
+
+  const allFontOptions = [
+    ...FONT_THEMES.map((theme) => ({
+      id: theme.id,
+      name: i18n.language === "zh" ? theme.name : theme.nameEn,
+      isCustom: false,
+    })),
+    ...customFonts.map((font) => ({
+      id: font.id,
+      name: font.name,
+      isCustom: true,
+    })),
+  ];
 
   return (
     <div className="space-y-6 p-4 pt-3">
@@ -36,9 +51,12 @@ export function ReadSettingsPanel() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {FONT_THEMES.map((theme) => (
-                  <SelectItem key={theme.id} value={theme.id}>
-                    {i18n.language === "zh" ? theme.name : theme.nameEn}
+                {allFontOptions.map((option) => (
+                  <SelectItem key={option.id} value={option.id}>
+                    {option.name}
+                    {option.isCustom && (
+                      <span className="ml-1 text-xs text-muted-foreground">(自定义)</span>
+                    )}
                   </SelectItem>
                 ))}
               </SelectContent>

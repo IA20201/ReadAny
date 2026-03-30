@@ -603,6 +603,47 @@ export const BookmarkIcon = icon(() => (
   <Path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z" />
 ));
 
+export const FileTextIcon = icon(() => (
+  <>
+    <Path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+    <Path d="M14 2v6h6" />
+    <Path d="M16 13H8" />
+    <Path d="M16 17H8" />
+    <Path d="M10 9H8" />
+  </>
+));
+
+export const TypeIcon = icon(() => (
+  <>
+    <Path d="M4 7V4h16v3" />
+    <Path d="M9 20h6" />
+    <Path d="M12 4v16" />
+  </>
+));
+
+export const LinkIcon = icon(() => (
+  <>
+    <Path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+    <Path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+  </>
+));
+
+export const GlobeIcon = icon(() => (
+  <>
+    <Path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z" />
+    <Path d="M2 12h20" />
+    <Path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+  </>
+));
+
+export const AlertCircleIcon = icon(() => (
+  <>
+    <Path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z" />
+    <Path d="M12 8v4" />
+    <Path d="M12 16h.01" />
+  </>
+));
+
 // Filled variant for bookmark (active state)
 export function BookmarkFilledIcon({
   size = 24,
