@@ -99,6 +99,24 @@ export function ReadSettingsPanel() {
               onValueChange={([v]) => updateReadSettings({ paragraphSpacing: v })}
             />
           </div>
+
+          {/* Page Turn Style */}
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-foreground">{t("settings.pageTurnStyle")}</span>
+            <Select
+              value={readSettings.pageTurnStyle ?? "slide"}
+              onValueChange={(v) => updateReadSettings({ pageTurnStyle: v as "slide" | "curl" | "none" })}
+            >
+              <SelectTrigger className="w-[140px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="slide">{t("settings.pageTurnSlide")}</SelectItem>
+                <SelectItem value="curl">{t("settings.pageTurnCurl")}</SelectItem>
+                <SelectItem value="none">{t("settings.pageTurnNone")}</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
       </section>
     </div>

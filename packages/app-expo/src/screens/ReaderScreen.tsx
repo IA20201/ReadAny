@@ -683,14 +683,13 @@ export function ReaderScreen({ route, navigation }: Props) {
         const latestBook = await db.getBook(bookId);
         const lastLocation = latestBook?.currentCfi || book.currentCfi || undefined;
 
-        // Use file URI for WebView to fetch directly — avoids 33% base64 memory bloat
-        // and eliminates the expensive cross-bridge transfer
-        const fileUri = Platform.OS === "android"
-          ? `file://${absPath}`
-          : absPath.startsWith("file://") ? absPath : `file://${absPath}`;
+        // Read the book file and send as base64 for reliability
+        const base64 = await FileSystem.readAsStringAsync(absPath, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
 
         bridge.openBook({
-          uri: fileUri,
+          base64,
           fileName: book.filePath.split("/").pop() || "book.epub",
           lastLocation,
           pageMargin: settingPageMargin,

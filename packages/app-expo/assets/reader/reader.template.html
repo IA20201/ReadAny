@@ -278,6 +278,11 @@
         case 'applySettings':
           if (view && msg.settings) applySettings(msg.settings);
           break;
+        case 'setPageTurnStyle':
+          if (view && view.renderer && msg.style) {
+            view.renderer.pageTurnStyle = msg.style;
+          }
+          break;
         case 'setThemeColors':
           if (msg.colors) setThemeColors(msg.colors);
           break;
@@ -292,6 +297,28 @@
           break;
         case 'removeChapterTranslations':
           handleRemoveChapterTranslations();
+          break;
+        case 'base64Chunk':
+          // Accumulate base64 chunks sent from RN (avoids single huge injectJavaScript call)
+          if (!window._b64Chunks) window._b64Chunks = [];
+          window._b64Chunks.push(msg.data);
+          break;
+        case 'base64End':
+          // All chunks received — join and open
+          try {
+            const fullBase64 = (window._b64Chunks || []).join('');
+            window._b64Chunks = null;
+            await openBook({
+              base64: fullBase64,
+              fileName: msg.fileName,
+              mimeType: msg.mimeType,
+              lastLocation: msg.lastLocation,
+              pageMargin: msg.pageMargin,
+            });
+          } catch (err) {
+            console.error('[WebView] base64End error:', err);
+            postToRN('error', { message: String(err) });
+          }
           break;
       }
     }
@@ -559,6 +586,10 @@
           renderer.setAttribute('max-inline-size', '100%');
         }
       }
+
+      if (settings.pageTurnStyle && 'pageTurnStyle' in renderer) {
+        renderer.pageTurnStyle = settings.pageTurnStyle;
+      }
     }
 
     function setThemeColors(colors) {
@@ -634,7 +665,14 @@
         const viewportX = e.changedTouches[0].clientX + iframeLeft;
         const normalizedX = ((viewportX % viewW) + viewW) % viewW;
 
-        if (normalizedX >= viewW * 0.25 && normalizedX <= viewW * 0.75) {
+        if (normalizedX < viewW * 0.25) {
+          // Left zone: previous page
+          if (window.goPrev) window.goPrev();
+        } else if (normalizedX > viewW * 0.75) {
+          // Right zone: next page
+          if (window.goNext) window.goNext();
+        } else {
+          // Center zone: toggle toolbar
           postToRN('tap', {});
         }
       }, { passive: true });
@@ -962,6 +1000,13 @@
     window.setNavigationLocked = function (locked) {
       if (view && view.renderer && 'navigationLocked' in view.renderer) {
         view.renderer.navigationLocked = locked;
+      }
+    };
+    window.setPageTurnStyle = function (style) {
+      // style: 'slide' | 'curl' | 'none'
+      if (view && view.renderer && 'pageTurnStyle' in view.renderer) {
+        view.renderer.pageTurnStyle = style;
+        console.log('[WebView] Page turn style set to:', style);
       }
     };
     window.requestPageSnippet = function () {

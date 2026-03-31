@@ -344,6 +344,7 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
             `[importBooks] Importing: name=${fileName}, format=${format}, uri=${filePath}`,
           );
 
+        try {
           // For TXT files: convert to EPUB bytes directly, skip Blob/File (slow in RN)
           if (ext === "txt") {
             try {
@@ -415,7 +416,7 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
                 const base64 = btoa(String.fromCharCode(...result.epubBytes));
                 queueAutoVectorize(book, base64, "application/epub+zip");
               }
-              continue;
+              return;
             } catch (convErr) {
               console.error(`[importBooks] TXT conversion failed:`, convErr);
               throw convErr;

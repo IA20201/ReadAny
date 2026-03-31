@@ -86,6 +86,43 @@ export function useReaderBridge(callbacks: ReaderBridgeCallbacks) {
     [inject],
   );
 
+  /**
+   * Send a large base64 string to the WebView in chunks.
+   * iOS WKWebView cannot fetch() file:// URIs, and a single injectJavaScript
+   * call with a multi-MB base64 string may hang or crash. This method splits
+   * the base64 data into 512 KB text chunks, sends each as a `base64Chunk`
+   * command, then sends a `base64End` command to trigger openBook.
+   */
+  const openBookChunked = useCallback(
+    (params: {
+      base64: string;
+      fileName?: string;
+      mimeType?: string;
+      lastLocation?: string;
+      pageMargin?: number;
+    }) => {
+      const { base64, ...rest } = params;
+      const CHUNK_SIZE = 512 * 1024; // 512 KB per chunk
+      const totalChunks = Math.ceil(base64.length / CHUNK_SIZE);
+
+      // Reset accumulator
+      inject('window._b64Chunks = []');
+
+      // Send chunks with a tiny delay between each to avoid flooding the JS thread
+      for (let i = 0; i < totalChunks; i++) {
+        const chunk = base64.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
+        // Escape any backticks / backslashes in the chunk (base64 only has A-Za-z0-9+/= so this is a no-op in practice)
+        const escaped = chunk.replace(/\\/g, '\\\\').replace(/`/g, '\\`');
+        inject(`handleCommand({type:"base64Chunk",data:\`${escaped}\`})`);
+      }
+
+      // Signal that all chunks have been sent
+      const endMsg = JSON.stringify({ type: "base64End", ...rest });
+      inject(`handleCommand(${endMsg})`);
+    },
+    [inject],
+  );
+
   const goNext = useCallback(() => {
     inject("window.goNext()");
   }, [inject]);
@@ -415,6 +452,7 @@ export function useReaderBridge(callbacks: ReaderBridgeCallbacks) {
       handleMessage,
       // Commands
       openBook,
+      openBookChunked,
       goNext,
       goPrev,
       goToFraction,
@@ -440,6 +478,7 @@ export function useReaderBridge(callbacks: ReaderBridgeCallbacks) {
     [
       handleMessage,
       openBook,
+      openBookChunked,
       goNext,
       goPrev,
       goToFraction,

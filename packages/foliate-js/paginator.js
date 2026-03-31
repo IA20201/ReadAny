@@ -19,7 +19,9 @@ const lerp = (min, max, x) => x * (max - min) + min;
 const easeOutCubic = (x) => 1 - Math.pow(1 - x, 3);
 
 // ═══════════════════════════════════════════════════════════════
-// Page Curl Effect — Canvas 2D simulated page turn
+// Page Curl Effect — Realistic simulation page turn
+// Ported from Legado (gedoor/legado) SimulationPageDelegate
+// Uses dual Bézier curves + matrix reflection for realistic curl
 // ═══════════════════════════════════════════════════════════════
 class PageCurlEffect {
   #canvas;
@@ -29,13 +31,36 @@ class PageCurlEffect {
   #active = false;
   #direction = 1; // 1 = forward (next), -1 = backward (prev)
   #progress = 0; // 0 = flat, 1 = fully turned
-  #cornerX = 0;
-  #cornerY = 0;
   #animationId = null;
   #onComplete = null;
-  #capturedCurrentPage = null;
-  #capturedNextPage = null;
-  #bgColor = '#1c1c1e';
+  #bgColor = '#ffffff';
+  #bgColorDark = '#1c1c1e';
+
+  // ── Legado-style Bézier geometry ──
+  // Touch point (the dragged corner)
+  #touchX = 0;
+  #touchY = 0;
+  // The page corner being pulled (fixed corner opposite to touch)
+  #cornerX = 0;
+  #cornerY = 0;
+  // Whether flipping from right-top or left-bottom
+  #isRtOrLb = false;
+  // Midpoint between touch and corner
+  #middleX = 0;
+  #middleY = 0;
+  // Bézier control, start, end, vertex points (two curves)
+  #bezierStart1 = { x: 0, y: 0 };
+  #bezierStart2 = { x: 0, y: 0 };
+  #bezierControl1 = { x: 0, y: 0 };
+  #bezierControl2 = { x: 0, y: 0 };
+  #bezierVertex1 = { x: 0, y: 0 };
+  #bezierVertex2 = { x: 0, y: 0 };
+  #bezierEnd1 = { x: 0, y: 0 };
+  #bezierEnd2 = { x: 0, y: 0 };
+
+  // Pre-allocated shadow drawables (as gradient configs)
+  #frontShadowColors = null;
+  #backShadowColors = null;
 
   constructor(container) {
     this.#canvas = document.createElement('canvas');
@@ -65,23 +90,12 @@ class PageCurlEffect {
   }
 
   set bgColor(color) {
-    this.#bgColor = color || '#1c1c1e';
+    this.#bgColor = color || '#ffffff';
+    // Compute a darker version for page back
+    this.#bgColorDark = this.#adjustBrightness(this.#bgColor, -25);
   }
 
   get active() { return this.#active; }
-
-  // Capture the current visible page as an image
-  async capturePages(container, direction) {
-    this.#direction = direction;
-    const w = this.#width;
-    const h = this.#height;
-
-    // We'll render simplified colored rectangles as page bitmaps
-    // The actual content is shown underneath; the curl canvas overlays
-    // to create the illusion of a page lifting
-    this.#capturedCurrentPage = { width: w, height: h };
-    this.#capturedNextPage = { width: w, height: h };
-  }
 
   start(touchX, touchY, direction, onComplete) {
     this.#active = true;
@@ -90,9 +104,13 @@ class PageCurlEffect {
     this.#canvas.style.display = 'block';
     this.#canvas.style.pointerEvents = 'auto';
 
-    // Initialize corner position at touch point
-    this.#cornerX = touchX;
-    this.#cornerY = touchY;
+    // Set touch point
+    this.#touchX = touchX;
+    this.#touchY = touchY;
+
+    // Calculate which corner is being pulled
+    this.#calcCornerXY(touchX, touchY);
+    this.#calcPoints();
     this.#progress = 0;
 
     this.#draw();
@@ -100,16 +118,14 @@ class PageCurlEffect {
 
   update(touchX, touchY) {
     if (!this.#active) return;
-    this.#cornerX = touchX;
-    this.#cornerY = touchY;
+    this.#touchX = touchX;
+    this.#touchY = touchY;
+    this.#calcPoints();
 
     const w = this.#width;
-    // Calculate progress based on how far the corner has moved
     if (this.#direction === 1) {
-      // Forward: from right edge to left
       this.#progress = Math.max(0, Math.min(1, (w - touchX) / w));
     } else {
-      // Backward: from left edge to right
       this.#progress = Math.max(0, Math.min(1, touchX / w));
     }
 
@@ -125,10 +141,24 @@ class PageCurlEffect {
 
     return new Promise((resolve) => {
       const startProgress = this.#progress;
-      const startCornerX = this.#cornerX;
+      const startTouchX = this.#touchX;
+      const startTouchY = this.#touchY;
       const w = this.#width;
+      const h = this.#height;
       const duration = 300;
       let startTime = null;
+
+      // Target touch position
+      let targetTouchX, targetTouchY;
+      if (shouldComplete) {
+        // Animate to opposite edge
+        targetTouchX = this.#direction === 1 ? -w * 0.15 : w * 1.15;
+        targetTouchY = this.#cornerY;
+      } else {
+        // Snap back to starting edge
+        targetTouchX = this.#cornerX;
+        targetTouchY = this.#cornerY;
+      }
 
       const step = (now) => {
         startTime ??= now;
@@ -137,14 +167,9 @@ class PageCurlEffect {
         const eased = 1 - Math.pow(1 - t, 3); // easeOutCubic
 
         this.#progress = startProgress + (targetProgress - startProgress) * eased;
-
-        // Update corner position
-        if (this.#direction === 1) {
-          this.#cornerX = w - this.#progress * w;
-        } else {
-          this.#cornerX = this.#progress * w;
-        }
-
+        this.#touchX = startTouchX + (targetTouchX - startTouchX) * eased;
+        this.#touchY = startTouchY + (targetTouchY - startTouchY) * eased;
+        this.#calcPoints();
         this.#draw();
 
         if (t < 1) {
@@ -173,142 +198,457 @@ class PageCurlEffect {
     this.#canvas.style.display = 'none';
     this.#canvas.style.pointerEvents = 'none';
     this.#ctx.clearRect(0, 0, this.#width, this.#height);
-    this.#capturedCurrentPage = null;
-    this.#capturedNextPage = null;
   }
 
+  // ── Legado core: calculate which corner the page is being pulled from ──
+  #calcCornerXY(x, y) {
+    const w = this.#width;
+    const h = this.#height;
+    // Snap to nearest corner based on direction and touch position
+    if (this.#direction === 1) {
+      // Forward: pulling from right side
+      this.#cornerX = w;
+      this.#cornerY = y <= h / 2 ? 0 : h;
+    } else {
+      // Backward: pulling from left side
+      this.#cornerX = 0;
+      this.#cornerY = y <= h / 2 ? 0 : h;
+    }
+    this.#isRtOrLb = (this.#cornerX === 0 && this.#cornerY === h)
+      || (this.#cornerX === w && this.#cornerY === 0);
+  }
+
+  // ── Legado core: calculate all Bézier control points ──
+  // This is the mathematical heart of the simulation
+  #calcPoints() {
+    const w = this.#width;
+    const h = this.#height;
+    let touchX = this.#touchX;
+    let touchY = this.#touchY;
+    const cornerX = this.#cornerX;
+    const cornerY = this.#cornerY;
+
+    // Midpoint between touch and corner
+    this.#middleX = (touchX + cornerX) / 2;
+    this.#middleY = (touchY + cornerY) / 2;
+
+    // Bézier control point 1 lies on the line y = cornerY
+    // Bézier control point 2 lies on the line x = cornerX
+    const diffX = cornerX - this.#middleX;
+    const diffY = cornerY - this.#middleY;
+
+    // Avoid division by zero
+    if (Math.abs(diffX) < 0.01 || Math.abs(diffY) < 0.01) return;
+
+    this.#bezierControl1.x = this.#middleX - (diffY * diffY) / diffX;
+    this.#bezierControl1.y = cornerY;
+
+    this.#bezierControl2.x = cornerX;
+    this.#bezierControl2.y = this.#middleY - (diffX * diffX) / diffY;
+
+    // ── Boundary correction ──
+    // Ensure bezierStart1.x doesn't go out of bounds
+    // (Ported from Legado's boundary clamping logic)
+    this.#bezierStart1.x = this.#bezierControl1.x - (cornerX - this.#bezierControl1.x) / 2;
+    this.#bezierStart1.y = cornerY;
+
+    // Clamp bezierStart1.x to valid range [0, w]
+    if (touchX > 0 && touchX < w) {
+      if (this.#bezierStart1.x < 0 || this.#bezierStart1.x > w) {
+        if (this.#bezierStart1.x < 0) {
+          this.#bezierStart1.x = w - this.#bezierStart1.x;
+        }
+        const f1 = Math.abs(cornerX - this.#bezierStart1.x);
+        const f2 = f1 * 2;
+        // Recalculate touch point to keep curve in bounds
+        const newMiddleX = Math.abs(cornerX - f2);
+        const cxAbs = Math.abs(cornerX);
+
+        if (Math.abs(newMiddleX - cxAbs) < 0.01) return;
+
+        touchX = Math.abs(cornerX - f2 * 2);
+        // Recalculate with new touch point
+        const my = (touchY + cornerY) / 2;
+        const mx = (touchX + cornerX) / 2;
+        const dx = cornerX - mx;
+        const dy = cornerY - my;
+
+        if (Math.abs(dx) < 0.01) return;
+
+        this.#touchX = touchX;
+        this.#middleX = mx;
+        this.#middleY = my;
+
+        this.#bezierControl1.x = mx - (dy * dy) / dx;
+        this.#bezierControl1.y = cornerY;
+
+        this.#bezierControl2.x = cornerX;
+        if (Math.abs(dy) > 0.01) {
+          this.#bezierControl2.y = my - (dx * dx) / dy;
+        }
+
+        this.#bezierStart1.x = this.#bezierControl1.x - (cornerX - this.#bezierControl1.x) / 2;
+      }
+    }
+
+    this.#bezierStart2.x = cornerX;
+    this.#bezierStart2.y = this.#bezierControl2.y - (cornerY - this.#bezierControl2.y) / 2;
+
+    // Bézier vertex = midpoint of control and start (the peak of the curve)
+    this.#bezierVertex1.x = (this.#bezierStart1.x + 2 * this.#bezierControl1.x) / 3;
+    this.#bezierVertex1.y = (this.#bezierStart1.y + 2 * this.#bezierControl1.y) / 3;
+
+    this.#bezierVertex2.x = (this.#bezierStart2.x + 2 * this.#bezierControl2.x) / 3;
+    this.#bezierVertex2.y = (this.#bezierStart2.y + 2 * this.#bezierControl2.y) / 3;
+
+    // Bézier end = midpoint of start and vertex
+    this.#bezierEnd1.x = (this.#bezierStart1.x + this.#bezierVertex1.x) / 2;
+    this.#bezierEnd1.y = (this.#bezierStart1.y + this.#bezierVertex1.y) / 2;
+
+    this.#bezierEnd2.x = (this.#bezierStart2.x + this.#bezierVertex2.x) / 2;
+    this.#bezierEnd2.y = (this.#bezierStart2.y + this.#bezierVertex2.y) / 2;
+  }
+
+  // ── Main draw routine (4 layers, like Legado) ──
   #draw() {
     const ctx = this.#ctx;
     const w = this.#width;
     const h = this.#height;
     const progress = this.#progress;
-    const dir = this.#direction;
 
     ctx.clearRect(0, 0, w, h);
-
     if (progress <= 0.001) return;
 
-    // ── Calculate curl geometry ──
-    // The "fold line" is where the page bends
-    // Corner being dragged
+    // Build the two paths that define the curl region
+    const path0 = this.#createPath0(); // The area of the current page still visible
+    const path1 = this.#createPath1(); // The curled back area
+
+    // Layer 1: Current page area shadow (the "hole" left by the lifted page)
+    this.#drawCurrentPageArea(ctx, path0, w, h);
+
+    // Layer 2: Next page area + shadow underneath the curl
+    this.#drawNextPageAreaAndShadow(ctx, path0, path1, w, h);
+
+    // Layer 3: Current page shadow (shadow cast by the lifted page)
+    this.#drawCurrentPageShadow(ctx, path0, w, h);
+
+    // Layer 4: Curled page back (the backside of the lifted page via reflection)
+    this.#drawCurrentBackArea(ctx, path1, w, h);
+  }
+
+  // ── Path 0: outline of the curl boundary (Bézier curves + page edges) ──
+  #createPath0() {
+    const path = new Path2D();
+    const cx = this.#cornerX;
+    const cy = this.#cornerY;
+    const bs1 = this.#bezierStart1;
+    const bs2 = this.#bezierStart2;
+    const bc1 = this.#bezierControl1;
+    const bc2 = this.#bezierControl2;
+    const be1 = this.#bezierEnd1;
+    const be2 = this.#bezierEnd2;
+    const bv1 = this.#bezierVertex1;
+    const bv2 = this.#bezierVertex2;
+
+    path.moveTo(bs1.x, bs1.y);
+    path.quadraticCurveTo(bc1.x, bc1.y, be1.x, be1.y);
+    path.lineTo(this.#touchX, this.#touchY);
+    path.lineTo(be2.x, be2.y);
+    path.quadraticCurveTo(bc2.x, bc2.y, bs2.x, bs2.y);
+    path.lineTo(cx, cy);
+    path.lineTo(bs1.x, bs1.y);
+    path.closePath();
+    return path;
+  }
+
+  // ── Path 1: the backside region of the curled page ──
+  #createPath1() {
+    const path = new Path2D();
+    const be1 = this.#bezierEnd1;
+    const be2 = this.#bezierEnd2;
+    const bv1 = this.#bezierVertex1;
+    const bv2 = this.#bezierVertex2;
+    const bs1 = this.#bezierStart1;
+    const bs2 = this.#bezierStart2;
+    const bc1 = this.#bezierControl1;
+    const bc2 = this.#bezierControl2;
+
+    path.moveTo(bs1.x, bs1.y);
+    path.quadraticCurveTo(bc1.x, bc1.y, be1.x, be1.y);
+    path.lineTo(this.#touchX, this.#touchY);
+    path.lineTo(be2.x, be2.y);
+    path.quadraticCurveTo(bc2.x, bc2.y, bs2.x, bs2.y);
+    path.lineTo(bs1.x, bs1.y);
+    path.closePath();
+    return path;
+  }
+
+  // ── Layer 1: Draw current page area (reveal the page underneath) ──
+  #drawCurrentPageArea(ctx, path0, w, h) {
+    ctx.save();
+
+    // Clip OUT path0 to show only the non-curled region
+    // We achieve "clipOut" by drawing the full rect then using evenodd with path0
+    const clipPath = new Path2D();
+    clipPath.rect(0, 0, w, h);
+    clipPath.addPath(path0);
+
+    ctx.clip(clipPath, 'evenodd');
+
+    // Subtle shadow at the fold line to give depth
+    const cx = this.#cornerX;
+    const touchX = this.#touchX;
+    const midFold = (touchX + cx) / 2;
+
+    const shadowW = Math.max(20, 40 * this.#progress);
+    const grad = ctx.createLinearGradient(
+      midFold - shadowW, 0, midFold + shadowW, 0
+    );
+    grad.addColorStop(0, 'rgba(0,0,0,0)');
+    grad.addColorStop(0.45, `rgba(0,0,0,${0.15 * this.#progress})`);
+    grad.addColorStop(0.55, `rgba(0,0,0,${0.15 * this.#progress})`);
+    grad.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(midFold - shadowW, 0, shadowW * 2, h);
+
+    ctx.restore();
+  }
+
+  // ── Layer 2: Draw next page area + shadow ──
+  #drawNextPageAreaAndShadow(ctx, path0, path1, w, h) {
+    ctx.save();
+
+    // The next page area is between path0 and path1
+    // Use path0 as the clip region (the curl boundary)
+    ctx.clip(path0);
+
+    // Draw shadow under the curled page
+    const bc1 = this.#bezierControl1;
+    const bc2 = this.#bezierControl2;
     const cx = this.#cornerX;
     const cy = this.#cornerY;
 
-    // The page curls from the edge
-    const edgeX = dir === 1 ? w : 0;
-    const midX = (cx + edgeX) / 2;
+    // Calculate shadow direction and size
+    const distC1 = Math.hypot(cx - bc1.x, cy - bc1.y);
+    const distC2 = Math.hypot(cx - bc2.x, cy - bc2.y);
+    const shadowRadius = Math.max(
+      Math.min(25, distC1 / 4),
+      Math.min(25, distC2 / 4)
+    ) * this.#progress;
 
-    // Fold line angle
-    const angle = Math.atan2(cy - h / 2, cx - edgeX);
-    const foldAngle = angle / 2;
+    if (shadowRadius > 1) {
+      // Shadow along the fold
+      const be1 = this.#bezierEnd1;
+      const be2 = this.#bezierEnd2;
+      const tx = this.#touchX;
+      const ty = this.#touchY;
 
-    // ── Draw the shadow under the curling page ──
-    ctx.save();
-    const shadowWidth = Math.min(60, progress * 80);
-    const shadowX = dir === 1 ? cx - shadowWidth : cx;
+      // Compute normal to the fold line for shadow direction
+      const foldDx = be2.x - be1.x;
+      const foldDy = be2.y - be1.y;
+      const foldLen = Math.hypot(foldDx, foldDy) || 1;
+      const nx = -foldDy / foldLen; // normal x
+      const ny = foldDx / foldLen;  // normal y
 
-    const shadowGrad = ctx.createLinearGradient(
-      dir === 1 ? cx - shadowWidth : cx,
-      0,
-      dir === 1 ? cx + 5 : cx + shadowWidth,
-      0,
-    );
-    shadowGrad.addColorStop(0, 'rgba(0,0,0,0)');
-    shadowGrad.addColorStop(0.5, `rgba(0,0,0,${0.3 * progress})`);
-    shadowGrad.addColorStop(1, 'rgba(0,0,0,0)');
+      // Determine which side the shadow falls on
+      const sideSign = (cx - tx) > 0 ? 1 : -1;
 
-    ctx.fillStyle = shadowGrad;
-    ctx.fillRect(shadowX, 0, shadowWidth + 5, h);
-    ctx.restore();
+      // Draw soft shadow along the fold line area
+      const shadowPath = new Path2D();
+      shadowPath.moveTo(be1.x, be1.y);
+      shadowPath.lineTo(tx, ty);
+      shadowPath.lineTo(be2.x, be2.y);
+      shadowPath.lineTo(be2.x + nx * sideSign * shadowRadius, be2.y + ny * sideSign * shadowRadius);
+      shadowPath.lineTo(tx + nx * sideSign * shadowRadius, ty + ny * sideSign * shadowRadius);
+      shadowPath.lineTo(be1.x + nx * sideSign * shadowRadius, be1.y + ny * sideSign * shadowRadius);
+      shadowPath.closePath();
 
-    // ── Draw the curled page (back side) ──
-    ctx.save();
+      ctx.save();
+      ctx.clip(shadowPath);
 
-    // The visible "back" of the curled page
-    const curlWidth = Math.abs(edgeX - cx);
-    const backWidth = Math.min(curlWidth, w * 0.45);
+      // Gradient perpendicular to fold
+      const gradX1 = tx;
+      const gradY1 = ty;
+      const gradX2 = tx + nx * sideSign * shadowRadius;
+      const gradY2 = ty + ny * sideSign * shadowRadius;
 
-    if (backWidth > 2) {
-      const backX = dir === 1 ? cx : cx - backWidth;
+      const shadowGrad = ctx.createLinearGradient(gradX1, gradY1, gradX2, gradY2);
+      shadowGrad.addColorStop(0, `rgba(0,0,0,${0.35 * this.#progress})`);
+      shadowGrad.addColorStop(0.6, `rgba(0,0,0,${0.1 * this.#progress})`);
+      shadowGrad.addColorStop(1, 'rgba(0,0,0,0)');
 
-      // Clip to the curl region
-      ctx.beginPath();
-      ctx.moveTo(backX, 0);
-      ctx.lineTo(backX + backWidth, 0);
-      ctx.lineTo(backX + backWidth, h);
-      ctx.lineTo(backX, h);
-      ctx.closePath();
-      ctx.clip();
-
-      // Page back color (slightly darker to simulate the back of paper)
-      const pageBg = this.#bgColor;
-      ctx.fillStyle = this.#adjustBrightness(pageBg, -15);
-      ctx.fillRect(backX, 0, backWidth, h);
-
-      // Add a subtle gradient for the curl effect (3D illusion)
-      const curlGrad = ctx.createLinearGradient(backX, 0, backX + backWidth, 0);
-      if (dir === 1) {
-        curlGrad.addColorStop(0, 'rgba(0,0,0,0.08)');
-        curlGrad.addColorStop(0.3, 'rgba(255,255,255,0.05)');
-        curlGrad.addColorStop(0.7, 'rgba(255,255,255,0.02)');
-        curlGrad.addColorStop(1, 'rgba(0,0,0,0.15)');
-      } else {
-        curlGrad.addColorStop(0, 'rgba(0,0,0,0.15)');
-        curlGrad.addColorStop(0.3, 'rgba(255,255,255,0.02)');
-        curlGrad.addColorStop(0.7, 'rgba(255,255,255,0.05)');
-        curlGrad.addColorStop(1, 'rgba(0,0,0,0.08)');
-      }
-      ctx.fillStyle = curlGrad;
-      ctx.fillRect(backX, 0, backWidth, h);
-
-      // Draw subtle horizontal lines to simulate paper texture
-      ctx.strokeStyle = `rgba(128,128,128,${0.04 * progress})`;
-      ctx.lineWidth = 0.5;
-      for (let y = 30; y < h; y += 28) {
-        ctx.beginPath();
-        ctx.moveTo(backX + 10, y);
-        ctx.lineTo(backX + backWidth - 10, y);
-        ctx.stroke();
-      }
+      ctx.fillStyle = shadowGrad;
+      ctx.fill(shadowPath);
+      ctx.restore();
     }
+
+    ctx.restore();
+  }
+
+  // ── Layer 3: Shadow cast by the lifted page on the current page ──
+  #drawCurrentPageShadow(ctx, path0, w, h) {
+    ctx.save();
+
+    // Clip out the curl region
+    const clipPath = new Path2D();
+    clipPath.rect(0, 0, w, h);
+    clipPath.addPath(path0);
+    ctx.clip(clipPath, 'evenodd');
+
+    const be1 = this.#bezierEnd1;
+    const be2 = this.#bezierEnd2;
+    const tx = this.#touchX;
+    const ty = this.#touchY;
+    const cx = this.#cornerX;
+
+    // Shadow parameters
+    const shadowSize = Math.min(30, 50 * this.#progress);
+    const isForward = this.#direction === 1;
+
+    // Draw shadow along the fold crease
+    if (shadowSize > 1) {
+      // Vertical shadow strip at the fold
+      const foldX = (be1.x + be2.x + tx) / 3;
+
+      const grad = ctx.createLinearGradient(
+        isForward ? foldX : foldX - shadowSize,
+        0,
+        isForward ? foldX + shadowSize : foldX,
+        0
+      );
+
+      if (isForward) {
+        grad.addColorStop(0, `rgba(0,0,0,${0.25 * this.#progress})`);
+        grad.addColorStop(0.5, `rgba(0,0,0,${0.08 * this.#progress})`);
+        grad.addColorStop(1, 'rgba(0,0,0,0)');
+      } else {
+        grad.addColorStop(0, 'rgba(0,0,0,0)');
+        grad.addColorStop(0.5, `rgba(0,0,0,${0.08 * this.#progress})`);
+        grad.addColorStop(1, `rgba(0,0,0,${0.25 * this.#progress})`);
+      }
+
+      ctx.fillStyle = grad;
+      ctx.fillRect(
+        isForward ? foldX : foldX - shadowSize,
+        0,
+        shadowSize,
+        h
+      );
+    }
+
+    ctx.restore();
+  }
+
+  // ── Layer 4: Back of the curled page (the core visual — matrix reflection) ──
+  #drawCurrentBackArea(ctx, path1, w, h) {
+    ctx.save();
+    ctx.clip(path1);
+
+    const bc1 = this.#bezierControl1;
+    const bc2 = this.#bezierControl2;
+    const cx = this.#cornerX;
+    const cy = this.#cornerY;
+    const tx = this.#touchX;
+    const ty = this.#touchY;
+    const be1 = this.#bezierEnd1;
+    const be2 = this.#bezierEnd2;
+
+    // ── Reflection matrix (from Legado) ──
+    // Reflect across the line from bezierControl1 to the corner
+    const dx = cx - bc1.x;
+    const dy = bc2.y - cy;
+    const dis = Math.hypot(dx, dy) || 1;
+    const f8 = dx / dis;
+    const f9 = dy / dis;
+
+    // 2D reflection matrix: R = I - 2*n*nT where n is the normal
+    const m0 = 1 - 2 * f9 * f9;
+    const m1 = 2 * f8 * f9;
+    const m3 = 2 * f8 * f9;
+    const m4 = 1 - 2 * f8 * f8;
+
+    // Apply the reflection transform
+    // pre-translate to bc1, apply reflection, post-translate back
+    const px = bc1.x;
+    const py = bc1.y;
+
+    ctx.translate(px, py);
+    ctx.transform(m0, m1, m3, m4, 0, 0);
+    ctx.translate(-px, -py);
+
+    // Fill the back of the page
+    ctx.fillStyle = this.#bgColorDark;
+    ctx.fillRect(0, 0, w, h);
+
+    // Add paper-back gradient for 3D illusion
+    const gradCenter = (be1.x + be2.x) / 2;
+    const backGrad = ctx.createLinearGradient(
+      gradCenter - w * 0.3, 0,
+      gradCenter + w * 0.3, 0
+    );
+    backGrad.addColorStop(0, `rgba(0,0,0,${0.06 * this.#progress})`);
+    backGrad.addColorStop(0.3, 'rgba(255,255,255,0.03)');
+    backGrad.addColorStop(0.5, `rgba(255,255,255,${0.06 * this.#progress})`);
+    backGrad.addColorStop(0.7, 'rgba(255,255,255,0.03)');
+    backGrad.addColorStop(1, `rgba(0,0,0,${0.06 * this.#progress})`);
+    ctx.fillStyle = backGrad;
+    ctx.fillRect(0, 0, w, h);
+
+    // Draw subtle texture lines on the back
+    ctx.strokeStyle = `rgba(128,128,128,${0.03 * this.#progress})`;
+    ctx.lineWidth = 0.5;
+    for (let y = 25; y < h; y += 24) {
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(w, y);
+      ctx.stroke();
+    }
+
     ctx.restore();
 
-    // ── Edge highlight (the fold crease) ──
+    // ── Highlight at the fold crease ──
     ctx.save();
     ctx.beginPath();
-    ctx.moveTo(cx, 0);
-    ctx.lineTo(cx, h);
-    ctx.strokeStyle = `rgba(255,255,255,${0.3 * progress})`;
-    ctx.lineWidth = 1;
+    ctx.moveTo(be1.x, be1.y);
+    ctx.lineTo(tx, ty);
+    ctx.lineTo(be2.x, be2.y);
+    ctx.strokeStyle = `rgba(255,255,255,${0.4 * this.#progress})`;
+    ctx.lineWidth = 1.5;
     ctx.stroke();
+    ctx.restore();
 
-    // Inner shadow along the fold
-    const innerShadowW = Math.min(15, progress * 20);
+    // ── Inner shadow along the fold ──
+    ctx.save();
+    const isForward = this.#direction === 1;
+    const innerW = Math.min(15, 20 * this.#progress);
+
+    // Build a thin strip along the fold for the inner shadow
+    const foldMidX = (be1.x + be2.x + tx) / 3;
     const innerGrad = ctx.createLinearGradient(
-      dir === 1 ? cx : cx - innerShadowW,
+      isForward ? foldMidX - innerW : foldMidX,
       0,
-      dir === 1 ? cx + innerShadowW : cx,
-      0,
+      isForward ? foldMidX : foldMidX + innerW,
+      0
     );
-    if (dir === 1) {
-      innerGrad.addColorStop(0, `rgba(0,0,0,${0.2 * progress})`);
-      innerGrad.addColorStop(1, 'rgba(0,0,0,0)');
-    } else {
+    if (isForward) {
       innerGrad.addColorStop(0, 'rgba(0,0,0,0)');
-      innerGrad.addColorStop(1, `rgba(0,0,0,${0.2 * progress})`);
+      innerGrad.addColorStop(1, `rgba(0,0,0,${0.15 * this.#progress})`);
+    } else {
+      innerGrad.addColorStop(0, `rgba(0,0,0,${0.15 * this.#progress})`);
+      innerGrad.addColorStop(1, 'rgba(0,0,0,0)');
     }
     ctx.fillStyle = innerGrad;
     ctx.fillRect(
-      dir === 1 ? cx : cx - innerShadowW,
+      isForward ? foldMidX - innerW : foldMidX,
       0,
-      innerShadowW,
-      h,
+      innerW,
+      h
     );
     ctx.restore();
   }
 
+  // ── Utility: adjust color brightness ──
   #adjustBrightness(color, amount) {
-    // Parse hex or rgb color and adjust brightness
     let r, g, b;
     if (color.startsWith('#')) {
       const hex = color.slice(1);
@@ -1639,9 +1979,11 @@ export class Paginator extends HTMLElement {
       const bg = getComputedStyle(document.documentElement).getPropertyValue('--bg')?.trim();
       if (bg) this.#curlEffect.bgColor = bg;
 
-      // Start from edge, animate to completion
-      const startX = dir === 1 ? w : 0;
-      this.#curlEffect.start(startX, h / 2, dir, null);
+      // Start from near the edge corner, animate to completion
+      // Use a slight offset from the edge so Bézier calc has valid geometry
+      const startX = dir === 1 ? w * 0.92 : w * 0.08;
+      const startY = h * 0.75; // Start from lower area, more natural
+      this.#curlEffect.start(startX, startY, dir, null);
 
       // Animate the curl automatically
       await this.#curlEffect.finish(dir * 0.5);

@@ -1093,6 +1093,17 @@ export const FoliateViewer = forwardRef<FoliateViewerHandle, FoliateViewerProps>
       }
     }, [viewSettings.viewMode, isFixedLayout]);
 
+    // --- Apply page turn style changes ---
+    useEffect(() => {
+      const view = viewRef.current;
+      if (!view?.renderer) return;
+      if (isFixedLayout) return;
+
+      if (viewSettings.pageTurnStyle) {
+        view.renderer.pageTurnStyle = viewSettings.pageTurnStyle;
+      }
+    }, [viewSettings.pageTurnStyle, isFixedLayout]);
+
     return (
       <div
         ref={containerRef}
@@ -1155,8 +1166,12 @@ function applyRendererSettings(
     }
   }
 
-  // Enable page turn animation
-  renderer.setAttribute("animated", "");
+  // Enable page turn animation based on pageTurnStyle
+  if (settings.pageTurnStyle) {
+    renderer.pageTurnStyle = settings.pageTurnStyle;
+  } else {
+    renderer.setAttribute("animated", "");
+  }
 
   // Apply CSS styles (skip font overrides for fixed layout)
   applyRendererStyles(view, settings, isFixedLayout, theme);
