@@ -1002,6 +1002,8 @@ class Loader {
         el.setAttribute(attr, await this.loadHref(el.getAttribute(attr), href, parents));
       for (const el of doc.querySelectorAll("link[href]")) await replace(el, "href");
       for (const el of doc.querySelectorAll("[src]")) await replace(el, "src");
+      // P3-1: Lazy-load images — defer off-screen image decoding
+      for (const el of doc.querySelectorAll("img")) el.setAttribute("loading", "lazy");
       for (const el of doc.querySelectorAll("[poster]")) await replace(el, "poster");
       for (const el of doc.querySelectorAll("object[data]")) await replace(el, "data");
       for (const el of doc.querySelectorAll("[*|href]:not([href])"))

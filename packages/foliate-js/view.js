@@ -28,7 +28,10 @@ const makeZipLoader = async (file) => {
   const { configure, ZipReader, BlobReader, TextWriter, BlobWriter } = await import(
     "./vendor/zip.js"
   );
-  configure({ useWebWorkers: false });
+  // Enable Web Workers for decompression when available (avoids blocking main thread).
+  // Fall back to synchronous decompression in environments without Worker support (e.g. some WebViews).
+  const canUseWorkers = typeof Worker !== "undefined";
+  configure({ useWebWorkers: canUseWorkers });
   const reader = new ZipReader(new BlobReader(file));
   const entries = await reader.getEntries();
   const map = new Map(entries.map((entry) => [entry.filename, entry]));

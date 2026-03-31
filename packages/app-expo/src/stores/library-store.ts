@@ -178,15 +178,25 @@ async function copyBookToAppData(
   bookId: string,
   ext: string,
   srcPath: string,
-): Promise<{ relativePath: string; fileBytes: Uint8Array }> {
+): Promise<{ relativePath: string; absPath: string }> {
   const platform = getPlatformService();
   await ensureAppSubDir("books");
   const relativePath = `books/${bookId}.${ext}`;
   const absPath = await resolveAppPath(relativePath);
 
-  const fileBytes = await platform.readFile(srcPath);
-  await platform.writeFile(absPath, fileBytes);
-  return { relativePath, fileBytes };
+  // Use stream-level copy instead of read-into-memory + write to avoid
+  // doubling memory usage for large files (P1 optimization)
+  const FileSystem = await import("expo-file-system/legacy");
+  const srcUri = srcPath.startsWith("file://") ? srcPath : `file://${srcPath}`;
+  const destUri = absPath.startsWith("file://") ? absPath : `file://${absPath}`;
+  await FileSystem.copyAsync({ from: srcUri, to: destUri });
+  return { relativePath, absPath };
+}
+
+/** Read file bytes lazily — only when needed for metadata extraction or vectorization */
+async function readBookBytes(absPath: string): Promise<Uint8Array> {
+  const platform = getPlatformService();
+  return platform.readFile(absPath);
 }
 
 export const useLibraryStore = create<LibraryState>((set, get) => ({
@@ -305,8 +315,9 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
   importBooks: async (files) => {
     set({ isImporting: true });
     try {
-      for (const fileInfo of files) {
-        try {
+      // Parallel import with concurrency limit of 3 to avoid OOM
+      const CONCURRENCY = 3;
+      const importSingle = async (fileInfo: { uri: string; name?: string }) => {
           const filePath = fileInfo.uri;
           // Use the original file name from DocumentPicker (not the cache UUID)
           const originalName = fileInfo.name
@@ -411,22 +422,25 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
             }
           }
 
-          const { relativePath, fileBytes } = await copyBookToAppData(
+          const { relativePath, absPath } = await copyBookToAppData(
             bookId,
             ext || "epub",
             filePath,
           );
           console.log(
-            `[importBooks] File copied. Bytes length: ${fileBytes.length}, relativePath: ${relativePath}`,
+            `[importBooks] File copied via stream. relativePath: ${relativePath}`,
           );
 
           // Extract metadata (title, author, cover) from book content
+          // Read bytes lazily only when needed (avoids double memory during copy)
           let title = fileName.replace(/\.\w+$/i, "") || "Untitled";
           let author = "";
           let coverUrl: string | undefined;
+          let fileBytes: Uint8Array | null = null;
 
           try {
             console.log(`[importBooks] Extracting metadata for format=${format}...`);
+            fileBytes = await readBookBytes(absPath);
             const meta = await extractBookMetadata(fileBytes, format, fileName);
             console.log(
               `[importBooks] Metadata result: title="${meta.title}", author="${meta.author}", hasCover=${!!meta.coverBytes}, coverSize=${meta.coverBytes?.length ?? 0}`,
@@ -477,6 +491,8 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
           // Auto-vectorize if enabled
           const vmState = useVectorModelStore.getState();
           if (vmState.vectorModelEnabled && vmState.hasVectorCapability()) {
+            // Read bytes if not already loaded for metadata extraction
+            if (!fileBytes) fileBytes = await readBookBytes(absPath);
             const base64 = btoa(String.fromCharCode(...fileBytes));
             const mimeTypes: Record<string, string> = {
               epub: "application/epub+zip",
@@ -496,6 +512,12 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
         } catch (err) {
           console.error(`Failed to import ${fileInfo.uri}:`, err);
         }
+      };
+
+      // Process files in batches with limited concurrency
+      for (let i = 0; i < files.length; i += CONCURRENCY) {
+        const batch = files.slice(i, i + CONCURRENCY);
+        await Promise.allSettled(batch.map(importSingle));
       }
     } finally {
       set({ isImporting: false });

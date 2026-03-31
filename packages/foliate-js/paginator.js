@@ -211,7 +211,12 @@ const setStylesImportant = (el, styles) => {
 };
 
 class View {
-  #observer = new ResizeObserver(() => this.expand());
+  #expandTimer = null;
+  #debouncedExpand = () => {
+    if (this.#expandTimer) clearTimeout(this.#expandTimer);
+    this.#expandTimer = setTimeout(() => this.expand(), 100);
+  };
+  #observer = new ResizeObserver(() => this.#debouncedExpand());
   #element = document.createElement("div");
   #iframe = document.createElement("iframe");
   #contentRange = document.createRange();
@@ -437,6 +442,7 @@ class View {
     return this.#overlayer;
   }
   destroy() {
+    if (this.#expandTimer) clearTimeout(this.#expandTimer);
     if (this.document) this.#observer.unobserve(this.document.body);
   }
 }
@@ -468,6 +474,7 @@ export class Paginator extends HTMLElement {
   #touchState;
   #touchScrolled;
   #lastVisibleRange;
+  #visibleRangeCache = { start: null, end: null, index: null, range: null };
   constructor() {
     super();
     this.#root.innerHTML = `<style>
@@ -981,15 +988,31 @@ export class Paginator extends HTMLElement {
   }
   #getVisibleRange() {
     if (!this.#view) return null;
+    // P2-2: Cache visible range — skip expensive DOM traversal when position unchanged
+    const cache = this.#visibleRangeCache;
+    const curStart = this.start;
+    const curEnd = this.end;
+    const curIndex = this.#index;
+    if (cache.range && cache.start === curStart && cache.end === curEnd && cache.index === curIndex) {
+      return cache.range;
+    }
+    let range;
     if (this.scrolled)
-      return getVisibleRange(
+      range = getVisibleRange(
         this.#view.document,
-        this.start + this.#margin,
-        this.end - this.#margin,
+        curStart + this.#margin,
+        curEnd - this.#margin,
         this.#getRectMapper(),
       );
-    const size = this.#rtl ? -this.size : this.size;
-    return getVisibleRange(this.#view.document, this.start - size, this.end - size, this.#getRectMapper());
+    else {
+      const size = this.#rtl ? -this.size : this.size;
+      range = getVisibleRange(this.#view.document, curStart - size, curEnd - size, this.#getRectMapper());
+    }
+    cache.start = curStart;
+    cache.end = curEnd;
+    cache.index = curIndex;
+    cache.range = range;
+    return range;
   }
   #afterScroll(reason) {
     const range = this.#getVisibleRange();
@@ -1061,6 +1084,42 @@ export class Paginator extends HTMLElement {
   #canGoToIndex(index) {
     return index >= 0 && index <= this.sections.length - 1;
   }
+  // ── Adjacent chapter preload cache ──
+  #preloadCache = new Map(); // Map<index, Promise<src>>
+  #preloadInFlight = new Set();
+
+  #preloadAdjacentSections(currentIndex) {
+    const directions = [-1, 1];
+    for (const dir of directions) {
+      let adjIndex = currentIndex + dir;
+      // Skip non-linear sections
+      while (adjIndex >= 0 && adjIndex < this.sections.length && this.sections[adjIndex]?.linear === "no") {
+        adjIndex += dir;
+      }
+      if (adjIndex < 0 || adjIndex >= this.sections.length) continue;
+      if (this.#preloadCache.has(adjIndex) || this.#preloadInFlight.has(adjIndex)) continue;
+      this.#preloadInFlight.add(adjIndex);
+      const promise = Promise.resolve(this.sections[adjIndex].load())
+        .then((src) => {
+          this.#preloadCache.set(adjIndex, src);
+          this.#preloadInFlight.delete(adjIndex);
+          return src;
+        })
+        .catch((e) => {
+          this.#preloadInFlight.delete(adjIndex);
+          console.warn(`[Preload] Failed to preload section ${adjIndex}:`, e);
+          return null;
+        });
+      // Don't await — fire-and-forget
+    }
+    // Evict cache entries far from current index (keep ±2)
+    for (const [idx] of this.#preloadCache) {
+      if (Math.abs(idx - currentIndex) > 2) {
+        this.#preloadCache.delete(idx);
+      }
+    }
+  }
+
   async #goTo({ index, anchor, select }) {
     if (index === this.#index) await this.#display({ index, anchor, select });
     else {
@@ -1070,8 +1129,14 @@ export class Paginator extends HTMLElement {
         this.setStyles(this.#styles);
         this.dispatchEvent(new CustomEvent("load", { detail }));
       };
+      // Use preloaded src if available, otherwise load fresh
+      const loadSrc = this.#preloadCache.has(index)
+        ? Promise.resolve(this.#preloadCache.get(index))
+        : Promise.resolve(this.sections[index].load());
+      // Clear used cache entry
+      this.#preloadCache.delete(index);
       await this.#display(
-        Promise.resolve(this.sections[index].load())
+        loadSrc
           .then((src) => ({ index, src, anchor, onLoad, select }))
           .catch((e) => {
             console.warn(e);
@@ -1079,12 +1144,19 @@ export class Paginator extends HTMLElement {
             return {};
           }),
       );
+      // Preload adjacent sections after displaying current
+      this.#preloadAdjacentSections(index);
     }
   }
   async goTo(target) {
     if (this.#locked) return;
     const resolved = await target;
-    if (this.#canGoToIndex(resolved.index)) return this.#goTo(resolved);
+    if (this.#canGoToIndex(resolved.index)) {
+      const result = await this.#goTo(resolved);
+      // Trigger preload on initial navigation too
+      this.#preloadAdjacentSections(resolved.index);
+      return result;
+    }
   }
   #scrollPrev(distance) {
     if (!this.#view) return true;
@@ -1190,6 +1262,9 @@ export class Paginator extends HTMLElement {
     this.#view = null;
     this.sections[this.#index]?.unload?.();
     this.#mediaQuery.removeEventListener("change", this.#mediaQueryListener);
+    // Clean up preload cache
+    this.#preloadCache.clear();
+    this.#preloadInFlight.clear();
   }
 }
 

@@ -118,6 +118,8 @@
 
     // Store user annotations for re-rendering on page change
     const userAnnotations = new Map();
+    // P2-3: Cache annotation CFI -> section index for fast chapter filtering
+    const annotationSectionIndex = new Map();
 
     // Note tooltip registry: per-doc WeakMap of cfi -> { range, note }
     const docNoteRegistries = new WeakMap();
@@ -265,6 +267,13 @@
             // Don't store flash highlights in userAnnotations
             if (!msg.annotation.flash && !(msg.annotation.value && msg.annotation.value.startsWith('flash-'))) {
               userAnnotations.set(msg.annotation.value, msg.annotation);
+              // P2-3: Cache section index for chapter-based filtering on page turns
+              try {
+                const resolved = view.resolveNavigation(msg.annotation.value);
+                if (resolved && resolved.index != null) {
+                  annotationSectionIndex.set(msg.annotation.value, resolved.index);
+                }
+              } catch (e) { /* ignore parse errors */ }
             }
             await view.addAnnotation(msg.annotation);
           }
@@ -275,6 +284,7 @@
             // Don't delete from userAnnotations if it's a flash highlight
             if (!msg.annotation.flash && !(msg.annotation.value && msg.annotation.value.startsWith('flash-'))) {
               userAnnotations.delete(msg.annotation.value);
+              annotationSectionIndex.delete(msg.annotation.value);
             }
           }
           break;
@@ -336,9 +346,11 @@
           attachTapListener(doc);
           attachSelectionListener(doc);
           attachNoteLongPress(doc);
-          // Re-add all user annotations for this page
-          // foliate-view will only render those that belong to current section
+          // Re-add only annotations belonging to this section (P2-3)
+          // Falls back to trying all annotations if section index not cached
           for (const [cfi, annotation] of userAnnotations) {
+            const cachedIdx = annotationSectionIndex.get(cfi);
+            if (cachedIdx != null && cachedIdx !== index) continue;
             view.addAnnotation(annotation).catch(err => {
               // Ignore errors for annotations not on current page
             });
