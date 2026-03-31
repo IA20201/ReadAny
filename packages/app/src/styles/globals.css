@@ -47,6 +47,10 @@
   --color-highlight-blue: #bfdbfe;
   --color-highlight-pink: #fbcfe8;
   --color-highlight-purple: #e9d5ff;
+
+  --overlay-opacity-sidebar: 0.85;
+  --overlay-opacity-card: 0.9;
+  --overlay-opacity-muted: 0.8;
 }
 
 /* ── Dark/Sepia CSS blocks removed — colors are now injected by the theme engine ── */

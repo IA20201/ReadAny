@@ -57,6 +57,7 @@ import {
   Alert,
   Animated,
   Dimensions,
+  ImageBackground,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -213,11 +214,13 @@ const makeTocStyles = (colors: ThemeColors) =>
 // ──────────────────────────── ReaderScreen ────────────────────────────
 export function ReaderScreen({ route, navigation }: Props) {
   const colors = useColors();
-  const { mode: themeMode } = useTheme();
+  const { mode: themeMode, activeThemeConfig } = useTheme();
   const s = makeStyles(colors);
   const { bookId, cfi, highlight: shouldHighlight } = route.params;
   const { t, i18n } = useTranslation();
   const insets = useSafeAreaInsets();
+  
+  const readerBackgroundImage = activeThemeConfig?.backgroundImages?.readerBackgroundImage;
 
   // State
   const [loading, setLoading] = useState(true);
@@ -263,7 +266,7 @@ export function ReaderScreen({ route, navigation }: Props) {
     cfi: string;
     position: { x: number; y: number; selectionTop: number; selectionBottom: number };
   } | null>(null);
-  const noteTooltipTimer = useRef<NodeJS.Timeout | null>(null);
+  const noteTooltipTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const assetLoadedRef = useRef(false);
   const pendingBookmarkRef = useRef(false);
 
@@ -291,8 +294,8 @@ export function ReaderScreen({ route, navigation }: Props) {
   const settingFontTheme = readSettings.fontTheme;
   const settingViewMode = readSettings.viewMode;
 
-  const controlsTimer = useRef<NodeJS.Timeout | null>(null);
-  const searchDebounceRef = useRef<NodeJS.Timeout | null>(null);
+  const controlsTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const TOOLBAR_HIDE_OFFSET = 200;
   const toolbarAnim = useRef(new Animated.Value(TOOLBAR_HIDE_OFFSET)).current;
   const lastCfiRef = useRef<string>("");
@@ -699,6 +702,7 @@ export function ReaderScreen({ route, navigation }: Props) {
           foreground: colors.foreground,
           muted: colors.mutedForeground,
           primary: colors.primary,
+          backgroundImage: readerBackgroundImage,
         });
       } catch (err: any) {
         console.error("[ReaderScreen] Failed to load book:", err);
@@ -718,8 +722,9 @@ export function ReaderScreen({ route, navigation }: Props) {
       foreground: colors.foreground,
       muted: colors.mutedForeground,
       primary: colors.primary,
+      backgroundImage: readerBackgroundImage,
     });
-  }, [themeMode, webViewReady]);
+  }, [themeMode, webViewReady, readerBackgroundImage]);
 
   // Load annotations into reader when ready
   useEffect(() => {
@@ -995,34 +1000,47 @@ export function ReaderScreen({ route, navigation }: Props) {
   const isPanelOpen = showTOC || showSettings || showSearch || showNotebook || showTranslation;
 
   return (
-    <View style={[s.container, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
-      {/* WebView with foliate-js */}
-      <View style={{ flex: 1 }}>
-        <WebView
-          ref={bridge.webViewRef}
-          source={{ uri: readerHtmlUri }}
-          style={[s.webview, { marginTop: 24 }]}
-          pointerEvents={isPanelOpen ? "none" : "auto"}
-          onMessage={bridge.handleMessage}
-          onError={(e) => {
-            console.error("[ReaderScreen] WebView error:", e.nativeEvent);
-          }}
-          onHttpError={(e) => {
-            console.error("[ReaderScreen] WebView HTTP error:", e.nativeEvent);
-          }}
-          onContentProcessDidTerminate={() => {
-            console.warn("[ReaderScreen] WebView content process terminated");
-          }}
-          javaScriptEnabled
-          domStorageEnabled
-          allowFileAccess
-          allowFileAccessFromFileURLs
-          allowUniversalAccessFromFileURLs
-          allowsInlineMediaPlayback
-          scrollEnabled={false}
-          showsVerticalScrollIndicator={false}
-          originWhitelist={["*"]}
-          mixedContentMode="always"
+    <View style={s.container}>
+      {/* Background layer - covers full screen including safe areas */}
+      {readerBackgroundImage ? (
+        <ImageBackground
+          source={{ uri: readerBackgroundImage }}
+          style={StyleSheet.absoluteFill}
+          resizeMode="cover"
+        />
+      ) : (
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.background }]} />
+      )}
+      
+      {/* Content with safe area padding */}
+      <View style={{ flex: 1, paddingTop: Math.max(insets.top - 20, 0), paddingBottom: insets.bottom }}>
+        {/* WebView with foliate-js */}
+        <View style={{ flex: 1, marginTop: 24 }}>
+          <WebView
+            ref={bridge.webViewRef}
+            source={{ uri: readerHtmlUri }}
+            style={s.webview}
+            pointerEvents={isPanelOpen ? "none" : "auto"}
+            onMessage={bridge.handleMessage}
+            onError={(e) => {
+              console.error("[ReaderScreen] WebView error:", e.nativeEvent);
+            }}
+            onHttpError={(e) => {
+              console.error("[ReaderScreen] WebView HTTP error:", e.nativeEvent);
+            }}
+            onContentProcessDidTerminate={() => {
+              console.warn("[ReaderScreen] WebView content process terminated");
+            }}
+            javaScriptEnabled
+            domStorageEnabled
+            allowFileAccess
+            allowFileAccessFromFileURLs
+            allowUniversalAccessFromFileURLs
+            allowsInlineMediaPlayback
+            scrollEnabled={false}
+            showsVerticalScrollIndicator={false}
+            originWhitelist={["*"]}
+            mixedContentMode="always"
         />
       </View>
 
@@ -1123,18 +1141,6 @@ export function ReaderScreen({ route, navigation }: Props) {
             </View>
           </View>
         </TouchableOpacity>
-      )}
-
-      {/* ─── Top Info Bar (always visible) ─── */}
-      {!showSearch && (
-        <View style={[s.topInfoBar, { top: insets.top }]}>
-          <Text style={s.topInfoText} numberOfLines={1}>
-            {currentChapter || bookTitle}
-          </Text>
-          <Text style={s.topInfoPageText}>
-            {currentPage > 0 && totalPages > 0 ? `${currentPage}/${totalPages}` : ""}
-          </Text>
-        </View>
       )}
 
       {/* ─── Bookmark Ribbon (top-right) ─── */}
@@ -1339,13 +1345,14 @@ export function ReaderScreen({ route, navigation }: Props) {
         animationType="slide"
         onRequestClose={() => setShowTOC(false)}
       >
-        <Pressable style={s.modalBackdrop} onPress={() => setShowTOC(false)} />
-        <View
-          style={[
-            s.bottomSheet,
-            { maxHeight: SCREEN_HEIGHT * 0.7, paddingBottom: insets.bottom || 16 },
-          ]}
-        >
+        <View style={{ flex: 1 }}>
+          <Pressable style={s.modalBackdrop} onPress={() => setShowTOC(false)} />
+          <View
+            style={[
+              s.bottomSheet,
+              { maxHeight: SCREEN_HEIGHT * 0.7, paddingBottom: insets.bottom || 16 },
+            ]}
+          >
           {/* Tab Header */}
           <View style={s.sheetHeader}>
             <View style={s.tocTabBar}>
@@ -1470,6 +1477,7 @@ export function ReaderScreen({ route, navigation }: Props) {
             </View>
           )}
         </View>
+        </View>
       </Modal>
 
       {/* ─── Settings Panel ─── */}
@@ -1479,8 +1487,9 @@ export function ReaderScreen({ route, navigation }: Props) {
         animationType="slide"
         onRequestClose={() => setShowSettings(false)}
       >
-        <Pressable style={s.modalBackdrop} onPress={() => setShowSettings(false)} />
-        <View style={[s.bottomSheet, { paddingBottom: insets.bottom || 16 }]}>
+        <View style={{ flex: 1 }}>
+          <Pressable style={s.modalBackdrop} onPress={() => setShowSettings(false)} />
+          <View style={[s.bottomSheet, { paddingBottom: insets.bottom || 16 }]}>
           <View style={s.sheetHeader}>
             <Text style={s.sheetTitle}>{t("reader.settings", "阅读设置")}</Text>
             <TouchableOpacity onPress={() => setShowSettings(false)}>
@@ -1636,6 +1645,7 @@ export function ReaderScreen({ route, navigation }: Props) {
             </View>
           </ScrollView>
         </View>
+        </View>
       </Modal>
 
       {/* ─── Notebook Panel ─── */}
@@ -1645,13 +1655,14 @@ export function ReaderScreen({ route, navigation }: Props) {
         animationType="slide"
         onRequestClose={() => setShowNotebook(false)}
       >
-        <Pressable style={s.modalBackdrop} onPress={() => setShowNotebook(false)} />
-        <View
-          style={[
-            s.bottomSheet,
-            { maxHeight: SCREEN_HEIGHT * 0.7, paddingBottom: insets.bottom || 16 },
-          ]}
-        >
+        <View style={{ flex: 1 }}>
+          <Pressable style={s.modalBackdrop} onPress={() => setShowNotebook(false)} />
+          <View
+            style={[
+              s.bottomSheet,
+              { maxHeight: SCREEN_HEIGHT * 0.7, paddingBottom: insets.bottom || 16 },
+            ]}
+          >
           <View style={s.sheetHeader}>
             <Text style={s.sheetTitle}>{t("reader.notebook", "笔记本")}</Text>
             <TouchableOpacity onPress={() => setShowNotebook(false)}>
@@ -1698,6 +1709,7 @@ export function ReaderScreen({ route, navigation }: Props) {
               </Text>
             </View>
           )}
+        </View>
         </View>
       </Modal>
 
@@ -1848,6 +1860,19 @@ export function ReaderScreen({ route, navigation }: Props) {
           onReplay={handleTTSReplay}
         />
       )}
+      </View>
+
+      {/* ─── Top Info Bar (outside content layer for proper z-index) ─── */}
+      {!showSearch && (
+        <View style={[s.topInfoBar, { top: Math.max(insets.top - 20, 0) + 4 }]}>
+          <Text style={s.topInfoText} numberOfLines={1}>
+            {currentChapter || bookTitle}
+          </Text>
+          <Text style={s.topInfoPageText}>
+            {currentPage > 0 && totalPages > 0 ? `${currentPage}/${totalPages}` : ""}
+          </Text>
+        </View>
+      )}
     </View>
   );
 }
@@ -1915,7 +1940,7 @@ const noteTooltipMdStyles = {
 
 const makeStyles = (colors: ThemeColors) =>
   StyleSheet.create({
-    container: { flex: 1, backgroundColor: colors.background },
+    container: { flex: 1 },
     webview: { flex: 1 },
     loadingWrap: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12 },
     loadingText: { fontSize: fontSize.sm, color: colors.mutedForeground },
@@ -1991,6 +2016,7 @@ const makeStyles = (colors: ThemeColors) =>
       alignItems: "center",
       paddingHorizontal: 16,
       paddingVertical: 4,
+      zIndex: 20,
     },
     topInfoText: {
       flex: 1,
@@ -2070,6 +2096,10 @@ const makeStyles = (colors: ThemeColors) =>
 
     modalBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.4)" },
     bottomSheet: {
+      position: "absolute",
+      bottom: 0,
+      left: 0,
+      right: 0,
       backgroundColor: colors.card,
       borderTopLeftRadius: radius.xxl,
       borderTopRightRadius: radius.xxl,

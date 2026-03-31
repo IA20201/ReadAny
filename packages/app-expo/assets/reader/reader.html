@@ -573,6 +573,7 @@
       const fg = colors.foreground || '#e8e8ed';
       const muted = colors.muted || '#7c7c82';
       const primary = colors.primary || '#3b82f6';
+      const bgImage = colors.backgroundImage;
 
       // Store current theme colors globally for applySettings to use
       currentThemeColors = { bg, fg, muted, primary };
@@ -581,14 +582,30 @@
       document.documentElement.style.setProperty('--fg', fg);
       document.documentElement.style.setProperty('--muted', muted);
       document.documentElement.style.setProperty('--primary', primary);
-      document.body.style.backgroundColor = bg;
+      
+      // Apply background image or color
+      if (bgImage) {
+        document.body.style.backgroundImage = `url(${bgImage})`;
+        document.body.style.backgroundSize = 'cover';
+        document.body.style.backgroundPosition = 'center';
+        document.body.style.backgroundAttachment = 'fixed';
+        document.body.style.backgroundRepeat = 'no-repeat';
+        document.body.style.backgroundColor = 'transparent';
+      } else {
+        document.body.style.backgroundImage = '';
+        document.body.style.backgroundSize = '';
+        document.body.style.backgroundPosition = '';
+        document.body.style.backgroundAttachment = '';
+        document.body.style.backgroundRepeat = '';
+        document.body.style.backgroundColor = bg;
+      }
       document.body.style.color = fg;
 
       // Inject theme colors into iframe via renderer.setStyles
       // This is critical for dark mode — without this, EPUB content stays black text
       if (view && view.renderer && view.renderer.setStyles) {
         const currentStyles = lastRendererStyles || '';
-        const themedStyles = injectThemeIntoStyles(currentStyles, bg, fg, primary);
+        const themedStyles = injectThemeIntoStyles(currentStyles, bg, fg, primary, bgImage);
         view.renderer.setStyles(themedStyles);
       }
 
@@ -599,12 +616,17 @@
     }
 
     // Helper: inject theme colors into a renderer styles string
-    function injectThemeIntoStyles(baseStyles, bg, fg, primary) {
+    function injectThemeIntoStyles(baseStyles, bg, fg, primary, bgImage) {
       // Remove any previous theme color rules we injected
       const cleaned = baseStyles.replace(/\/\* __theme_colors__ \*\/[\s\S]*?\/\* __end_theme_colors__ \*\//g, '');
+      
+      const bgStyle = bgImage 
+        ? `background-image: url(${bgImage}) !important; background-size: cover !important; background-position: center !important; background-attachment: fixed !important; background-repeat: no-repeat !important;`
+        : `background-color: ${bg} !important;`;
+      
       const themeBlock = `/* __theme_colors__ */
 html, body {
-  background-color: ${bg} !important;
+  ${bgStyle}
   color: ${fg} !important;
 }
 p, div, span, blockquote, li, dd, dt, h1, h2, h3, h4, h5, h6, td, th, caption, figcaption, label, a {

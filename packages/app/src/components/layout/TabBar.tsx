@@ -6,6 +6,7 @@ import { evictBlobCache } from "@/components/reader/ReaderView";
 import { type Tab, useAppStore } from "@/stores/app-store";
 import { useLibraryStore } from "@/stores/library-store";
 import { useReaderStore } from "@/stores/reader-store";
+import { useThemeStore } from "@readany/core/stores";
 import { BookOpen, Home, MessageSquare, NotebookPen, X } from "lucide-react";
 
 const TAB_ICONS: Record<string, React.ElementType> = {
@@ -19,6 +20,8 @@ export function TabBar() {
   const { tabs, activeTabId, setActiveTab, removeTab } = useAppStore();
   const removeReaderTab = useReaderStore((s) => s.removeTab);
   const books = useLibraryStore((s) => s.books);
+  const activeTheme = useThemeStore((s) => s.getActiveTheme());
+  const hasBgImage = !!activeTheme?.backgroundImages?.backgroundImage;
 
   const readerTabs = tabs.filter((t) => t.type !== "home");
 
@@ -45,7 +48,7 @@ export function TabBar() {
 
   return (
     <div
-      className="flex h-8 shrink-0 select-none items-center border-neutral-200 bg-muted"
+      className={`flex h-8 shrink-0 select-none items-center border-neutral-200 ${hasBgImage ? "" : "bg-muted"}`}
       data-tauri-drag-region
       style={{ WebkitAppRegion: "drag" } as React.CSSProperties}
     >

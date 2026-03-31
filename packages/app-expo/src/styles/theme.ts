@@ -64,6 +64,7 @@ export const colors: ThemeColors = {
   stone300: "#d6d3d1",
   stone400: "#a8a29e",
   stone500: "#78716c",
+  overlayOpacity: { sidebar: 0.85, card: 0.9, muted: 0.8 },
 };
 
 /**

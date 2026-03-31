@@ -26,7 +26,7 @@ import { DarkTheme, DefaultTheme, NavigationContainer } from "@react-navigation/
 import { StatusBar } from "expo-status-bar";
 import * as SecureStore from "expo-secure-store";
 import { useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, View } from "react-native";
+import { ActivityIndicator, View, ImageBackground, StyleSheet } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
@@ -161,15 +161,33 @@ function AppInner() {
     [colors, isDark],
   );
 
+  const content = (
+    <SafeAreaProvider>
+      <NavigationContainer theme={navTheme}>
+        <StatusBar style={mode === "dark" ? "light" : "dark"} />
+        <RootNavigator />
+      </NavigationContainer>
+      <UpdateDialog />
+    </SafeAreaProvider>
+  );
+
+  if (colors.backgroundImage) {
+    return (
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <ImageBackground
+          source={{ uri: colors.backgroundImage }}
+          style={{ flex: 1 }}
+          resizeMode="cover"
+        >
+          {content}
+        </ImageBackground>
+      </GestureHandlerRootView>
+    );
+  }
+
   return (
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: colors.background }}>
-      <SafeAreaProvider>
-        <NavigationContainer theme={navTheme}>
-          <StatusBar style={mode === "dark" ? "light" : "dark"} />
-          <RootNavigator />
-        </NavigationContainer>
-        <UpdateDialog />
-      </SafeAreaProvider>
+      {content}
     </GestureHandlerRootView>
   );
 }

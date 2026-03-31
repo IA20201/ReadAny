@@ -5,8 +5,19 @@
  * Highlight colors and functional colors (indigo, emerald, etc.) are kept
  * static as they're independent of user theming.
  */
-import type { ThemeConfig } from "../types/theme";
+import type { ThemeConfig, ThemeOverlayOpacity } from "../types/theme";
 import { deriveColors } from "./derive-colors";
+
+export type OverlayOpacity = ThemeOverlayOpacity;
+
+function hexToRgba(hex: string, alpha: number): string {
+  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  if (!result) return hex;
+  const r = parseInt(result[1], 16);
+  const g = parseInt(result[2], 16);
+  const b = parseInt(result[3], 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
 
 /**
  * The color shape consumed by mobile components via useTheme()/useColors().
@@ -44,6 +55,9 @@ export interface RNThemeColors {
   stone300: string;
   stone400: string;
   stone500: string;
+  // Background image support
+  backgroundImage?: string;
+  overlayOpacity: OverlayOpacity;
 }
 
 /**
@@ -62,13 +76,24 @@ export function resolveRNThemeColors(
 
   const isDark = mode === "dark";
   const derived = deriveColors(colors, isDark);
+  const hasBgImage = !!config.backgroundImages?.backgroundImage;
+  const overlayOpacity = config.overlayOpacity ?? { sidebar: 0.85, card: 0.9, muted: 0.8 };
+
+  // Apply transparency when background image is set
+  const bgColor = hasBgImage ? "transparent" : colors.background;
+  const cardColor = hasBgImage 
+    ? hexToRgba(colors.card, overlayOpacity.card ?? 0.9) 
+    : colors.card;
+  const mutedColor = hasBgImage 
+    ? hexToRgba(colors.muted, overlayOpacity.muted ?? 0.8) 
+    : colors.muted;
 
   return {
-    background: colors.background,
+    background: bgColor,
     foreground: colors.foreground,
-    card: colors.card,
+    card: cardColor,
     cardForeground: colors.cardForeground,
-    muted: colors.muted,
+    muted: mutedColor,
     mutedForeground: colors.mutedForeground,
     border: colors.border,
     primary: colors.primary,
@@ -98,5 +123,9 @@ export function resolveRNThemeColors(
     stone300: "#d6d3d1",
     stone400: "#a8a29e",
     stone500: "#78716c",
+
+    // Background image support
+    backgroundImage: hasBgImage ? config.backgroundImages!.backgroundImage : undefined,
+    overlayOpacity,
   };
 }

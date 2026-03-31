@@ -8,6 +8,41 @@
 import type { ThemeConfig } from "../types/theme";
 import { deriveColors } from "./derive-colors";
 
+function hexToRgba(hex: string, alpha: number): string {
+  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  if (!result) return hex;
+  const r = parseInt(result[1], 16);
+  const g = parseInt(result[2], 16);
+  const b = parseInt(result[3], 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+function oklchToRgba(oklch: string, alpha: number): string {
+  if (oklch.startsWith("#") || oklch.startsWith("rgb")) {
+    return hexToRgba(oklch, alpha);
+  }
+  return `oklch(${oklch.match(/[\d.]+/g)?.join(" ") || oklch} / ${alpha})`;
+}
+
+function applyAlpha(color: string, alpha: number): string {
+  if (color.startsWith("oklch")) {
+    return oklchToRgba(color, alpha);
+  }
+  if (color.startsWith("#")) {
+    return hexToRgba(color, alpha);
+  }
+  if (color.startsWith("rgb")) {
+    return color.replace(/rgba?\(([^)]+)\)/, (_, inner) => {
+      const parts = inner.split(",").map((s: string) => s.trim());
+      if (parts.length === 3) {
+        return `rgba(${parts[0]}, ${parts[1]}, ${parts[2]}, ${alpha})`;
+      }
+      return color;
+    });
+  }
+  return color;
+}
+
 /**
  * Apply a theme + mode to the DOM.
  *
@@ -24,21 +59,27 @@ export function applyThemeToDOM(
 
   const derived = deriveColors(colors, mode === "dark");
   const el = document.documentElement;
+  const hasBgImage = !!config.backgroundImages?.backgroundImage;
+  const overlayOpacity = config.overlayOpacity ?? { sidebar: 0.85, card: 0.9, muted: 0.8 };
 
   // ── L0: Page base ──
-  el.style.setProperty("--background", colors.background);
+  const backgroundColor = hasBgImage ? applyAlpha(colors.background, overlayOpacity.card ?? 0.9) : colors.background;
+  el.style.setProperty("--background", backgroundColor);
   el.style.setProperty("--foreground", colors.foreground);
 
   // ── L1: Sidebar ──
-  el.style.setProperty("--sidebar", colors.sidebar);
+  const sidebarColor = hasBgImage ? applyAlpha(colors.sidebar, overlayOpacity.sidebar ?? 0.85) : colors.sidebar;
+  el.style.setProperty("--sidebar", sidebarColor);
   el.style.setProperty("--sidebar-foreground", colors.sidebarForeground);
 
   // ── L2: Cards ──
-  el.style.setProperty("--card", colors.card);
+  const cardColor = hasBgImage ? applyAlpha(colors.card, overlayOpacity.card ?? 0.9) : colors.card;
+  el.style.setProperty("--card", cardColor);
   el.style.setProperty("--card-foreground", colors.cardForeground);
 
   // ── L3: Muted ──
-  el.style.setProperty("--muted", colors.muted);
+  const mutedColor = hasBgImage ? applyAlpha(colors.muted, overlayOpacity.muted ?? 0.8) : colors.muted;
+  el.style.setProperty("--muted", mutedColor);
   el.style.setProperty("--muted-foreground", colors.mutedForeground);
 
   // ── Functional ──
@@ -49,7 +90,7 @@ export function applyThemeToDOM(
   el.style.setProperty("--border", colors.border);
 
   // ── Derived (auto-computed) ──
-  el.style.setProperty("--popover", derived.popover);
+  el.style.setProperty("--popover", hasBgImage ? applyAlpha(derived.popover, overlayOpacity.card ?? 0.9) : derived.popover);
   el.style.setProperty("--popover-foreground", derived.popoverForeground);
   el.style.setProperty("--secondary", derived.secondary);
   el.style.setProperty("--secondary-foreground", derived.secondaryForeground);
@@ -70,31 +111,34 @@ export function applyThemeToDOM(
   }
 
   // ── Overlay opacity (for background images) ──
-  const overlayOpacity = config.overlayOpacity;
   el.style.setProperty(
     "--overlay-opacity-sidebar",
-    String(overlayOpacity?.sidebar ?? 0.85),
+    String(overlayOpacity.sidebar ?? 0.85),
   );
   el.style.setProperty(
     "--overlay-opacity-card",
-    String(overlayOpacity?.card ?? 0.9),
+    String(overlayOpacity.card ?? 0.9),
   );
   el.style.setProperty(
     "--overlay-opacity-muted",
-    String(overlayOpacity?.muted ?? 0.8),
+    String(overlayOpacity.muted ?? 0.8),
   );
 
   // ── Background image ──
-  if (config.backgroundImages?.backgroundImage) {
-    document.body.style.backgroundImage = `url(${config.backgroundImages.backgroundImage})`;
+  if (hasBgImage) {
+    document.body.style.backgroundImage = `url(${config.backgroundImages!.backgroundImage})`;
     document.body.style.backgroundSize = "cover";
     document.body.style.backgroundPosition = "center";
     document.body.style.backgroundAttachment = "fixed";
+    document.body.style.backgroundRepeat = "no-repeat";
+    document.body.style.backgroundColor = "transparent";
   } else {
     document.body.style.backgroundImage = "";
     document.body.style.backgroundSize = "";
     document.body.style.backgroundPosition = "";
     document.body.style.backgroundAttachment = "";
+    document.body.style.backgroundRepeat = "";
+    document.body.style.backgroundColor = "";
   }
 
   // ── data-theme attribute ──

@@ -28,6 +28,7 @@ import { useAppStore } from "@/stores/app-store";
 import { useLibraryStore } from "@/stores/library-store";
 import { useReaderStore } from "@/stores/reader-store";
 import { useSettingsStore } from "@readany/core/stores/settings-store";
+import { useThemeStore } from "@readany/core/stores";
 import { BookOpen } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -58,6 +59,8 @@ export function AppLayout() {
   const readerStoreTabs = useReaderStore((s) => s.tabs);
   const books = useLibraryStore((s) => s.books);
   const { hasCompletedOnboarding: _hasCompletedOnboarding, _hasHydrated } = useSettingsStore();
+  const activeTheme = useThemeStore((s) => s.getActiveTheme());
+  const hasBgImage = !!activeTheme?.backgroundImages?.backgroundImage;
   const { t } = useTranslation();
 
   // Command palette state
@@ -183,7 +186,7 @@ export function AppLayout() {
   }, [readerTabs]);
 
   return (
-    <div className="flex h-screen w-screen flex-col overflow-hidden bg-muted">
+    <div className={`flex h-screen w-screen flex-col overflow-hidden ${hasBgImage ? "" : "bg-muted"}`}>
       {_hasHydrated && <OnboardingModal />}
       <TabBar />
       <main className="relative flex-1 overflow-hidden">
