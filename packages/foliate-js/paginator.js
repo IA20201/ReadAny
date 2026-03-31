@@ -17,6 +17,323 @@ const debounce = (f, wait, immediate) => {
 const lerp = (min, max, x) => x * (max - min) + min;
 // Smooth cubic bezier approximation — feels like a natural page glide
 const easeOutCubic = (x) => 1 - Math.pow(1 - x, 3);
+
+// ═══════════════════════════════════════════════════════════════
+// Page Curl Effect — Canvas 2D simulated page turn
+// ═══════════════════════════════════════════════════════════════
+class PageCurlEffect {
+  #canvas;
+  #ctx;
+  #width = 0;
+  #height = 0;
+  #active = false;
+  #direction = 1; // 1 = forward (next), -1 = backward (prev)
+  #progress = 0; // 0 = flat, 1 = fully turned
+  #cornerX = 0;
+  #cornerY = 0;
+  #animationId = null;
+  #onComplete = null;
+  #capturedCurrentPage = null;
+  #capturedNextPage = null;
+  #bgColor = '#1c1c1e';
+
+  constructor(container) {
+    this.#canvas = document.createElement('canvas');
+    Object.assign(this.#canvas.style, {
+      position: 'absolute',
+      top: '0',
+      left: '0',
+      width: '100%',
+      height: '100%',
+      zIndex: '1000',
+      pointerEvents: 'none',
+      display: 'none',
+    });
+    container.appendChild(this.#canvas);
+    this.#ctx = this.#canvas.getContext('2d');
+  }
+
+  resize(width, height) {
+    const dpr = window.devicePixelRatio || 1;
+    this.#width = width;
+    this.#height = height;
+    this.#canvas.width = width * dpr;
+    this.#canvas.height = height * dpr;
+    this.#canvas.style.width = width + 'px';
+    this.#canvas.style.height = height + 'px';
+    this.#ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+
+  set bgColor(color) {
+    this.#bgColor = color || '#1c1c1e';
+  }
+
+  get active() { return this.#active; }
+
+  // Capture the current visible page as an image
+  async capturePages(container, direction) {
+    this.#direction = direction;
+    const w = this.#width;
+    const h = this.#height;
+
+    // We'll render simplified colored rectangles as page bitmaps
+    // The actual content is shown underneath; the curl canvas overlays
+    // to create the illusion of a page lifting
+    this.#capturedCurrentPage = { width: w, height: h };
+    this.#capturedNextPage = { width: w, height: h };
+  }
+
+  start(touchX, touchY, direction, onComplete) {
+    this.#active = true;
+    this.#direction = direction;
+    this.#onComplete = onComplete;
+    this.#canvas.style.display = 'block';
+    this.#canvas.style.pointerEvents = 'auto';
+
+    // Initialize corner position at touch point
+    this.#cornerX = touchX;
+    this.#cornerY = touchY;
+    this.#progress = 0;
+
+    this.#draw();
+  }
+
+  update(touchX, touchY) {
+    if (!this.#active) return;
+    this.#cornerX = touchX;
+    this.#cornerY = touchY;
+
+    const w = this.#width;
+    // Calculate progress based on how far the corner has moved
+    if (this.#direction === 1) {
+      // Forward: from right edge to left
+      this.#progress = Math.max(0, Math.min(1, (w - touchX) / w));
+    } else {
+      // Backward: from left edge to right
+      this.#progress = Math.max(0, Math.min(1, touchX / w));
+    }
+
+    this.#draw();
+  }
+
+  // Animate to completion or snap back
+  async finish(velocity) {
+    if (!this.#active) return false;
+
+    const shouldComplete = this.#progress > 0.3 || Math.abs(velocity) > 0.3;
+    const targetProgress = shouldComplete ? 1 : 0;
+
+    return new Promise((resolve) => {
+      const startProgress = this.#progress;
+      const startCornerX = this.#cornerX;
+      const w = this.#width;
+      const duration = 300;
+      let startTime = null;
+
+      const step = (now) => {
+        startTime ??= now;
+        const elapsed = now - startTime;
+        const t = Math.min(1, elapsed / duration);
+        const eased = 1 - Math.pow(1 - t, 3); // easeOutCubic
+
+        this.#progress = startProgress + (targetProgress - startProgress) * eased;
+
+        // Update corner position
+        if (this.#direction === 1) {
+          this.#cornerX = w - this.#progress * w;
+        } else {
+          this.#cornerX = this.#progress * w;
+        }
+
+        this.#draw();
+
+        if (t < 1) {
+          this.#animationId = requestAnimationFrame(step);
+        } else {
+          this.#cleanup();
+          resolve(shouldComplete);
+        }
+      };
+
+      this.#animationId = requestAnimationFrame(step);
+    });
+  }
+
+  cancel() {
+    if (this.#animationId) {
+      cancelAnimationFrame(this.#animationId);
+      this.#animationId = null;
+    }
+    this.#cleanup();
+  }
+
+  #cleanup() {
+    this.#active = false;
+    this.#progress = 0;
+    this.#canvas.style.display = 'none';
+    this.#canvas.style.pointerEvents = 'none';
+    this.#ctx.clearRect(0, 0, this.#width, this.#height);
+    this.#capturedCurrentPage = null;
+    this.#capturedNextPage = null;
+  }
+
+  #draw() {
+    const ctx = this.#ctx;
+    const w = this.#width;
+    const h = this.#height;
+    const progress = this.#progress;
+    const dir = this.#direction;
+
+    ctx.clearRect(0, 0, w, h);
+
+    if (progress <= 0.001) return;
+
+    // ── Calculate curl geometry ──
+    // The "fold line" is where the page bends
+    // Corner being dragged
+    const cx = this.#cornerX;
+    const cy = this.#cornerY;
+
+    // The page curls from the edge
+    const edgeX = dir === 1 ? w : 0;
+    const midX = (cx + edgeX) / 2;
+
+    // Fold line angle
+    const angle = Math.atan2(cy - h / 2, cx - edgeX);
+    const foldAngle = angle / 2;
+
+    // ── Draw the shadow under the curling page ──
+    ctx.save();
+    const shadowWidth = Math.min(60, progress * 80);
+    const shadowX = dir === 1 ? cx - shadowWidth : cx;
+
+    const shadowGrad = ctx.createLinearGradient(
+      dir === 1 ? cx - shadowWidth : cx,
+      0,
+      dir === 1 ? cx + 5 : cx + shadowWidth,
+      0,
+    );
+    shadowGrad.addColorStop(0, 'rgba(0,0,0,0)');
+    shadowGrad.addColorStop(0.5, `rgba(0,0,0,${0.3 * progress})`);
+    shadowGrad.addColorStop(1, 'rgba(0,0,0,0)');
+
+    ctx.fillStyle = shadowGrad;
+    ctx.fillRect(shadowX, 0, shadowWidth + 5, h);
+    ctx.restore();
+
+    // ── Draw the curled page (back side) ──
+    ctx.save();
+
+    // The visible "back" of the curled page
+    const curlWidth = Math.abs(edgeX - cx);
+    const backWidth = Math.min(curlWidth, w * 0.45);
+
+    if (backWidth > 2) {
+      const backX = dir === 1 ? cx : cx - backWidth;
+
+      // Clip to the curl region
+      ctx.beginPath();
+      ctx.moveTo(backX, 0);
+      ctx.lineTo(backX + backWidth, 0);
+      ctx.lineTo(backX + backWidth, h);
+      ctx.lineTo(backX, h);
+      ctx.closePath();
+      ctx.clip();
+
+      // Page back color (slightly darker to simulate the back of paper)
+      const pageBg = this.#bgColor;
+      ctx.fillStyle = this.#adjustBrightness(pageBg, -15);
+      ctx.fillRect(backX, 0, backWidth, h);
+
+      // Add a subtle gradient for the curl effect (3D illusion)
+      const curlGrad = ctx.createLinearGradient(backX, 0, backX + backWidth, 0);
+      if (dir === 1) {
+        curlGrad.addColorStop(0, 'rgba(0,0,0,0.08)');
+        curlGrad.addColorStop(0.3, 'rgba(255,255,255,0.05)');
+        curlGrad.addColorStop(0.7, 'rgba(255,255,255,0.02)');
+        curlGrad.addColorStop(1, 'rgba(0,0,0,0.15)');
+      } else {
+        curlGrad.addColorStop(0, 'rgba(0,0,0,0.15)');
+        curlGrad.addColorStop(0.3, 'rgba(255,255,255,0.02)');
+        curlGrad.addColorStop(0.7, 'rgba(255,255,255,0.05)');
+        curlGrad.addColorStop(1, 'rgba(0,0,0,0.08)');
+      }
+      ctx.fillStyle = curlGrad;
+      ctx.fillRect(backX, 0, backWidth, h);
+
+      // Draw subtle horizontal lines to simulate paper texture
+      ctx.strokeStyle = `rgba(128,128,128,${0.04 * progress})`;
+      ctx.lineWidth = 0.5;
+      for (let y = 30; y < h; y += 28) {
+        ctx.beginPath();
+        ctx.moveTo(backX + 10, y);
+        ctx.lineTo(backX + backWidth - 10, y);
+        ctx.stroke();
+      }
+    }
+    ctx.restore();
+
+    // ── Edge highlight (the fold crease) ──
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(cx, 0);
+    ctx.lineTo(cx, h);
+    ctx.strokeStyle = `rgba(255,255,255,${0.3 * progress})`;
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    // Inner shadow along the fold
+    const innerShadowW = Math.min(15, progress * 20);
+    const innerGrad = ctx.createLinearGradient(
+      dir === 1 ? cx : cx - innerShadowW,
+      0,
+      dir === 1 ? cx + innerShadowW : cx,
+      0,
+    );
+    if (dir === 1) {
+      innerGrad.addColorStop(0, `rgba(0,0,0,${0.2 * progress})`);
+      innerGrad.addColorStop(1, 'rgba(0,0,0,0)');
+    } else {
+      innerGrad.addColorStop(0, 'rgba(0,0,0,0)');
+      innerGrad.addColorStop(1, `rgba(0,0,0,${0.2 * progress})`);
+    }
+    ctx.fillStyle = innerGrad;
+    ctx.fillRect(
+      dir === 1 ? cx : cx - innerShadowW,
+      0,
+      innerShadowW,
+      h,
+    );
+    ctx.restore();
+  }
+
+  #adjustBrightness(color, amount) {
+    // Parse hex or rgb color and adjust brightness
+    let r, g, b;
+    if (color.startsWith('#')) {
+      const hex = color.slice(1);
+      r = parseInt(hex.substr(0, 2), 16) || 0;
+      g = parseInt(hex.substr(2, 2), 16) || 0;
+      b = parseInt(hex.substr(4, 2), 16) || 0;
+    } else if (color.startsWith('rgb')) {
+      const m = color.match(/(\d+)/g);
+      if (m) { r = +m[0]; g = +m[1]; b = +m[2]; }
+      else { r = g = b = 28; }
+    } else {
+      r = g = b = 28;
+    }
+    r = Math.max(0, Math.min(255, r + amount));
+    g = Math.max(0, Math.min(255, g + amount));
+    b = Math.max(0, Math.min(255, b + amount));
+    return `rgb(${r},${g},${b})`;
+  }
+
+  destroy() {
+    this.cancel();
+    this.#canvas.remove();
+  }
+}
+
 const animate = (a, b, duration, ease, render) =>
   new Promise((resolve) => {
     let start;
@@ -475,6 +792,10 @@ export class Paginator extends HTMLElement {
   #touchScrolled;
   #lastVisibleRange;
   #visibleRangeCache = { start: null, end: null, index: null, range: null };
+  // ── Page curl effect ──
+  #pageTurnStyle = 'slide'; // 'slide' | 'curl' | 'none'
+  #curlEffect = null;
+  #curlTouchState = null; // track curl-specific touch data
   constructor() {
     super();
     this.#root.innerHTML = `<style>
@@ -634,12 +955,31 @@ export class Paginator extends HTMLElement {
       this.#background.style.background = getBackground(this.#view.document);
     };
     this.#mediaQuery.addEventListener("change", this.#mediaQueryListener);
+
+    // Initialize page curl effect (inside shadow DOM)
+    this.#curlEffect = new PageCurlEffect(this.#top);
   }
   disconnectedCallback() {
     // 清理节流定时器，避免内存泄漏
     if (this.#renderTimeout) {
       clearTimeout(this.#renderTimeout);
       this.#renderTimeout = null;
+    }
+    if (this.#curlEffect) {
+      this.#curlEffect.destroy();
+      this.#curlEffect = null;
+    }
+  }
+  /** Page turn style: 'slide' (default scrollLeft animation), 'curl' (page curl effect), 'none' (instant) */
+  get pageTurnStyle() { return this.#pageTurnStyle; }
+  set pageTurnStyle(style) {
+    const valid = ['slide', 'curl', 'none'];
+    this.#pageTurnStyle = valid.includes(style) ? style : 'slide';
+    // Update animated attribute: slide uses it, curl handles its own animation
+    if (this.#pageTurnStyle === 'slide') {
+      this.setAttribute('animated', '');
+    } else {
+      this.removeAttribute('animated');
     }
   }
   attributeChangedCallback(name, _, value) {
@@ -846,6 +1186,30 @@ export class Paginator extends HTMLElement {
       }
     }
     const touch = e.changedTouches[0];
+
+    // ── Curl mode: start curl effect ──
+    if (this.#pageTurnStyle === 'curl' && !this.scrolled && touch) {
+      const rect = this.getBoundingClientRect?.() ?? { left: 0, top: 0, width: window.innerWidth, height: window.innerHeight };
+      const touchX = touch.clientX - (rect.left || 0);
+      const touchY = touch.clientY - (rect.top || 0);
+      const w = rect.width || window.innerWidth;
+
+      // Determine direction based on which half the touch starts in
+      const direction = touchX > w / 2 ? 1 : -1;
+
+      this.#curlTouchState = {
+        startX: touch.screenX,
+        startY: touch.screenY,
+        lastX: touch.screenX,
+        lastY: touch.screenY,
+        startTime: e.timeStamp,
+        direction,
+        curlStarted: false,
+        touchX,
+        touchY,
+      };
+    }
+
     this.#touchState = {
       x: touch?.screenX,
       y: touch?.screenY,
@@ -877,11 +1241,51 @@ export class Paginator extends HTMLElement {
       if (this.#touchScrolled) e.preventDefault();
       return;
     }
-    // Only preventDefault once finger moves beyond a small threshold (10px).
-    // This preserves synthetic click generation for pure taps on iOS.
+
     const touch = e.changedTouches[0];
     const totalDx = Math.abs(touch.screenX - (state.startX ?? touch.screenX));
     const totalDy = Math.abs(touch.screenY - (state.startY ?? touch.screenY));
+
+    // ── Curl mode: update curl effect ──
+    if (this.#pageTurnStyle === 'curl' && this.#curlTouchState) {
+      const curlState = this.#curlTouchState;
+
+      // Only start curl once we have enough horizontal movement
+      if (!curlState.curlStarted && totalDx > 15 && totalDx > totalDy) {
+        curlState.curlStarted = true;
+
+        // Resize canvas to match container
+        const rect = this.getBoundingClientRect?.() ?? { width: window.innerWidth, height: window.innerHeight };
+        if (this.#curlEffect) {
+          this.#curlEffect.resize(rect.width, rect.height);
+          // Set background color from current theme
+          const bg = getComputedStyle(document.documentElement).getPropertyValue('--bg')?.trim();
+          if (bg) this.#curlEffect.bgColor = bg;
+          this.#curlEffect.start(
+            curlState.touchX,
+            curlState.touchY,
+            curlState.direction,
+            null,
+          );
+        }
+      }
+
+      if (curlState.curlStarted) {
+        e.preventDefault();
+        state.didPreventDefault = true;
+        const rect = this.getBoundingClientRect?.() ?? { left: 0, top: 0 };
+        const currentX = touch.clientX - (rect.left || 0);
+        const currentY = touch.clientY - (rect.top || 0);
+        this.#curlEffect?.update(currentX, currentY);
+
+        curlState.lastX = touch.screenX;
+        curlState.lastY = touch.screenY;
+        return; // Don't do normal scroll in curl mode
+      }
+    }
+
+    // Only preventDefault once finger moves beyond a small threshold (10px).
+    // This preserves synthetic click generation for pure taps on iOS.
     if (totalDx > 10 || totalDy > 10 || state.didPreventDefault) {
       e.preventDefault();
       state.didPreventDefault = true;
@@ -902,6 +1306,26 @@ export class Paginator extends HTMLElement {
   #onTouchEnd() {
     this.#touchScrolled = false;
     if (this.scrolled || this.#navigationLocked) return;
+
+    // ── Curl mode: finish the curl animation ──
+    if (this.#pageTurnStyle === 'curl' && this.#curlTouchState?.curlStarted) {
+      const curlState = this.#curlTouchState;
+      const velocity = this.#touchState?.vx ?? 0;
+      this.#curlTouchState = null;
+
+      if (this.#curlEffect?.active) {
+        this.#curlEffect.finish(velocity).then((completed) => {
+          if (completed) {
+            // Actually turn the page
+            const dir = curlState.direction;
+            if (dir === 1) this.next();
+            else this.prev();
+          }
+        });
+      }
+      return;
+    }
+    this.#curlTouchState = null;
 
     // XXX: Firefox seems to report scale as 1... sometimes...?
     // at this point I'm basically throwing `requestAnimationFrame` at
@@ -945,6 +1369,18 @@ export class Paginator extends HTMLElement {
     }
     // FIXME: vertical-rl only, not -lr
     if (this.scrolled && this.#vertical) offset = -offset;
+
+    // Curl mode: always jump instantly (curl Canvas handles the visual transition)
+    // None mode: also jump instantly
+    const turnStyle = this.#pageTurnStyle;
+    if (turnStyle === 'curl' || turnStyle === 'none') {
+      element[scrollProp] = offset;
+      this.#scrollBounds = [offset, this.atStart ? 0 : size, this.atEnd ? 0 : size];
+      this.#afterScroll(reason);
+      return;
+    }
+
+    // Slide mode: use scrollLeft animation
     if ((reason === "snap" || smooth) && this.hasAttribute("animated"))
       return animate(element[scrollProp], offset, 400, easeOutCubic, (x) => (element[scrollProp] = x)).then(() => {
         this.#scrollBounds = [offset, this.atStart ? 0 : size, this.atEnd ? 0 : size];
@@ -1193,6 +1629,24 @@ export class Paginator extends HTMLElement {
   async #turnPage(dir, distance) {
     if (this.#locked) return;
     this.#locked = true;
+
+    // ── Curl mode: play auto curl animation for tap/programmatic page turns ──
+    if (this.#pageTurnStyle === 'curl' && !this.scrolled && this.#curlEffect && !this.#curlEffect.active) {
+      const rect = this.getBoundingClientRect?.() ?? { width: window.innerWidth, height: window.innerHeight };
+      const w = rect.width;
+      const h = rect.height;
+      this.#curlEffect.resize(w, h);
+      const bg = getComputedStyle(document.documentElement).getPropertyValue('--bg')?.trim();
+      if (bg) this.#curlEffect.bgColor = bg;
+
+      // Start from edge, animate to completion
+      const startX = dir === 1 ? w : 0;
+      this.#curlEffect.start(startX, h / 2, dir, null);
+
+      // Animate the curl automatically
+      await this.#curlEffect.finish(dir * 0.5);
+    }
+
     const prev = dir === -1;
     const shouldGo = await (prev ? this.#scrollPrev(distance) : this.#scrollNext(distance));
     if (shouldGo)
@@ -1200,7 +1654,7 @@ export class Paginator extends HTMLElement {
         index: this.#adjacentIndex(dir),
         anchor: prev ? () => 1 : () => 0,
       });
-    if (shouldGo || !this.hasAttribute("animated")) await wait(100);
+    if (shouldGo || (!this.hasAttribute("animated") && this.#pageTurnStyle !== 'curl')) await wait(100);
     this.#locked = false;
   }
   prev(distance) {
@@ -1265,6 +1719,11 @@ export class Paginator extends HTMLElement {
     // Clean up preload cache
     this.#preloadCache.clear();
     this.#preloadInFlight.clear();
+    // Clean up curl effect
+    if (this.#curlEffect) {
+      this.#curlEffect.destroy();
+      this.#curlEffect = null;
+    }
   }
 }
 

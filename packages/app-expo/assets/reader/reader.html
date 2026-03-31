@@ -291,6 +291,11 @@
         case 'applySettings':
           if (view && msg.settings) applySettings(msg.settings);
           break;
+        case 'setPageTurnStyle':
+          if (view && view.renderer && msg.style) {
+            view.renderer.pageTurnStyle = msg.style;
+          }
+          break;
         case 'setThemeColors':
           if (msg.colors) setThemeColors(msg.colors);
           break;
@@ -577,6 +582,10 @@
           renderer.removeAttribute('flow');
           renderer.setAttribute('max-inline-size', '100%');
         }
+      }
+
+      if (settings.pageTurnStyle && 'pageTurnStyle' in renderer) {
+        renderer.pageTurnStyle = settings.pageTurnStyle;
       }
     }
 
@@ -962,6 +971,13 @@ a { color: ${primary} !important; }
     window.setPageMargin = function (m) { applySettings({ pageMargin: m }); };
     window.setFontTheme = function (t) { applySettings({ fontTheme: t }); };
     window.setViewMode = function (m) { applySettings({ viewMode: m }); };
+    window.setPageTurnStyle = function (style) {
+      // style: 'slide' | 'curl' | 'none'
+      if (view && view.renderer && 'pageTurnStyle' in view.renderer) {
+        view.renderer.pageTurnStyle = style;
+        console.log('[WebView] Page turn style set to:', style);
+      }
+    };
     window.addAnnotation = function (a) { if (view) view.addAnnotation(a); };
     window.removeAnnotation = function (a) { if (view) view.deleteAnnotation(a); };
     

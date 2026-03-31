@@ -165,8 +165,17 @@ export function useReaderBridge(callbacks: ReaderBridgeCallbacks) {
       pageMargin?: number;
       fontTheme?: string;
       viewMode?: string;
+      pageTurnStyle?: string;
     }) => {
       const msg = JSON.stringify({ type: "applySettings", settings });
+      inject(`handleCommand(${msg})`);
+    },
+    [inject],
+  );
+
+  const setPageTurnStyle = useCallback(
+    (style: string) => {
+      const msg = JSON.stringify({ type: "setPageTurnStyle", style });
       inject(`handleCommand(${msg})`);
     },
     [inject],
@@ -418,6 +427,7 @@ export function useReaderBridge(callbacks: ReaderBridgeCallbacks) {
       removeAnnotation,
       highlightCFITemporarily,
       applySettings,
+      setPageTurnStyle,
       setThemeColors,
       setNavigationLocked,
       requestPageSnippet,
@@ -442,6 +452,7 @@ export function useReaderBridge(callbacks: ReaderBridgeCallbacks) {
       removeAnnotation,
       highlightCFITemporarily,
       applySettings,
+      setPageTurnStyle,
       setThemeColors,
       setNavigationLocked,
       requestPageSnippet,

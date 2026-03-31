@@ -290,6 +290,7 @@ export function ReaderScreen({ route, navigation }: Props) {
   const settingPageMargin = readSettings.pageMargin;
   const settingFontTheme = readSettings.fontTheme;
   const settingViewMode = readSettings.viewMode;
+  const settingPageTurnStyle = readSettings.pageTurnStyle ?? "slide";
 
   const controlsTimer = useRef<NodeJS.Timeout | null>(null);
   const searchDebounceRef = useRef<NodeJS.Timeout | null>(null);
@@ -466,6 +467,7 @@ export function ReaderScreen({ route, navigation }: Props) {
         paragraphSpacing: settings.paragraphSpacing,
         fontTheme: settings.fontTheme,
         viewMode: settings.viewMode,
+        pageTurnStyle: settings.pageTurnStyle,
       });
     },
     onRelocate: (detail: RelocateEvent) => {
@@ -1635,6 +1637,62 @@ export function ReaderScreen({ route, navigation }: Props) {
                 </TouchableOpacity>
               </View>
             </View>
+            {/* Page Turn Style — only visible in paginated mode */}
+            {settingViewMode === "paginated" && (
+              <View style={s.settingRow}>
+                <Text style={s.settingLabel}>{t("reader.pageTurnStyle", "翻页效果")}</Text>
+                <View style={s.viewModeRow}>
+                  <TouchableOpacity
+                    style={[s.viewModeBtn, settingPageTurnStyle === "slide" && s.viewModeBtnActive]}
+                    onPress={() => {
+                      updateSetting("pageTurnStyle", "slide");
+                      bridge?.setPageTurnStyle("slide");
+                    }}
+                  >
+                    <Text
+                      style={[
+                        s.viewModeBtnText,
+                        settingPageTurnStyle === "slide" && s.viewModeBtnTextActive,
+                      ]}
+                    >
+                      {t("reader.slideEffect", "滑动")}
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[s.viewModeBtn, settingPageTurnStyle === "curl" && s.viewModeBtnActive]}
+                    onPress={() => {
+                      updateSetting("pageTurnStyle", "curl");
+                      bridge?.setPageTurnStyle("curl");
+                    }}
+                  >
+                    <Text
+                      style={[
+                        s.viewModeBtnText,
+                        settingPageTurnStyle === "curl" && s.viewModeBtnTextActive,
+                      ]}
+                    >
+                      {t("reader.curlEffect", "仿真")}
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[s.viewModeBtn, settingPageTurnStyle === "none" && s.viewModeBtnActive]}
+                    onPress={() => {
+                      updateSetting("pageTurnStyle", "none");
+                      bridge?.setPageTurnStyle("none");
+                    }}
+                  >
+                    <Text
+                      style={[
+                        s.viewModeBtnText,
+                        settingPageTurnStyle === "none" && s.viewModeBtnTextActive,
+                      ]}
+                    >
+                      {t("reader.noEffect", "无")}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
           </ScrollView>
         </View>
       </Modal>
