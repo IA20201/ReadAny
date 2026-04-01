@@ -39,7 +39,6 @@ export interface SyncDelta {
     bookmarks?: TableDelta;
     highlights?: TableDelta;
     notes?: TableDelta;
-    reading_sessions?: TableDelta;
     threads?: TableDelta;
     messages?: TableDelta;
     skills?: TableDelta;

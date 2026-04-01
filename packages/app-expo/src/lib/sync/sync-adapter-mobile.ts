@@ -1,4 +1,4 @@
-import { closeDB, initDatabase, resetDBCache } from "@readany/core/db";
+import { closeDB, initDatabase, resetDBCache, resetLocalDBCache } from "@readany/core/db";
 /**
  * Mobile (Expo) sync adapter — implements ISyncAdapter
  * using expo-sqlite, expo-file-system, and expo-crypto.
@@ -54,6 +54,7 @@ export class MobileSyncAdapter implements ISyncAdapter {
 
   async reopenDatabase(): Promise<void> {
     resetDBCache();
+    resetLocalDBCache();
     await initDatabase();
   }
 

@@ -1,8 +1,12 @@
 export {
   initDatabase,
+  initLocalDatabase,
   getDB,
+  getLocalDB,
   closeDB,
+  closeLocalDB,
   resetDBCache,
+  resetLocalDBCache,
   getBooks,
   getBook,
   insertBook,

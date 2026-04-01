@@ -9,11 +9,15 @@ import type { Book, Bookmark, Chunk, Highlight, Message, Note, Skill, Thread } f
 import type { ReadingSession } from "../types/reading";
 import { generateId } from "../utils/generate-id";
 
-// Lazy-loaded database instance
+// Lazy-loaded database instances
 let db: IDatabase | null = null;
 let dbInitialized = false;
 
+let localDb: IDatabase | null = null;
+let localDbInitialized = false;
+
 const DB_NAME = "sqlite:readany.db";
+const LOCAL_DB_NAME = "sqlite:readany_local.db";
 
 // Cached device ID for sync tracking
 let cachedDeviceId: string | null = null;
@@ -24,6 +28,15 @@ export async function getDB(): Promise<IDatabase> {
     db = await platform.loadDatabase(DB_NAME);
   }
   return db;
+}
+
+/** Get or lazily open the local database (readany_local.db) */
+export async function getLocalDB(): Promise<IDatabase> {
+  if (!localDb) {
+    const platform = getPlatformService();
+    localDb = await platform.loadDatabase(LOCAL_DB_NAME);
+  }
+  return localDb;
 }
 
 /** Close the active database connection and clear cache */
@@ -37,6 +50,21 @@ export async function closeDB(): Promise<void> {
     db = null;
     dbInitialized = false;
     cachedDeviceId = null;
+  }
+  // Also close the local database
+  await closeLocalDB();
+}
+
+/** Close the local database connection and clear cache */
+export async function closeLocalDB(): Promise<void> {
+  if (localDb) {
+    try {
+      await localDb.close();
+    } catch {
+      // Ignore close errors
+    }
+    localDb = null;
+    localDbInitialized = false;
   }
 }
 
@@ -56,6 +84,12 @@ export function resetDBCache(): void {
   db = null;
   dbInitialized = false;
   cachedDeviceId = null;
+}
+
+/** Reset the local DB cache without closing */
+export function resetLocalDBCache(): void {
+  localDb = null;
+  localDbInitialized = false;
 }
 
 /** Get or create device ID for sync tracking */
@@ -226,35 +260,6 @@ export async function initDatabase(): Promise<void> {
   `);
 
   await database.execute(`
-    CREATE TABLE IF NOT EXISTS reading_sessions (
-      id TEXT PRIMARY KEY,
-      book_id TEXT NOT NULL,
-      started_at INTEGER NOT NULL,
-      ended_at INTEGER,
-      total_active_time INTEGER DEFAULT 0,
-      pages_read INTEGER DEFAULT 0,
-      state TEXT DEFAULT 'active',
-      FOREIGN KEY (book_id) REFERENCES books(id) ON DELETE CASCADE
-    )
-  `);
-
-  await database.execute(`
-    CREATE TABLE IF NOT EXISTS chunks (
-      id TEXT PRIMARY KEY,
-      book_id TEXT NOT NULL,
-      chapter_index INTEGER NOT NULL,
-      chapter_title TEXT NOT NULL DEFAULT '',
-      content TEXT NOT NULL,
-      token_count INTEGER NOT NULL DEFAULT 0,
-      start_cfi TEXT,
-      end_cfi TEXT,
-      segment_cfis TEXT,
-      embedding BLOB,
-      FOREIGN KEY (book_id) REFERENCES books(id) ON DELETE CASCADE
-    )
-  `);
-
-  await database.execute(`
     CREATE TABLE IF NOT EXISTS skills (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
@@ -274,10 +279,6 @@ export async function initDatabase(): Promise<void> {
   await database.execute("CREATE INDEX IF NOT EXISTS idx_notes_book ON notes(book_id)");
   await database.execute("CREATE INDEX IF NOT EXISTS idx_bookmarks_book ON bookmarks(book_id)");
   await database.execute("CREATE INDEX IF NOT EXISTS idx_messages_thread ON messages(thread_id)");
-  await database.execute("CREATE INDEX IF NOT EXISTS idx_chunks_book ON chunks(book_id)");
-  await database.execute(
-    "CREATE INDEX IF NOT EXISTS idx_reading_sessions_book ON reading_sessions(book_id)",
-  );
 
   // Migrations: add columns that may be missing from older schema versions
   try {
@@ -300,12 +301,6 @@ export async function initDatabase(): Promise<void> {
   } catch {
     // Column already exists, ignore
   }
-  try {
-    await database.execute("ALTER TABLE chunks ADD COLUMN segment_cfis TEXT");
-  } catch {
-    // Column already exists, ignore
-  }
-
   // --- Sync migrations ---
   // Migration 4: Add updated_at and file_hash to books
   try {
@@ -354,7 +349,6 @@ export async function initDatabase(): Promise<void> {
     "bookmarks",
     "threads",
     "messages",
-    "reading_sessions",
     "skills",
   ];
   for (const table of syncTables) {
@@ -371,7 +365,7 @@ export async function initDatabase(): Promise<void> {
   }
 
   // Migration 8: Add updated_at to tables that need it for incremental sync
-  const tablesNeedingUpdatedAt = ["bookmarks", "reading_sessions"];
+  const tablesNeedingUpdatedAt = ["bookmarks"];
   for (const table of tablesNeedingUpdatedAt) {
     try {
       await database.execute(
@@ -381,16 +375,9 @@ export async function initDatabase(): Promise<void> {
       // Column already exists
     }
   }
-  // Initialize updated_at from created_at or started_at
+  // Initialize updated_at from created_at
   try {
     await database.execute("UPDATE bookmarks SET updated_at = created_at WHERE updated_at = 0");
-  } catch {
-    // Already updated or column doesn't exist
-  }
-  try {
-    await database.execute(
-      "UPDATE reading_sessions SET updated_at = started_at WHERE updated_at = 0",
-    );
   } catch {
     // Already updated or column doesn't exist
   }
@@ -405,9 +392,141 @@ export async function initDatabase(): Promise<void> {
   }
 
   dbInitialized = true;
+
+  // Also initialize the local database (chunks, reading_sessions)
+  await initLocalDatabase();
+}
+export async function initLocalDatabase(): Promise<void> {
+  if (localDbInitialized) return;
+
+  const database = await getLocalDB();
+
+  await database.execute(`
+    CREATE TABLE IF NOT EXISTS chunks (
+      id TEXT PRIMARY KEY,
+      book_id TEXT NOT NULL,
+      chapter_index INTEGER NOT NULL,
+      chapter_title TEXT NOT NULL DEFAULT '',
+      content TEXT NOT NULL,
+      token_count INTEGER NOT NULL DEFAULT 0,
+      start_cfi TEXT,
+      end_cfi TEXT,
+      segment_cfis TEXT,
+      embedding BLOB
+    )
+  `);
+
+  await database.execute(`
+    CREATE TABLE IF NOT EXISTS reading_sessions (
+      id TEXT PRIMARY KEY,
+      book_id TEXT NOT NULL,
+      started_at INTEGER NOT NULL,
+      ended_at INTEGER,
+      total_active_time INTEGER DEFAULT 0,
+      pages_read INTEGER DEFAULT 0,
+      state TEXT DEFAULT 'active'
+    )
+  `);
+
+  // Create indexes
+  await database.execute("CREATE INDEX IF NOT EXISTS idx_chunks_book ON chunks(book_id)");
+  await database.execute(
+    "CREATE INDEX IF NOT EXISTS idx_reading_sessions_book ON reading_sessions(book_id)",
+  );
+
+  localDbInitialized = true;
+
+  // Migrate data from main DB to local DB on first run
+  await migrateDataToLocalDB();
 }
 
-// --- Serialization helpers ---
+/** Migrate chunks and reading_sessions from main DB to local DB (one-time) */
+async function migrateDataToLocalDB(): Promise<void> {
+  const mainDB = await getDB();
+
+  // Check if migration has already been done
+  try {
+    const rows = await mainDB.select<{ value: string }>(
+      "SELECT value FROM sync_metadata WHERE key = 'local_db_migration_done'",
+    );
+    if (rows.length > 0 && rows[0].value === "1") {
+      return; // Already migrated
+    }
+  } catch {
+    // sync_metadata might not exist yet, skip migration
+    return;
+  }
+
+  // Check if chunks table exists in main DB
+  let hasChunksInMain = false;
+  let hasReadingSessionsInMain = false;
+
+  try {
+    await mainDB.select<{ id: string }>("SELECT id FROM chunks LIMIT 1");
+    hasChunksInMain = true;
+  } catch {
+    // Table doesn't exist in main DB
+  }
+
+  try {
+    await mainDB.select<{ id: string }>("SELECT id FROM reading_sessions LIMIT 1");
+    hasReadingSessionsInMain = true;
+  } catch {
+    // Table doesn't exist in main DB
+  }
+
+  const localDB = await getLocalDB();
+
+  // Migrate chunks
+  if (hasChunksInMain) {
+    try {
+      const chunks = await mainDB.select<Record<string, unknown>>("SELECT id, book_id, chapter_index, chapter_title, content, token_count, start_cfi, end_cfi, segment_cfis, embedding FROM chunks");
+      for (const chunk of chunks) {
+        await localDB.execute(
+          "INSERT OR IGNORE INTO chunks (id, book_id, chapter_index, chapter_title, content, token_count, start_cfi, end_cfi, segment_cfis, embedding) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+          [
+            chunk.id, chunk.book_id, chunk.chapter_index, chunk.chapter_title,
+            chunk.content, chunk.token_count, chunk.start_cfi, chunk.end_cfi,
+            chunk.segment_cfis, chunk.embedding,
+          ],
+        );
+      }
+      // Drop from main DB
+      await mainDB.execute("DROP TABLE IF EXISTS chunks");
+    } catch {
+      // Migration error — non-fatal, table may be partially migrated
+    }
+  }
+
+  // Migrate reading_sessions
+  if (hasReadingSessionsInMain) {
+    try {
+      const sessions = await mainDB.select<Record<string, unknown>>("SELECT id, book_id, started_at, ended_at, total_active_time, pages_read, state FROM reading_sessions");
+      for (const session of sessions) {
+        await localDB.execute(
+          "INSERT OR IGNORE INTO reading_sessions (id, book_id, started_at, ended_at, total_active_time, pages_read, state) VALUES (?, ?, ?, ?, ?, ?, ?)",
+          [
+            session.id, session.book_id, session.started_at, session.ended_at,
+            session.total_active_time, session.pages_read, session.state,
+          ],
+        );
+      }
+      // Drop from main DB
+      await mainDB.execute("DROP TABLE IF EXISTS reading_sessions");
+    } catch {
+      // Migration error — non-fatal
+    }
+  }
+
+  // Mark migration as done
+  try {
+    await mainDB.execute(
+      "INSERT OR REPLACE INTO sync_metadata (key, value) VALUES ('local_db_migration_done', '1')",
+    );
+  } catch {
+    // Non-fatal
+  }
+}
 
 function serializeEmbedding(embedding?: number[]): Uint8Array | null {
   if (!embedding || embedding.length === 0) return null;
@@ -650,11 +769,10 @@ export async function deleteBook(id: string): Promise<void> {
   // Delete bookmarks
   await database.execute("DELETE FROM bookmarks WHERE book_id = ?", [id]);
 
-  // Delete reading sessions
-  await database.execute("DELETE FROM reading_sessions WHERE book_id = ?", [id]);
-
-  // Delete chunks (for RAG/vectorization)
-  await database.execute("DELETE FROM chunks WHERE book_id = ?", [id]);
+  // Delete reading sessions and chunks from local DB
+  const localDatabase = await getLocalDB();
+  await localDatabase.execute("DELETE FROM reading_sessions WHERE book_id = ?", [id]);
+  await localDatabase.execute("DELETE FROM chunks WHERE book_id = ?", [id]);
 
   // Finally, delete the book itself
   await insertTombstone(database, id, "books");
@@ -1202,7 +1320,7 @@ export async function insertMessage(message: Message): Promise<void> {
 // --- Reading Sessions ---
 
 export async function getReadingSessions(bookId: string): Promise<ReadingSession[]> {
-  const database = await getDB();
+  const database = await getLocalDB();
   const rows = await database.select<{
     id: string;
     book_id: string;
@@ -1227,7 +1345,7 @@ export async function getReadingSessionsByDateRange(
   startDate: Date,
   endDate: Date,
 ): Promise<ReadingSession[]> {
-  const database = await getDB();
+  const database = await getLocalDB();
   const rows = await database.select<{
     id: string;
     book_id: string;
@@ -1252,11 +1370,9 @@ export async function getReadingSessionsByDateRange(
 }
 
 export async function insertReadingSession(session: ReadingSession): Promise<void> {
-  const database = await getDB();
-  const deviceId = await getDeviceId();
-  const syncVersion = await nextSyncVersion(database, "reading_sessions");
+  const database = await getLocalDB();
   await database.execute(
-    "INSERT INTO reading_sessions (id, book_id, started_at, ended_at, total_active_time, pages_read, state, sync_version, last_modified_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    "INSERT INTO reading_sessions (id, book_id, started_at, ended_at, total_active_time, pages_read, state) VALUES (?, ?, ?, ?, ?, ?, ?)",
     [
       session.id,
       session.bookId,
@@ -1265,8 +1381,6 @@ export async function insertReadingSession(session: ReadingSession): Promise<voi
       session.totalActiveTime,
       session.pagesRead,
       session.state,
-      syncVersion,
-      deviceId,
     ],
   );
 }
@@ -1275,7 +1389,7 @@ export async function updateReadingSession(
   id: string,
   updates: Partial<ReadingSession>,
 ): Promise<void> {
-  const database = await getDB();
+  const database = await getLocalDB();
   const sets: string[] = [];
   const values: unknown[] = [];
 
@@ -1298,14 +1412,6 @@ export async function updateReadingSession(
 
   if (sets.length === 0) return;
 
-  // Add sync tracking
-  const deviceId = await getDeviceId();
-  const syncVersion = await nextSyncVersion(database, "reading_sessions");
-  sets.push("sync_version = ?");
-  values.push(syncVersion);
-  sets.push("last_modified_by = ?");
-  values.push(deviceId);
-
   values.push(id);
   await database.execute(`UPDATE reading_sessions SET ${sets.join(", ")} WHERE id = ?`, values);
 }
@@ -1313,7 +1419,7 @@ export async function updateReadingSession(
 // --- Chunks ---
 
 export async function getChunks(bookId: string): Promise<Chunk[]> {
-  const database = await getDB();
+  const database = await getLocalDB();
   const rows = await database.select<{
     id: string;
     book_id: string;
@@ -1341,7 +1447,7 @@ export async function getChunks(bookId: string): Promise<Chunk[]> {
 }
 
 export async function insertChunks(chunks: Chunk[]): Promise<void> {
-  const database = await getDB();
+  const database = await getLocalDB();
   for (const chunk of chunks) {
     await database.execute(
       "INSERT INTO chunks (id, book_id, chapter_index, chapter_title, content, token_count, start_cfi, end_cfi, segment_cfis, embedding) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
@@ -1362,7 +1468,7 @@ export async function insertChunks(chunks: Chunk[]): Promise<void> {
 }
 
 export async function deleteChunks(bookId: string): Promise<void> {
-  const database = await getDB();
+  const database = await getLocalDB();
   await database.execute("DELETE FROM chunks WHERE book_id = ?", [bookId]);
 }
 

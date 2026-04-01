@@ -38,7 +38,13 @@
       "Bash(xargs basename:*)",
       "WebFetch(domain:deepwiki.com)",
       "WebFetch(domain:daviddaytw.github.io)",
-      "WebFetch(domain:docs.rs)"
+      "WebFetch(domain:docs.rs)",
+      "Bash(/tmp/sync_critical_findings.md:*)",
+      "Read(//tmp/**)",
+      "WebFetch(domain:vlcn.io)",
+      "WebFetch(domain:docs.expo.dev)",
+      "WebFetch(domain:crates.io)",
+      "WebFetch(domain:expo.dev)"
     ]
   }
 }

@@ -1,4 +1,4 @@
-import { closeDB, initDatabase, resetDBCache } from "@readany/core/db";
+import { closeDB, initDatabase, resetDBCache, resetLocalDBCache } from "@readany/core/db";
 /**
  * Desktop (Tauri) sync adapter — implements ISyncAdapter
  * using Tauri invoke commands and @tauri-apps/plugin-fs.
@@ -49,6 +49,7 @@ export class DesktopSyncAdapter implements ISyncAdapter {
 
   async reopenDatabase(): Promise<void> {
     resetDBCache();
+    resetLocalDBCache();
     await initDatabase();
   }
 

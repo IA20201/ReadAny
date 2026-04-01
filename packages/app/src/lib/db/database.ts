@@ -4,6 +4,7 @@
  */
 export {
   initDatabase,
+  initLocalDatabase,
   getBooks,
   getBook,
   insertBook,
