@@ -38,11 +38,34 @@ export const DEFAULT_BINDINGS: KeyBinding[] = [
   { key: "0", meta: true, action: "zoom-reset", description: "Reset font size" },
 ];
 
-/** Check if the keyboard event target is an input element */
+/** Check if the keyboard event target is an editable or interactive element */
 export function isInputElement(target: EventTarget | null): boolean {
   if (!target || !(target instanceof HTMLElement)) return false;
   const tag = target.tagName.toLowerCase();
-  return tag === "input" || tag === "textarea" || target.isContentEditable;
+  if (tag === "input" || tag === "textarea" || tag === "select") return true;
+  if (target.isContentEditable) return true;
+
+  return Boolean(
+    target.closest(
+      "input, textarea, select, button, [contenteditable='true'], [contenteditable=''], [role='textbox'], [role='button']",
+    ),
+  );
+}
+
+/** IME composition should not trigger reader shortcuts. */
+export function isComposingKeyboardEvent(event: {
+  isComposing?: boolean;
+  key?: string;
+  keyCode?: number;
+}): boolean {
+  return event.isComposing === true || event.key === "Process" || event.keyCode === 229;
+}
+
+/** Shared guard for reader/global shortcuts. */
+export function shouldIgnoreKeyboardShortcut(
+  event: Pick<KeyboardEvent, "defaultPrevented" | "isComposing" | "key" | "keyCode" | "target">,
+): boolean {
+  return event.defaultPrevented || isComposingKeyboardEvent(event) || isInputElement(event.target);
 }
 
 /** Match a keyboard event against a binding */
@@ -61,7 +84,7 @@ export function findAction(
   event: KeyboardEvent,
   bindings: KeyBinding[] = DEFAULT_BINDINGS,
 ): string | null {
-  if (isInputElement(event.target)) return null;
+  if (shouldIgnoreKeyboardShortcut(event)) return null;
   const match = bindings.find((b) => matchBinding(event, b));
   return match?.action ?? null;
 }

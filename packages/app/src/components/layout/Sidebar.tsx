@@ -82,7 +82,7 @@ export function HomeSidebar() {
   };
 
   return (
-    <aside className="z-40 flex h-full w-48 shrink-0 select-none flex-col overflow-hidden">
+    <aside className="z-40 flex h-full min-h-0 w-48 shrink-0 select-none flex-col overflow-hidden">
       <div className="px-2 pt-2">
         {isSearchVisible ? (
           <div className="flex w-full items-center gap-1.5 rounded-lg bg-muted px-2.5 py-1.5 transition-colors">
@@ -119,7 +119,7 @@ export function HomeSidebar() {
           </button>
         )}
       </div>
-      <nav className="flex flex-1 flex-col space-y-1 overflow-y-auto px-1 pt-2 pl-2">
+      <nav className="flex min-h-0 flex-1 flex-col space-y-1 overflow-y-auto px-1 pt-2 pl-2">
         {NAV_ITEMS.map((item) => {
           const isActive = activeType === item.tabType;
           const Icon = item.icon;
@@ -372,7 +372,7 @@ export function HomeSidebar() {
           );
         })}
       </nav>
-      <div className="space-y-1 px-2 py-3">
+      <div className="shrink-0 space-y-1 px-2 py-3">
         <button
           type="button"
           className="flex w-full items-center gap-2 rounded-md p-1 py-1 text-left text-muted-foreground text-sm hover:bg-muted hover:text-foreground"

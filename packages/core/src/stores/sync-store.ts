@@ -5,6 +5,7 @@
  */
 
 import { create } from "zustand";
+import { emitLibraryChanged } from "../events/library-events";
 import { getPlatformService } from "../services/platform";
 import type { S3Config, SyncConfig, WebDavConfig } from "../sync/sync-backend";
 import { DEFAULT_SYNC_CONFIG, SYNC_CONFIG_KEY, SYNC_SECRET_KEYS } from "../sync/sync-backend";
@@ -20,6 +21,24 @@ import type {
 } from "../sync/sync-types";
 import { WebDavClient } from "../sync/webdav-client";
 
+let activeSyncPromise: Promise<SyncResult | null> | null = null;
+const SYNC_RUNTIME_STATE_KEY = "sync_runtime_state";
+
+interface PersistedSyncRuntimeState {
+  lastSyncAt: number | null;
+  lastResult: SyncResult | null;
+}
+
+function runWithSyncLock(task: () => Promise<SyncResult | null>): Promise<SyncResult | null> {
+  if (activeSyncPromise) return activeSyncPromise;
+
+  activeSyncPromise = task().finally(() => {
+    activeSyncPromise = null;
+  });
+
+  return activeSyncPromise;
+}
+
 function statusFromProgress(progress: SyncProgress): SyncStatusType {
   if (progress.phase === "files") return "syncing-files";
   return progress.operation === "upload" ? "uploading" : "downloading";
@@ -31,6 +50,41 @@ async function flushPendingReadingSession(): Promise<void> {
     await useReadingSessionStore.getState().saveCurrentSession();
   } catch (error) {
     console.warn("[SyncStore] Failed to flush reading session before sync:", error);
+  }
+}
+
+function notifyLibraryStateChanged(): void {
+  try {
+    emitLibraryChanged();
+  } catch (error) {
+    console.warn("[SyncStore] Failed to notify library refresh after sync:", error);
+  }
+}
+
+async function loadPersistedSyncRuntimeState(): Promise<PersistedSyncRuntimeState> {
+  try {
+    const platform = getPlatformService();
+    const raw = await platform.kvGetItem(SYNC_RUNTIME_STATE_KEY);
+    if (!raw) {
+      return { lastSyncAt: null, lastResult: null };
+    }
+
+    const parsed = JSON.parse(raw) as PersistedSyncRuntimeState;
+    return {
+      lastSyncAt: typeof parsed.lastSyncAt === "number" ? parsed.lastSyncAt : null,
+      lastResult: parsed.lastResult ?? null,
+    };
+  } catch {
+    return { lastSyncAt: null, lastResult: null };
+  }
+}
+
+async function persistSyncRuntimeState(state: PersistedSyncRuntimeState): Promise<void> {
+  try {
+    const platform = getPlatformService();
+    await platform.kvSetItem(SYNC_RUNTIME_STATE_KEY, JSON.stringify(state));
+  } catch (error) {
+    console.warn("[SyncStore] Failed to persist sync runtime state:", error);
   }
 }
 
@@ -98,6 +152,7 @@ export interface SyncState {
   syncSimple: (backend: ISyncBackend) => Promise<SyncResult | null>;
   forceFullSync: (direction: "upload" | "download") => Promise<SyncResult | null>;
   setAutoSync: (enabled: boolean) => Promise<void>;
+  setSyncIntervalMins: (minutes: number) => Promise<void>;
   setWifiOnly: (enabled: boolean) => Promise<void>;
   setNotifyOnComplete: (enabled: boolean) => Promise<void>;
   resetSync: () => Promise<void>;
@@ -120,7 +175,11 @@ export const useSyncStore = create<SyncState>((set, get) => ({
       const configStr = await platform.kvGetItem(SYNC_CONFIG_KEY);
       console.log(`[SyncStore] loadConfig: configStr = ${configStr ? "found" : "not found"}`);
       if (configStr) {
-        const config = JSON.parse(configStr) as SyncConfig;
+        const parsedConfig = JSON.parse(configStr) as SyncConfig;
+        const config =
+          parsedConfig.type === "webdav" || parsedConfig.type === "s3"
+            ? ({ ...DEFAULT_SYNC_CONFIG, ...parsedConfig } as SyncConfig)
+            : parsedConfig;
         const secretKey = config.type !== "lan" ? getSecretKeyForBackend(config.type) : null;
         const secret = secretKey ? await platform.kvGetItem(secretKey) : null;
         console.log(
@@ -139,10 +198,19 @@ export const useSyncStore = create<SyncState>((set, get) => ({
         console.log(
           `[SyncStore] loadConfig: isConfigured = ${isConfigured}, backendType = ${config.type}`,
         );
+        const runtimeState = await loadPersistedSyncRuntimeState();
         set({
           config,
           isConfigured,
           backendType: config.type,
+          lastSyncAt: runtimeState.lastSyncAt,
+          lastResult: runtimeState.lastResult,
+        });
+      } else {
+        const runtimeState = await loadPersistedSyncRuntimeState();
+        set({
+          lastSyncAt: runtimeState.lastSyncAt,
+          lastResult: runtimeState.lastResult,
         });
       }
     } catch (e) {
@@ -222,94 +290,140 @@ export const useSyncStore = create<SyncState>((set, get) => ({
   },
 
   syncNow: async (_resolvedDirection, _useIncremental) => {
-    const state = get();
-    if (state.status !== "idle") return null;
-    if (!state.isConfigured || !state.config) {
-      set({ error: "Sync not configured" });
-      return null;
+    const currentState = get();
+    if (currentState.status !== "idle" && currentState.status !== "error") {
+      return activeSyncPromise;
     }
 
-    const platform = getPlatformService();
-    const secretKey =
-      state.config.type !== "lan" ? getSecretKeyForBackend(state.config.type) : null;
-    const secret = secretKey ? await platform.kvGetItem(secretKey) : null;
+    return runWithSyncLock(async () => {
+      const state = get();
+      if (!state.isConfigured || !state.config) {
+        set({ error: "Sync not configured" });
+        return null;
+      }
 
-    if (state.config.type !== "lan" && !secret) {
-      set({ error: "No credentials configured" });
-      return null;
-    }
+      const platform = getPlatformService();
+      const secretKey =
+        state.config.type !== "lan" ? getSecretKeyForBackend(state.config.type) : null;
+      const secret = secretKey ? await platform.kvGetItem(secretKey) : null;
 
-    // Enforce wifiOnly setting
-    if (state.config.type !== "lan" && "wifiOnly" in state.config && state.config.wifiOnly) {
-      if (platform.isOnWifi) {
-        const isWifi = await platform.isOnWifi();
-        if (!isWifi) {
-          set({ error: "Sync skipped: WiFi-only mode is enabled and device is not on WiFi" });
-          return null;
+      if (state.config.type !== "lan" && !secret) {
+        set({ error: "No credentials configured" });
+        return null;
+      }
+
+      if (state.config.type !== "lan" && "wifiOnly" in state.config && state.config.wifiOnly) {
+        if (platform.isOnWifi) {
+          const isWifi = await platform.isOnWifi();
+          if (!isWifi) {
+            set({ error: "Sync skipped: WiFi-only mode is enabled and device is not on WiFi" });
+            return null;
+          }
         }
       }
-    }
 
-    set({ status: "checking", error: null, pendingDirection: null });
+      set({ status: "checking", error: null, pendingDirection: null });
 
-    try {
-      await flushPendingReadingSession();
-      const backend = createSyncBackend(state.config, secret || "");
+      try {
+        await flushPendingReadingSession();
+        const backend = createSyncBackend(state.config, secret || "");
 
-      const connected = await backend.testConnection();
-      if (!connected) {
-        set({ status: "error", error: "无法连接到同步服务器，请检查网络和凭据", pendingDirection: null, progress: null });
-        return {
+        const connected = await backend.testConnection();
+        if (!connected) {
+          const connectionError = "无法连接到同步服务器，请检查网络和凭据";
+          const result: SyncResult = {
+            success: false,
+            direction: "none",
+            filesUploaded: 0,
+            filesDownloaded: 0,
+            durationMs: 0,
+            error: connectionError,
+          };
+          set({
+            status: "error",
+            error: connectionError,
+            pendingDirection: null,
+            progress: null,
+            lastResult: result,
+          });
+          await persistSyncRuntimeState({
+            lastSyncAt: get().lastSyncAt,
+            lastResult: result,
+          });
+          return result;
+        }
+
+        set({ error: null });
+
+        const result = await get().syncSimple(backend);
+        if (!result) {
+          set({ status: "idle", progress: null, pendingDirection: null });
+        } else {
+          await persistSyncRuntimeState({
+            lastSyncAt: get().lastSyncAt,
+            lastResult: get().lastResult,
+          });
+        }
+        return result;
+      } catch (e) {
+        const error = e instanceof Error ? e.message : String(e);
+        const result: SyncResult = {
           success: false,
           direction: "none",
           filesUploaded: 0,
           filesDownloaded: 0,
           durationMs: 0,
-          error: "无法连接到同步服务器，请检查网络和凭据",
+          error,
         };
+        set({ status: "error", error, pendingDirection: null, progress: null, lastResult: result });
+        await persistSyncRuntimeState({
+          lastSyncAt: get().lastSyncAt,
+          lastResult: result,
+        });
+        return result;
       }
-
-      // Clear error on successful connection
-      set({ error: null });
-
-      // Use new simplified sync (JSON-based)
-      return await get().syncSimple(backend);
-    } catch (e) {
-      const error = e instanceof Error ? e.message : String(e);
-      set({ status: "error", error, pendingDirection: null, progress: null });
-      return {
-        success: false,
-        direction: "none",
-        filesUploaded: 0,
-        filesDownloaded: 0,
-        durationMs: 0,
-        error,
-      };
-    }
+    });
   },
 
   syncWithBackend: async (backend, _resolvedDirection, _useIncremental = true) => {
     const state = get();
-    if (state.status !== "idle") return null;
-
-    set({ status: "checking", error: null, pendingDirection: null });
-
-    try {
-      await flushPendingReadingSession();
-      // Use new simplified sync (JSON-based, no full db file sync)
-      return await get().syncSimple(backend);
-    } catch (e) {
-      const error = e instanceof Error ? e.message : String(e);
-      set({ status: "error", error, pendingDirection: null, progress: null });
-      return {
-        success: false,
-        direction: "none",
-        filesUploaded: 0,
-        filesDownloaded: 0,
-        durationMs: 0,
-        error,
-      };
+    if (state.status !== "idle" && state.status !== "error") {
+      return activeSyncPromise;
     }
+
+    return runWithSyncLock(async () => {
+      set({ status: "checking", error: null, pendingDirection: null });
+
+      try {
+        await flushPendingReadingSession();
+        const result = await get().syncSimple(backend);
+        if (!result) {
+          set({ status: "idle", progress: null, pendingDirection: null });
+        } else {
+          await persistSyncRuntimeState({
+            lastSyncAt: get().lastSyncAt,
+            lastResult: get().lastResult,
+          });
+        }
+        return result;
+      } catch (e) {
+        const error = e instanceof Error ? e.message : String(e);
+        const result: SyncResult = {
+          success: false,
+          direction: "none",
+          filesUploaded: 0,
+          filesDownloaded: 0,
+          durationMs: 0,
+          error,
+        };
+        set({ status: "error", error, pendingDirection: null, progress: null, lastResult: result });
+        await persistSyncRuntimeState({
+          lastSyncAt: get().lastSyncAt,
+          lastResult: result,
+        });
+        return result;
+      }
+    });
   },
 
   syncSimple: async (backend: ISyncBackend) => {
@@ -349,6 +463,17 @@ export const useSyncStore = create<SyncState>((set, get) => ({
           error: null,
           progress: null,
         });
+        notifyLibraryStateChanged();
+        await persistSyncRuntimeState({
+          lastSyncAt: Date.now(),
+          lastResult: {
+            success: true,
+            direction: "upload",
+            filesUploaded: result.filesUploaded,
+            filesDownloaded: result.filesDownloaded,
+            durationMs: 0,
+          },
+        });
       } else {
         set({
           status: "error",
@@ -362,6 +487,17 @@ export const useSyncStore = create<SyncState>((set, get) => ({
           },
           error: result.error || "同步失败",
           progress: null,
+        });
+        await persistSyncRuntimeState({
+          lastSyncAt: get().lastSyncAt,
+          lastResult: {
+            success: false,
+            direction: "none",
+            filesUploaded: 0,
+            filesDownloaded: 0,
+            durationMs: 0,
+            error: result.error || "同步失败",
+          },
         });
       }
 
@@ -388,6 +524,17 @@ export const useSyncStore = create<SyncState>((set, get) => ({
         error,
         progress: null,
       });
+      await persistSyncRuntimeState({
+        lastSyncAt: get().lastSyncAt,
+        lastResult: {
+          success: false,
+          direction: "none",
+          filesUploaded: 0,
+          filesDownloaded: 0,
+          durationMs: 0,
+          error,
+        },
+      });
       return {
         success: false,
         direction: "none" as const,
@@ -401,7 +548,9 @@ export const useSyncStore = create<SyncState>((set, get) => ({
 
   forceFullSync: async (direction) => {
     const state = get();
-    if (state.status !== "idle") return null;
+    if (state.status !== "idle" && state.status !== "error") {
+      return activeSyncPromise;
+    }
     if (!state.isConfigured || !state.config) {
       set({ error: "Sync not configured" });
       return null;
@@ -427,101 +576,133 @@ export const useSyncStore = create<SyncState>((set, get) => ({
       }
     }
 
-    set({ status: "checking", error: null, pendingDirection: null, progress: null });
+    const config = state.config;
 
-    try {
-      await flushPendingReadingSession();
-      const backend = createSyncBackend(state.config, secret || "");
-      const connected = await backend.testConnection();
+    return runWithSyncLock(async () => {
+      set({ status: "checking", error: null, pendingDirection: null, progress: null });
 
-      if (!connected) {
-        const connectionError = "无法连接到同步服务器，请检查网络和凭据";
+      try {
+        await flushPendingReadingSession();
+        const backend = createSyncBackend(config, secret || "");
+        const connected = await backend.testConnection();
+
+        if (!connected) {
+          const connectionError = "无法连接到同步服务器，请检查网络和凭据";
+          const result: SyncResult = {
+            success: false,
+            direction: "none",
+            filesUploaded: 0,
+            filesDownloaded: 0,
+            durationMs: 0,
+            error: connectionError,
+          };
+          set({
+            status: "error",
+            error: connectionError,
+            pendingDirection: null,
+            progress: null,
+            lastResult: result,
+          });
+          await persistSyncRuntimeState({
+            lastSyncAt: get().lastSyncAt,
+            lastResult: result,
+          });
+          return result;
+        }
+
+        const { runSync } = await import("../sync/sync-engine");
+        const remoteManifest =
+          direction === "download"
+            ? await backend.getJSON<RemoteSyncManifest>(REMOTE_MANIFEST).catch(() => null)
+            : null;
+
+        const result = await runSync(
+          backend,
+          direction,
+          (progress) => {
+            set({
+              status: statusFromProgress(progress),
+              progress,
+            });
+          },
+          remoteManifest,
+          undefined,
+          false,
+          direction === "upload"
+            ? { forceUploadAll: true }
+            : { forceDownloadAll: true, downloadRemoteBooks: true },
+        );
+
+        if (result.success) {
+          set({
+            status: "idle",
+            lastSyncAt: Date.now(),
+            lastResult: result,
+            error: null,
+            progress: null,
+            pendingDirection: null,
+          });
+          notifyLibraryStateChanged();
+          await persistSyncRuntimeState({
+            lastSyncAt: Date.now(),
+            lastResult: result,
+          });
+        } else {
+          set({
+            status: "error",
+            lastResult: result,
+            error: result.error || "同步失败",
+            progress: null,
+            pendingDirection: null,
+          });
+          await persistSyncRuntimeState({
+            lastSyncAt: get().lastSyncAt,
+            lastResult: result,
+          });
+        }
+
+        return result;
+      } catch (e) {
+        const error = e instanceof Error ? e.message : String(e);
         const result: SyncResult = {
           success: false,
-          direction: "none",
+          direction,
           filesUploaded: 0,
           filesDownloaded: 0,
           durationMs: 0,
-          error: connectionError,
+          error,
         };
         set({
           status: "error",
-          error: connectionError,
-          pendingDirection: null,
+          lastResult: result,
+          error,
           progress: null,
+          pendingDirection: null,
+        });
+        await persistSyncRuntimeState({
+          lastSyncAt: get().lastSyncAt,
           lastResult: result,
         });
         return result;
       }
-
-      const { runSync } = await import("../sync/sync-engine");
-      const remoteManifest =
-        direction === "download"
-          ? await backend.getJSON<RemoteSyncManifest>(REMOTE_MANIFEST).catch(() => null)
-          : null;
-
-      const result = await runSync(
-        backend,
-        direction,
-        (progress) => {
-          set({
-            status: statusFromProgress(progress),
-            progress,
-          });
-        },
-        remoteManifest,
-        undefined,
-        false,
-        direction === "upload"
-          ? { forceUploadAll: true }
-          : { forceDownloadAll: true, downloadRemoteBooks: true },
-      );
-
-      if (result.success) {
-        set({
-          status: "idle",
-          lastSyncAt: Date.now(),
-          lastResult: result,
-          error: null,
-          progress: null,
-          pendingDirection: null,
-        });
-      } else {
-        set({
-          status: "error",
-          lastResult: result,
-          error: result.error || "同步失败",
-          progress: null,
-          pendingDirection: null,
-        });
-      }
-
-      return result;
-    } catch (e) {
-      const error = e instanceof Error ? e.message : String(e);
-      const result: SyncResult = {
-        success: false,
-        direction,
-        filesUploaded: 0,
-        filesDownloaded: 0,
-        durationMs: 0,
-        error,
-      };
-      set({
-        status: "error",
-        lastResult: result,
-        error,
-        progress: null,
-        pendingDirection: null,
-      });
-      return result;
-    }
+    });
   },
 
   setAutoSync: async (enabled) => {
     const state = get();
     if (!state.config) return;
     const config = { ...state.config, autoSync: enabled };
+    const platform = getPlatformService();
+    await platform.kvSetItem(SYNC_CONFIG_KEY, JSON.stringify(config));
+    set({ config });
+  },
+
+  setSyncIntervalMins: async (minutes) => {
+    const state = get();
+    if (!state.config || state.config.type === "lan") return;
+
+    const clampedMinutes = Math.max(5, Math.min(720, Math.round(minutes || DEFAULT_SYNC_CONFIG.syncIntervalMins)));
+    const config = { ...state.config, syncIntervalMins: clampedMinutes };
     const platform = getPlatformService();
     await platform.kvSetItem(SYNC_CONFIG_KEY, JSON.stringify(config));
     set({ config });
@@ -550,6 +731,7 @@ export const useSyncStore = create<SyncState>((set, get) => ({
     await platform.kvRemoveItem(SYNC_CONFIG_KEY);
     await platform.kvRemoveItem(SYNC_SECRET_KEYS.webdav);
     await platform.kvRemoveItem(SYNC_SECRET_KEYS.s3);
+    await platform.kvRemoveItem(SYNC_RUNTIME_STATE_KEY);
     set({
       config: null,
       isConfigured: false,

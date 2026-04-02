@@ -53,7 +53,7 @@ function isS3Config(config: unknown): config is S3Config {
   return typeof config === "object" && config !== null && (config as S3Config).type === "s3";
 }
 
-function hasAutoSync(config: unknown): config is { autoSync: boolean } {
+function hasAutoSync(config: unknown): config is { autoSync: boolean; syncIntervalMins?: number } {
   return typeof config === "object" && config !== null && "autoSync" in config;
 }
 
@@ -81,6 +81,7 @@ export default function SyncSettingsScreen() {
     syncWithBackend,
     forceFullSync,
     setAutoSync,
+    setSyncIntervalMins,
     resetSync,
   } = useSyncStore();
 
@@ -119,7 +120,8 @@ export default function SyncSettingsScreen() {
   const [testResult, setTestResult] = useState<"success" | "error" | null>(null);
   const [testError, setTestError] = useState("");
   const [saving, setSaving] = useState(false);
-  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(true);
+  const [syncIntervalInput, setSyncIntervalInput] = useState("30");
 
   const isBusy = status !== "idle" && status !== "error";
 
@@ -152,6 +154,7 @@ export default function SyncSettingsScreen() {
         setUrl(config.url);
         setUsername(config.username);
         setAllowInsecure(config.allowInsecure ?? false);
+        setSyncIntervalInput(String(config.syncIntervalMins ?? 30));
         getPlatformService()
           .kvGetItem(SYNC_SECRET_KEYS.webdav)
           .then((pw) => {
@@ -162,6 +165,7 @@ export default function SyncSettingsScreen() {
         setS3Region(config.region);
         setS3Bucket(config.bucket);
         setS3AccessKeyId(config.accessKeyId);
+        setSyncIntervalInput(String(config.syncIntervalMins ?? 30));
         getPlatformService()
           .kvGetItem("sync_s3_secret_key")
           .then((key) => {
@@ -454,6 +458,13 @@ export default function SyncSettingsScreen() {
   };
 
   const autoSyncEnabled = hasAutoSync(config) ? config.autoSync : false;
+
+  const handleSyncIntervalBlur = useCallback(async () => {
+    const parsed = Number.parseInt(syncIntervalInput, 10);
+    const nextValue = Number.isFinite(parsed) ? Math.max(5, Math.min(720, parsed)) : 30;
+    setSyncIntervalInput(String(nextValue));
+    await setSyncIntervalMins(nextValue);
+  }, [setSyncIntervalMins, syncIntervalInput]);
 
   return (
     <SafeAreaView
@@ -1099,6 +1110,27 @@ export default function SyncSettingsScreen() {
                     />
                   </TouchableOpacity>
                 </View>
+                <View style={styles.intervalRow}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.autoSyncLabel}>{t("settings.syncInterval")}</Text>
+                    <Text style={styles.autoSyncDesc}>{t("settings.syncIntervalDesc")}</Text>
+                  </View>
+                  <View style={styles.intervalInputWrap}>
+                    <TextInput
+                      style={styles.intervalInput}
+                      value={syncIntervalInput}
+                      onChangeText={setSyncIntervalInput}
+                      onBlur={() => void handleSyncIntervalBlur()}
+                      keyboardType="number-pad"
+                      returnKeyType="done"
+                    />
+                    <Text style={styles.intervalSuffix}>
+                      {t("settings.syncIntervalMinutes", {
+                        count: Number.parseInt(syncIntervalInput || "30", 10) || 30,
+                      })}
+                    </Text>
+                  </View>
+                </View>
               </View>
             </View>
           )}
@@ -1334,6 +1366,16 @@ const makeStyles = (colors: ThemeColors) =>
       borderTopColor: colors.border,
       paddingTop: 12,
     },
+    intervalRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: colors.border,
+      paddingTop: 12,
+      marginTop: 12,
+      gap: 12,
+    },
     autoSyncLabel: {
       fontSize: fontSize.sm,
       fontWeight: fontWeight.medium,
@@ -1360,6 +1402,27 @@ const makeStyles = (colors: ThemeColors) =>
       backgroundColor: colors.card,
     },
     toggleThumbActive: { alignSelf: "flex-end" },
+    intervalInputWrap: {
+      minWidth: 116,
+      alignItems: "flex-end",
+      gap: 4,
+    },
+    intervalInput: {
+      width: 72,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: radius.md,
+      backgroundColor: colors.background,
+      color: colors.foreground,
+      paddingHorizontal: 10,
+      paddingVertical: 8,
+      textAlign: "right",
+      fontSize: fontSize.sm,
+    },
+    intervalSuffix: {
+      fontSize: fontSize.xs,
+      color: colors.mutedForeground,
+    },
     advancedHeader: {
       flexDirection: "row",
       alignItems: "center",

@@ -405,6 +405,13 @@ export async function syncFiles(
   }>("SELECT id, file_path, file_hash, cover_url, title FROM books", []);
 
   const appDataDir = await adapter.getAppDataDir();
+  const currentBookIds = new Set(books.map((book) => book.id));
+
+  const getManagedAssetBookId = (fileName: string): string | null => {
+    const dotIndex = fileName.lastIndexOf(".");
+    if (dotIndex <= 0) return null;
+    return fileName.slice(0, dotIndex);
+  };
 
   // --- Pre-compute all local paths and remote names ---
   type BookFileInfo = {
@@ -621,6 +628,92 @@ export async function syncFiles(
     console.log(
       `[Sync] ✅ Download completed: ${filesDownloaded} succeeded, ${downloadFailed} failed in ${Date.now() - downloadStart}ms`,
     );
+  }
+
+  // Clean up remote orphaned assets for books that no longer exist in the merged DB.
+  const remoteDeleteTasks: (() => Promise<boolean>)[] = [];
+  for (const file of remoteFiles) {
+    if (file.isDirectory) continue;
+    const bookId = getManagedAssetBookId(file.name);
+    if (bookId && !currentBookIds.has(bookId)) {
+      remoteDeleteTasks.push(async () => {
+        try {
+          await backend.delete(`${REMOTE_FILES}/${file.name}`);
+          console.log(`[Sync] 🗑️ Deleted remote orphaned book file: ${file.name}`);
+          return true;
+        } catch (e) {
+          console.warn(`[Sync] Failed to delete remote orphaned book file ${file.name}:`, e);
+          return false;
+        }
+      });
+    }
+  }
+  for (const file of remoteCovers) {
+    if (file.isDirectory) continue;
+    const bookId = getManagedAssetBookId(file.name);
+    if (bookId && !currentBookIds.has(bookId)) {
+      remoteDeleteTasks.push(async () => {
+        try {
+          await backend.delete(`${REMOTE_COVERS}/${file.name}`);
+          console.log(`[Sync] 🗑️ Deleted remote orphaned cover: ${file.name}`);
+          return true;
+        } catch (e) {
+          console.warn(`[Sync] Failed to delete remote orphaned cover ${file.name}:`, e);
+          return false;
+        }
+      });
+    }
+  }
+
+  if (remoteDeleteTasks.length > 0) {
+    console.log(`[Sync] 🧹 Cleaning up ${remoteDeleteTasks.length} remote orphaned assets...`);
+    await parallelLimit(remoteDeleteTasks, 5);
+  }
+
+  // Also clean up app-managed local orphaned assets after DB sync.
+  const localDeleteTasks: (() => Promise<boolean>)[] = [];
+  const [localManagedBookFiles, localManagedCovers] = await Promise.all([
+    adapter.listFiles(adapter.joinPath(appDataDir, "books")),
+    adapter.listFiles(adapter.joinPath(appDataDir, "covers")),
+  ]);
+
+  for (const fileName of localManagedBookFiles) {
+    const bookId = getManagedAssetBookId(fileName);
+    if (bookId && !currentBookIds.has(bookId)) {
+      const localPath = adapter.joinPath(appDataDir, "books", fileName);
+      localDeleteTasks.push(async () => {
+        try {
+          await adapter.deleteFile(localPath);
+          console.log(`[Sync] 🗑️ Deleted local orphaned book file: ${fileName}`);
+          return true;
+        } catch (e) {
+          console.warn(`[Sync] Failed to delete local orphaned book file ${fileName}:`, e);
+          return false;
+        }
+      });
+    }
+  }
+
+  for (const fileName of localManagedCovers) {
+    const bookId = getManagedAssetBookId(fileName);
+    if (bookId && !currentBookIds.has(bookId)) {
+      const localPath = adapter.joinPath(appDataDir, "covers", fileName);
+      localDeleteTasks.push(async () => {
+        try {
+          await adapter.deleteFile(localPath);
+          console.log(`[Sync] 🗑️ Deleted local orphaned cover: ${fileName}`);
+          return true;
+        } catch (e) {
+          console.warn(`[Sync] Failed to delete local orphaned cover ${fileName}:`, e);
+          return false;
+        }
+      });
+    }
+  }
+
+  if (localDeleteTasks.length > 0) {
+    console.log(`[Sync] 🧹 Cleaning up ${localDeleteTasks.length} local orphaned assets...`);
+    await parallelLimit(localDeleteTasks, 5);
   }
 
   console.log(`[Sync] ✅ File sync completed in ${Date.now() - syncFilesStart}ms`);

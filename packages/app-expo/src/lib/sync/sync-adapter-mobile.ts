@@ -13,8 +13,16 @@ export class MobileSyncAdapter implements ISyncAdapter {
   async vacuumInto(targetPath: string): Promise<void> {
     const SQLite = await import("expo-sqlite");
     const db = await SQLite.openDatabaseAsync("readany.db");
+    const targetDirPath = targetPath.replace(/\/[^/]+$/, "");
+    const targetDir = new Directory(targetDirPath);
+    if (!targetDir.exists) {
+      targetDir.create({ intermediates: true });
+    }
+
+    // expo-sqlite expects a native filesystem path here, not a file:// URI.
+    const sqliteTargetPath = targetPath.replace(/^file:\/\//, "");
     try {
-      await db.execAsync(`VACUUM INTO '${targetPath}'`);
+      await db.execAsync(`VACUUM INTO '${sqliteTargetPath.replace(/'/g, "''")}'`);
     } finally {
       await db.closeAsync();
     }

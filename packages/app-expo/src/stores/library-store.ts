@@ -69,6 +69,15 @@ async function resolveAppPath(relativePath: string): Promise<string> {
   return platform.joinPath(appData, relativePath);
 }
 
+function isRelativeAppPath(path: string): boolean {
+  return (
+    !path.startsWith("/") &&
+    !path.startsWith("file://") &&
+    !path.startsWith("asset://") &&
+    !path.startsWith("http")
+  );
+}
+
 async function ensureAppSubDir(subDir: string): Promise<void> {
   const platform = getPlatformService();
   const absDir = await resolveAppPath(subDir);
@@ -275,11 +284,17 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
     } catch (err) {
       console.error("Failed to delete book from database:", err);
     }
-    if (bookToRemove?.filePath) {
+    if (bookToRemove) {
       try {
         const platform = getPlatformService();
-        const absPath = await resolveAppPath(bookToRemove.filePath);
-        await platform.deleteFile(absPath);
+        if (bookToRemove.filePath && isRelativeAppPath(bookToRemove.filePath)) {
+          const absPath = await resolveAppPath(bookToRemove.filePath);
+          await platform.deleteFile(absPath);
+        }
+        if (bookToRemove.meta.coverUrl && isRelativeAppPath(bookToRemove.meta.coverUrl)) {
+          const coverAbsPath = await resolveAppPath(bookToRemove.meta.coverUrl);
+          await platform.deleteFile(coverAbsPath);
+        }
       } catch {
         /* file may not exist */
       }

@@ -42,8 +42,8 @@ function deviceSyncPath(deviceId: string): string {
   return `${SYNC_DIR}/device-${deviceId}.json`;
 }
 
-const DB_LOCK_MAX_RETRIES = 4;
-const DB_LOCK_RETRY_DELAY_MS = 300;
+const DB_LOCK_MAX_RETRIES = 6;
+const DB_LOCK_RETRY_DELAY_MS = 500;
 
 function isDatabaseLockedError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
@@ -202,66 +202,47 @@ export async function applyChanges(
     const db = await getDB();
     let applied = 0;
     let skipped = 0;
-    let inTransaction = false;
 
-    try {
-      await db.execute("BEGIN TRANSACTION", []);
-      inTransaction = true;
+    // Keep this transaction-free. On some adapters, explicit BEGIN/COMMIT can
+    // lose state across awaited calls and end with "cannot commit - no transaction is active".
+    for (const [tableName, tableData] of Object.entries(payload.tables)) {
+      const tableInfo = SYNC_TABLES.find((t) => t.name === tableName);
+      if (!tableInfo) continue;
 
-      for (const [tableName, tableData] of Object.entries(payload.tables)) {
-        const tableInfo = SYNC_TABLES.find((t) => t.name === tableName);
-        if (!tableInfo) continue;
+      const { pk, timestampCol } = tableInfo;
+      const exclude = tableInfo.excludeColumns ?? [];
 
-        const { pk, timestampCol } = tableInfo;
-        const exclude = tableInfo.excludeColumns ?? [];
+      for (const record of tableData.records) {
+        const pkValue = record[pk];
+        const remoteTs = record[timestampCol] as number;
 
-        // Apply upserts (last-write-wins by timestamp)
-        for (const record of tableData.records) {
-          const pkValue = record[pk];
-          const remoteTs = record[timestampCol] as number;
+        const existing = await db.select<Record<string, unknown>>(
+          `SELECT ${timestampCol} FROM ${tableName} WHERE ${pk} = ?`,
+          [pkValue],
+        );
 
-          const existing = await db.select<Record<string, unknown>>(
-            `SELECT ${timestampCol} FROM ${tableName} WHERE ${pk} = ?`,
-            [pkValue],
-          );
+        const safeRecord = exclude.length > 0
+          ? Object.fromEntries(Object.entries(record).filter(([k]) => !exclude.includes(k)))
+          : record;
 
-          // Strip locally-owned columns before upserting
-          const safeRecord = exclude.length > 0
-            ? Object.fromEntries(Object.entries(record).filter(([k]) => !exclude.includes(k)))
-            : record;
-
-          if (existing.length > 0) {
-            const localTs = existing[0][timestampCol] as number;
-            if (remoteTs > localTs) {
-              await upsertRecord(db, tableName, safeRecord, pk);
-              applied++;
-            } else {
-              skipped++;
-            }
-          } else {
+        if (existing.length > 0) {
+          const localTs = existing[0][timestampCol] as number;
+          if (remoteTs > localTs) {
             await upsertRecord(db, tableName, safeRecord, pk);
             applied++;
+          } else {
+            skipped++;
           }
-        }
-
-        // Apply deletions
-        for (const deletedId of tableData.deletedIds) {
-          await db.execute(`DELETE FROM ${tableName} WHERE ${pk} = ?`, [deletedId]);
+        } else {
+          await upsertRecord(db, tableName, safeRecord, pk);
           applied++;
         }
       }
 
-      await db.execute("COMMIT", []);
-      inTransaction = false;
-    } catch (e) {
-      if (inTransaction) {
-        try {
-          await db.execute("ROLLBACK", []);
-        } catch {
-          // Ignore rollback errors
-        }
+      for (const deletedId of tableData.deletedIds) {
+        await db.execute(`DELETE FROM ${tableName} WHERE ${pk} = ?`, [deletedId]);
+        applied++;
       }
-      throw e;
     }
 
     return { applied, skipped };

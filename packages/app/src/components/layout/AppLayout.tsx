@@ -270,17 +270,17 @@ export function AppLayout() {
       >
         <TabBar />
       </div>
-      <main className="relative h-full flex-1 overflow-hidden">
+      <main className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
         {!isReaderActive && (
           <div className="h-8 shrink-0" />
         )}
         {/* === Home layer (sidebar + content card) === */}
         <div
-          className="flex h-full w-full overflow-hidden"
+          className="flex min-h-0 flex-1 w-full overflow-hidden"
           style={{ display: !isReaderActive ? "flex" : "none" }}
         >
           <HomeSidebar />
-          <div className="h-full flex-1 overflow-hidden pr-1 pb-1">
+          <div className="min-h-0 flex-1 overflow-hidden pr-1 pb-1">
             <div className="relative flex h-full flex-col overflow-hidden rounded-xl border bg-background shadow-around">
               {/* All home sub-views stay mounted; toggle via display:none */}
               {HOME_VIEWS.map(({ id, Component }) => (

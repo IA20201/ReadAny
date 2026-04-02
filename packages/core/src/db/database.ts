@@ -24,7 +24,7 @@ let cachedDeviceId: string | null = null;
 
 async function configureDatabaseConnection(database: IDatabase): Promise<void> {
   try {
-    await database.execute("PRAGMA busy_timeout = 5000");
+    await database.execute("PRAGMA busy_timeout = 15000");
   } catch {
     // Some adapters may not support PRAGMA configuration
   }
@@ -375,6 +375,9 @@ export async function initDatabase(): Promise<void> {
     "highlights",
     "notes",
     "bookmarks",
+    "tags",
+    "book_tags",
+    "reading_sessions",
     "threads",
     "messages",
     "skills",
@@ -1409,8 +1412,10 @@ export async function getReadingSessionsByDateRange(
 export async function insertReadingSession(session: ReadingSession): Promise<void> {
   const database = await getDB();
   const now = Date.now();
+  const deviceId = await getDeviceId();
+  const syncVersion = await nextSyncVersion(database, "reading_sessions");
   await database.execute(
-    "INSERT INTO reading_sessions (id, book_id, started_at, ended_at, total_active_time, pages_read, state, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+    "INSERT INTO reading_sessions (id, book_id, started_at, ended_at, total_active_time, pages_read, state, updated_at, sync_version, last_modified_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     [
       session.id,
       session.bookId,
@@ -1420,6 +1425,8 @@ export async function insertReadingSession(session: ReadingSession): Promise<voi
       session.pagesRead,
       session.state,
       now,
+      syncVersion,
+      deviceId,
     ],
   );
 }
@@ -1429,6 +1436,8 @@ export async function updateReadingSession(
   updates: Partial<ReadingSession>,
 ): Promise<void> {
   const database = await getDB();
+  const deviceId = await getDeviceId();
+  const syncVersion = await nextSyncVersion(database, "reading_sessions");
   const sets: string[] = [];
   const values: unknown[] = [];
 
@@ -1453,6 +1462,10 @@ export async function updateReadingSession(
 
   sets.push("updated_at = ?");
   values.push(Date.now());
+  sets.push("sync_version = ?");
+  values.push(syncVersion);
+  sets.push("last_modified_by = ?");
+  values.push(deviceId);
 
 
   values.push(id);
@@ -1548,6 +1561,23 @@ export async function clearVectorizationFlagsWithoutLocalChunks(): Promise<void>
      WHERE (is_vectorized != 0 OR vectorize_progress != 0)
        AND ${clauses.join(" AND ")}`,
     params,
+  );
+
+  const restoreClauses: string[] = [];
+  const restoreParams: string[] = [];
+
+  for (let index = 0; index < bookIds.length; index += batchSize) {
+    const batch = bookIds.slice(index, index + batchSize);
+    restoreClauses.push(`id IN (${batch.map(() => "?").join(", ")})`);
+    restoreParams.push(...batch);
+  }
+
+  await database.execute(
+    `UPDATE books
+     SET is_vectorized = 1, vectorize_progress = 1
+     WHERE (is_vectorized = 0 OR vectorize_progress < 1)
+       AND (${restoreClauses.join(" OR ")})`,
+    restoreParams,
   );
 }
 

@@ -5,6 +5,7 @@
  * iframe-keydown messages from iframeEventHandlers.
  */
 import { useCallback, useEffect } from "react";
+import { shouldIgnoreKeyboardShortcut } from "../../reader/keyboard";
 import type { FoliateView } from "./useFoliateView";
 
 interface UseBookShortcutsOptions {
@@ -85,8 +86,7 @@ export function useBookShortcuts({
     if (!enabled || typeof window === "undefined") return;
 
     const onKeydown = (e: KeyboardEvent) => {
-      const tag = (e.target as HTMLElement)?.tagName?.toLowerCase();
-      if (tag === "input" || tag === "textarea") return;
+      if (shouldIgnoreKeyboardShortcut(e)) return;
 
       const handled = handleAction(e.key, {
         ctrlKey: e.ctrlKey,
@@ -99,6 +99,9 @@ export function useBookShortcuts({
     const onMessage = (event: MessageEvent) => {
       const data = event.data;
       if (data?.type !== "iframe-keydown" || data.bookKey !== bookKey) return;
+      if (data.defaultPrevented || data.isComposing || data.key === "Process" || data.keyCode === 229) {
+        return;
+      }
 
       handleAction(data.key, {
         ctrlKey: data.ctrlKey,

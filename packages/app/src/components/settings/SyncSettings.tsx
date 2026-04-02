@@ -33,6 +33,7 @@ export function SyncSettings() {
     syncNow,
     forceFullSync,
     setAutoSync,
+    setSyncIntervalMins,
     resetSync,
   } = useSyncStore();
 
@@ -57,6 +58,7 @@ export function SyncSettings() {
   const [testError, setTestError] = useState("");
   const [saving, setSaving] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [syncIntervalInput, setSyncIntervalInput] = useState("30");
 
   // LAN dialog state
   const [lanDialogOpen, setLanDialogOpen] = useState(false);
@@ -74,6 +76,7 @@ export function SyncSettings() {
         setWebdavUrl(config.url);
         setWebdavUsername(config.username);
         setWebdavAllowInsecure(config.allowInsecure ?? false);
+        setSyncIntervalInput(String(config.syncIntervalMins ?? 30));
         getPlatformService()
           .kvGetItem("sync_webdav_password")
           .then((pw) => {
@@ -85,6 +88,7 @@ export function SyncSettings() {
         setS3Bucket(config.bucket);
         setS3AccessKeyId(config.accessKeyId);
         setS3PathStyle(config.pathStyle ?? false);
+        setSyncIntervalInput(String(config.syncIntervalMins ?? 30));
         getPlatformService()
           .kvGetItem("sync_s3_secret_key")
           .then((key) => {
@@ -231,6 +235,13 @@ export function SyncSettings() {
     if (!ts) return t("settings.syncNever");
     return new Date(ts).toLocaleString();
   };
+
+  const handleSyncIntervalBlur = useCallback(async () => {
+    const parsed = Number.parseInt(syncIntervalInput, 10);
+    const nextValue = Number.isFinite(parsed) ? Math.max(5, Math.min(720, parsed)) : 30;
+    setSyncIntervalInput(String(nextValue));
+    await setSyncIntervalMins(nextValue);
+  }, [setSyncIntervalMins, syncIntervalInput]);
 
   const statusLabel = () => {
     switch (status) {
@@ -598,6 +609,30 @@ export function SyncSettings() {
             checked={config?.type === "webdav" || config?.type === "s3" ? config.autoSync : false}
             onCheckedChange={(checked) => setAutoSync(checked)}
           />
+        </div>
+        <div className="flex items-center justify-between gap-3 border-t border-border/40 pt-3">
+          <div>
+            <span className="text-sm text-foreground">{t("settings.syncInterval")}</span>
+            <p className="mt-0.5 text-xs text-muted-foreground">{t("settings.syncIntervalDesc")}</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <input
+              type="number"
+              min={5}
+              max={720}
+              step={1}
+              value={syncIntervalInput}
+              onChange={(e) => setSyncIntervalInput(e.target.value)}
+              onBlur={() => void handleSyncIntervalBlur()}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.currentTarget.blur();
+                }
+              }}
+              className="w-20 rounded-md border border-input bg-background px-3 py-1.5 text-right text-sm text-foreground outline-none focus:border-primary"
+            />
+            <span className="text-xs text-muted-foreground">{t("settings.syncIntervalMinutes", { count: Number.parseInt(syncIntervalInput || "30", 10) || 30 })}</span>
+          </div>
         </div>
       </div>
     </section>

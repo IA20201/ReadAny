@@ -119,7 +119,10 @@ export class TauriPlatformService implements IPlatformService {
 
   async loadDatabase(path: string): Promise<IDatabase> {
     const Database = (await import("@tauri-apps/plugin-sql")).default;
-    const tauriDb = await Database.load(path);
+    const normalizedPath = path.startsWith("sqlite:")
+      ? path
+      : `sqlite:${path.replace(/^file:\/\//, "")}`;
+    const tauriDb = await Database.load(normalizedPath);
     return wrapTauriDatabase(tauriDb);
   }
 

@@ -173,69 +173,52 @@ export async function applyRemoteDelta(delta: SyncDelta): Promise<{
   const db = await getDB();
   let applied = 0;
   let conflicts = 0;
-  let inTransaction = false;
 
-  try {
-    await db.execute("BEGIN TRANSACTION", []);
-    inTransaction = true;
+  // Keep this transaction-free for cross-platform stability.
+  for (const tableName of Object.keys(delta.tables) as (keyof typeof delta.tables)[]) {
+    const tableDelta = delta.tables[tableName];
+    if (!tableDelta || (tableDelta.records.length === 0 && tableDelta.deletedIds.length === 0))
+      continue;
 
-    for (const tableName of Object.keys(delta.tables) as (keyof typeof delta.tables)[]) {
-      const tableDelta = delta.tables[tableName];
-      if (!tableDelta || (tableDelta.records.length === 0 && tableDelta.deletedIds.length === 0))
-        continue;
+    const { table, records } = tableDelta;
+    const tableInfo = SYNC_TABLES.find((t) => t.name === table);
+    if (!tableInfo) continue;
 
-      const { table, records } = tableDelta;
-      const tableInfo = SYNC_TABLES.find((t) => t.name === table);
-      if (!tableInfo) continue;
+    const { pk, timestampCol } = tableInfo;
 
-      const { pk, timestampCol } = tableInfo;
+    for (const record of records) {
+      const pkValue = record[pk];
+      const remoteTimestamp = record[timestampCol] as number;
 
-      for (const record of records) {
-        const pkValue = record[pk];
-        const remoteTimestamp = record[timestampCol] as number;
+      const existing = await db.select<Record<string, unknown>>(
+        `SELECT ${timestampCol} FROM ${table} WHERE ${pk} = ?`,
+        [pkValue],
+      );
 
-        const existing = await db.select<Record<string, unknown>>(
-          `SELECT ${timestampCol} FROM ${table} WHERE ${pk} = ?`,
-          [pkValue],
-        );
-
-        if (existing.length > 0) {
-          const localTimestamp = existing[0][timestampCol] as number;
-          if (remoteTimestamp > localTimestamp) {
-            await upsertRecord(db, table, record, pk);
-            applied++;
-          } else {
-            conflicts++;
-          }
-        } else {
+      if (existing.length > 0) {
+        const localTimestamp = existing[0][timestampCol] as number;
+        if (remoteTimestamp > localTimestamp) {
           await upsertRecord(db, table, record, pk);
           applied++;
+        } else {
+          conflicts++;
         }
-      }
-
-      for (const deletedId of tableDelta.deletedIds) {
-        await db.execute(`DELETE FROM ${table} WHERE ${pk} = ?`, [deletedId]);
+      } else {
+        await upsertRecord(db, table, record, pk);
         applied++;
       }
     }
 
-    await db.execute("INSERT OR REPLACE INTO sync_metadata (key, value) VALUES (?, ?)", [
-      SYNC_META_KEYS.LAST_SYNC_AT,
-      String(Date.now()),
-    ]);
-
-    await db.execute("COMMIT", []);
-    inTransaction = false;
-  } catch (e) {
-    if (inTransaction) {
-      try {
-        await db.execute("ROLLBACK", []);
-      } catch {
-        // Ignore rollback errors
-      }
+    for (const deletedId of tableDelta.deletedIds) {
+      await db.execute(`DELETE FROM ${table} WHERE ${pk} = ?`, [deletedId]);
+      applied++;
     }
-    throw e;
   }
+
+  await db.execute("INSERT OR REPLACE INTO sync_metadata (key, value) VALUES (?, ?)", [
+    SYNC_META_KEYS.LAST_SYNC_AT,
+    String(Date.now()),
+  ]);
 
   return { applied, conflicts };
 }

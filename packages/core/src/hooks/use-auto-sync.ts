@@ -11,6 +11,11 @@ function hasAutoSync(config: unknown): config is { autoSync: boolean; syncInterv
   return typeof config === "object" && config !== null && "autoSync" in config;
 }
 
+function withJitter(baseMs: number, maxJitterMs: number): number {
+  const jitter = Math.floor(Math.random() * maxJitterMs);
+  return baseMs + jitter;
+}
+
 export function useAutoSync(onSyncComplete?: () => void) {
   const config = useSyncStore((s) => s.config);
   const isConfigured = useSyncStore((s) => s.isConfigured);
@@ -21,7 +26,7 @@ export function useAutoSync(onSyncComplete?: () => void) {
   const error = useSyncStore((s) => s.error);
   const statusRef = useRef(status);
   statusRef.current = status;
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastErrorRef = useRef<string | null>(null);
   lastErrorRef.current = error;
 
@@ -58,26 +63,29 @@ export function useAutoSync(onSyncComplete?: () => void) {
       return;
     }
 
-    // Delayed startup sync (10 seconds after mount)
-    const startupTimer = setTimeout(() => {
-      if (statusRef.current === "idle" && !lastErrorRef.current) {
-        syncNow();
-      }
-    }, 10_000);
-
-    // Periodic sync
     const intervalMs = (hasAutoSync(config) ? config.syncIntervalMins || 30 : 30) * 60 * 1000;
-    timerRef.current = setInterval(() => {
-      // Skip if there's an error (auth/connection issues)
-      if (statusRef.current === "idle" && !lastErrorRef.current) {
-        syncNow();
-      }
-    }, intervalMs);
+    let cancelled = false;
+
+    const scheduleNext = (delayMs: number) => {
+      timerRef.current = setTimeout(async () => {
+        if (cancelled) return;
+
+        if (statusRef.current === "idle" && !lastErrorRef.current) {
+          await syncNow();
+        }
+
+        if (!cancelled) {
+          scheduleNext(withJitter(intervalMs, Math.min(60_000, Math.floor(intervalMs * 0.1))));
+        }
+      }, delayMs);
+    };
+
+    scheduleNext(withJitter(10_000, 10_000));
 
     return () => {
-      clearTimeout(startupTimer);
+      cancelled = true;
       if (timerRef.current) {
-        clearInterval(timerRef.current);
+        clearTimeout(timerRef.current);
         timerRef.current = null;
       }
     };
