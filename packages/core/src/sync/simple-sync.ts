@@ -9,7 +9,12 @@
  * 4. Tombstones for deletions
  */
 
-import { ensureNoTransaction, getDB } from "../db/database";
+import {
+  cleanupOrphanedSyncRows,
+  ensureNoTransaction,
+  getDB,
+  getDeviceId as getLocalDeviceId,
+} from "../db/database";
 import type { ISyncBackend } from "./sync-backend";
 
 interface SyncTableConfig {
@@ -48,6 +53,11 @@ const DB_LOCK_RETRY_DELAY_MS = 500;
 function isDatabaseLockedError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
   return message.includes("database is locked") || message.includes("(code: 5)");
+}
+
+function isForeignKeyConstraintError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return message.includes("FOREIGN KEY constraint failed") || message.includes("(code: 787)");
 }
 
 function sleep(ms: number): Promise<void> {
@@ -101,18 +111,7 @@ export interface DeviceSyncPayload {
 // ---------------------------------------------------------------------------
 
 async function getDeviceId(): Promise<string> {
-  const db = await getDB();
-  const rows = await db.select<{ value: string }>(
-    "SELECT value FROM sync_metadata WHERE key = 'device_id'",
-  );
-  if (rows[0]?.value) return rows[0].value;
-
-  const deviceId = `device-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-  await db.execute(
-    "INSERT OR REPLACE INTO sync_metadata (key, value) VALUES ('device_id', ?)",
-    [deviceId],
-  );
-  return deviceId;
+  return getLocalDeviceId();
 }
 
 async function getLastSyncTimestamp(): Promise<number> {
@@ -138,6 +137,7 @@ async function setLastSyncTimestamp(timestamp: number): Promise<void> {
 export async function collectChanges(since: number): Promise<DeviceSyncPayload> {
   await ensureNoTransaction();
   const db = await getDB();
+  await cleanupOrphanedSyncRows(db);
   const deviceId = await getDeviceId();
   const now = Date.now();
 
@@ -200,6 +200,7 @@ export async function applyChanges(
   return withDatabaseLockRetry(async () => {
     await ensureNoTransaction();
     const db = await getDB();
+    await cleanupOrphanedSyncRows(db);
     let applied = 0;
     let skipped = 0;
 
@@ -228,14 +229,36 @@ export async function applyChanges(
         if (existing.length > 0) {
           const localTs = existing[0][timestampCol] as number;
           if (remoteTs > localTs) {
-            await upsertRecord(db, tableName, safeRecord, pk);
-            applied++;
+            try {
+              await upsertRecord(db, tableName, safeRecord, pk);
+              applied++;
+            } catch (error) {
+              if (isForeignKeyConstraintError(error)) {
+                console.warn(
+                  `[SimpleSync] Skipping orphaned ${tableName} record ${String(pkValue)}: ${error instanceof Error ? error.message : String(error)}`,
+                );
+                skipped++;
+                continue;
+              }
+              throw error;
+            }
           } else {
             skipped++;
           }
         } else {
-          await upsertRecord(db, tableName, safeRecord, pk);
-          applied++;
+          try {
+            await upsertRecord(db, tableName, safeRecord, pk);
+            applied++;
+          } catch (error) {
+            if (isForeignKeyConstraintError(error)) {
+              console.warn(
+                `[SimpleSync] Skipping orphaned ${tableName} record ${String(pkValue)}: ${error instanceof Error ? error.message : String(error)}`,
+              );
+              skipped++;
+              continue;
+            }
+            throw error;
+          }
         }
       }
 

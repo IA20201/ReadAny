@@ -3,7 +3,7 @@
  * Supports WebDAV, S3, and LAN sync through ISyncBackend interface.
  */
 
-import { clearVectorizationFlagsWithoutLocalChunks, getDB } from "../db/database";
+import { clearVectorizationFlagsWithoutLocalChunks, getDB, getDeviceId } from "../db/database";
 import { getPlatformService } from "../services/platform";
 import { getSyncAdapter } from "./sync-adapter";
 import type { ISyncBackend } from "./sync-backend";
@@ -147,6 +147,9 @@ async function executeUpload(
     try {
       await snapshotDb.execute(
         "UPDATE books SET is_vectorized = 0, vectorize_progress = 0 WHERE is_vectorized != 0 OR vectorize_progress != 0",
+      );
+      await snapshotDb.execute(
+        "DELETE FROM sync_metadata WHERE key IN ('device_id', 'last_sync_at', 'last_remote_modified_at', 'last_sync_db_hash')",
       );
     } finally {
       await snapshotDb.close();
@@ -298,6 +301,7 @@ async function executeDownload(
     await clearVectorizationFlagsWithoutLocalChunks();
     const db = await getDB();
     await db.select<unknown[]>("SELECT COUNT(*) as c FROM books", []);
+    await getDeviceId();
 
     // 8. Update sync metadata (reuse manifest from caller, batch write)
     const dbHash = await adapter.hashFile(dbPath);

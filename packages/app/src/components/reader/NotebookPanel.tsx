@@ -5,7 +5,8 @@ import { useAnnotationStore } from "@/stores/annotation-store";
 import { useLibraryStore } from "@/stores/library-store";
 import { useNotebookStore } from "@/stores/notebook-store";
 import { type ExportFormat, annotationExporter } from "@readany/core/export";
-import type { Highlight, HighlightColor, Note } from "@readany/core/types";
+import { createSelectionNoteMutation } from "@readany/core/reader";
+import type { Highlight, Note } from "@readany/core/types";
 import { HIGHLIGHT_COLOR_HEX } from "@readany/core/types";
 import { cn } from "@readany/core/utils";
 import {
@@ -84,31 +85,38 @@ export function NotebookPanel({
 
   const handleSave = () => {
     if (pendingNote) {
-      // Create new highlight with note
-      const highlightId = crypto.randomUUID();
-      const color = "yellow" as HighlightColor;
-      addHighlight({
-        id: highlightId,
+      const mutation = createSelectionNoteMutation({
         bookId,
         cfi: pendingNote.cfi,
         text: pendingNote.text,
-        color,
-        note: noteContent.trim() || undefined,
+        note: noteContent,
         chapterTitle: pendingNote.chapterTitle,
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
+        defaultColor: "yellow",
       });
-      // Add annotation to the viewer (with note for bubble style)
-      onAddAnnotation?.(pendingNote.cfi, color, noteContent.trim() || undefined);
+      if (mutation.kind === "create") {
+        addHighlight(mutation.highlight);
+        onAddAnnotation?.(pendingNote.cfi, mutation.highlight.color, mutation.highlight.note);
+      }
       // Clear draft
       clearDraft(pendingNote.text);
       clearPending();
     } else if (editingHighlight) {
-      // Update existing highlight's note
-      updateHighlight(editingHighlight.id, {
-        note: noteContent.trim() || undefined,
-        updatedAt: Date.now(),
+      const mutation = createSelectionNoteMutation({
+        bookId,
+        cfi: editingHighlight.cfi,
+        text: editingHighlight.text,
+        note: noteContent,
+        chapterTitle: editingHighlight.chapterTitle,
+        existingHighlight: editingHighlight,
       });
+      if (mutation.kind === "update") {
+        updateHighlight(mutation.id, mutation.updates);
+        onAddAnnotation?.(
+          editingHighlight.cfi,
+          editingHighlight.color,
+          mutation.updates.note,
+        );
+      }
       clearPending();
     }
     setNoteContent("");
@@ -121,11 +129,8 @@ export function NotebookPanel({
 
   const handleDeleteNote = () => {
     if (editingHighlight) {
-      // Delete the entire highlight (note + highlight)
-      removeHighlight(editingHighlight.id);
-      if (editingHighlight.cfi) {
-        onDeleteAnnotation?.(editingHighlight.cfi);
-      }
+      updateHighlight(editingHighlight.id, { note: undefined });
+      onAddAnnotation?.(editingHighlight.cfi, editingHighlight.color, undefined);
       clearPending();
       setNoteContent("");
     }
@@ -143,11 +148,8 @@ export function NotebookPanel({
   };
 
   const handleDeleteNoteOnly = (highlight: Highlight) => {
-    // Delete the entire highlight (note + highlight)
-    removeHighlight(highlight.id);
-    if (highlight.cfi) {
-      onDeleteAnnotation?.(highlight.cfi);
-    }
+    updateHighlight(highlight.id, { note: undefined });
+    onAddAnnotation?.(highlight.cfi, highlight.color, undefined);
     // Clear editing state if we're editing this highlight
     if (editingHighlight?.id === highlight.id) {
       clearPending();

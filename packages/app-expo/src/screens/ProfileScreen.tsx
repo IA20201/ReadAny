@@ -32,6 +32,7 @@ import {
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { readingStatsService } from "@readany/core/stats";
+import { eventBus } from "@readany/core/utils/event-bus";
 import Constants from "expo-constants";
 import type { DailyStats, OverallStats } from "@readany/core/stats";
 /**
@@ -39,7 +40,7 @@ import type { DailyStats, OverallStats } from "@readany/core/stats";
  * Features: reading stats cards, heatmap, settings menu (general/skills/about),
  * complete menu items including Skills and VectorModel.
  */
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   ActivityIndicator,
@@ -295,6 +296,12 @@ export function ProfileScreen() {
       void loadStats();
     }, [loadStats]),
   );
+
+  useEffect(() => {
+    return eventBus.on("sync:completed", () => {
+      void loadStats();
+    });
+  }, [loadStats]);
 
   const liveDailyStats = useMemo(
     () => mergeCurrentSessionIntoDailyStats(dailyStats, currentSession),

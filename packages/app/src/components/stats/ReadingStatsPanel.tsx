@@ -1,5 +1,9 @@
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { readingStatsService } from "@/lib/stats/reading-stats";
+import {
+  mergeCurrentSessionIntoDailyStats,
+  mergeCurrentSessionIntoOverallStats,
+} from "@readany/core/stats";
 import type {
   DailyStats,
   OverallStats,
@@ -8,6 +12,7 @@ import type {
 } from "@/lib/stats/reading-stats";
 import { useAppStore } from "@/stores/app-store";
 import { useReadingSessionStore } from "@/stores/reading-session-store";
+import { eventBus } from "@readany/core/utils/event-bus";
 import { BookOpen, ChevronLeft, ChevronRight, Clock, Flame, TrendingUp } from "lucide-react";
 /**
  * ReadingStatsPanel — displays reading statistics with charts, heatmap and book list
@@ -53,6 +58,7 @@ export function ReadingStatsPanel() {
   const { t, i18n } = useTranslation();
   const activeTabId = useAppStore((s) => s.activeTabId);
   const saveCurrentSession = useReadingSessionStore((s) => s.saveCurrentSession);
+  const currentSession = useReadingSessionStore((s) => s.currentSession);
   const [dailyStats, setDailyStats] = useState<DailyStats[]>([]);
   const [overall, setOverall] = useState<OverallStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -67,44 +73,7 @@ export function ReadingStatsPanel() {
 
   const lang = i18n.language;
 
-  useEffect(() => {
-    if (activeTabId === "stats") {
-      saveCurrentSession().then(() => loadStats());
-    }
-  }, [activeTabId]);
-
-  // Load chart data when mode or date changes
-  useEffect(() => {
-    if (activeTabId === "stats" && !loading) {
-      loadChartData();
-    }
-  }, [chartMode, chartDate, activeTabId]);
-
-  const loadStats = async () => {
-    setLoading(true);
-    try {
-      const endDate = new Date();
-      const startDate = new Date();
-      startDate.setDate(startDate.getDate() - 365);
-
-      const [daily, overallStats, trend] = await Promise.all([
-        readingStatsService.getDailyStats(startDate, endDate),
-        readingStatsService.getOverallStats(),
-        readingStatsService.getRecentTrend(30),
-      ]);
-
-      setDailyStats(daily);
-      setOverall(overallStats);
-      setTrendData(trend);
-    } catch {
-      // Stats may fail if DB isn't initialized
-    }
-    setLoading(false);
-    // Load chart data after base stats are ready
-    loadChartData();
-  };
-
-  const loadChartData = async () => {
+  const loadChartData = useCallback(async () => {
     try {
       let barData: DailyStats[];
       let periodStart: Date;
@@ -129,7 +98,51 @@ export function ReadingStatsPanel() {
     } catch {
       // ignore
     }
-  };
+  }, [chartDate, chartMode]);
+
+  const loadStats = useCallback(async () => {
+    setLoading(true);
+    try {
+      const endDate = new Date();
+      const startDate = new Date();
+      startDate.setDate(startDate.getDate() - 365);
+
+      const [daily, overallStats, trend] = await Promise.all([
+        readingStatsService.getDailyStats(startDate, endDate),
+        readingStatsService.getOverallStats(),
+        readingStatsService.getRecentTrend(30),
+      ]);
+
+      setDailyStats(daily);
+      setOverall(overallStats);
+      setTrendData(trend);
+    } catch {
+      // Stats may fail if DB isn't initialized
+    }
+    setLoading(false);
+    // Load chart data after base stats are ready
+    void loadChartData();
+  }, [loadChartData]);
+
+  useEffect(() => {
+    if (activeTabId === "stats") {
+      void saveCurrentSession().then(() => loadStats());
+    }
+  }, [activeTabId, saveCurrentSession, loadStats]);
+
+  // Load chart data when mode or date changes
+  useEffect(() => {
+    if (activeTabId === "stats" && !loading) {
+      void loadChartData();
+    }
+  }, [chartMode, chartDate, activeTabId, loading, loadChartData]);
+
+  useEffect(() => {
+    return eventBus.on("sync:completed", () => {
+      if (activeTabId !== "stats") return;
+      void loadStats();
+    });
+  }, [activeTabId, loadStats]);
 
   // Chart date navigation
   const navigatePeriod = (direction: -1 | 1) => {
@@ -192,6 +205,14 @@ export function ReadingStatsPanel() {
     () => trendData.map((p) => ({ date: p.date, value: p.dailyTime })),
     [trendData],
   );
+  const liveDailyStats = useMemo(
+    () => mergeCurrentSessionIntoDailyStats(dailyStats, currentSession),
+    [dailyStats, currentSession],
+  );
+  const liveOverall = useMemo(
+    () => mergeCurrentSessionIntoOverallStats(overall, dailyStats, currentSession),
+    [overall, dailyStats, currentSession],
+  );
 
   if (loading) {
     return (
@@ -210,30 +231,30 @@ export function ReadingStatsPanel() {
       </div>
 
       {/* Stat Cards Grid */}
-      {overall && (
+      {liveOverall && (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           <StatCard
             icon={<BookOpen className="h-4 w-4" />}
             title={t("stats.booksRead")}
-            value={String(overall.totalBooks)}
+            value={String(liveOverall.totalBooks)}
             description={t("stats.booksReadDesc")}
           />
           <StatCard
             icon={<Clock className="h-4 w-4" />}
             title={t("stats.totalTime")}
-            value={formatTime(overall.totalReadingTime)}
+            value={formatTime(liveOverall.totalReadingTime)}
             description={t("stats.totalTimeDesc")}
           />
           <StatCard
             icon={<Flame className="h-4 w-4" />}
             title={t("stats.currentStreak")}
-            value={`${overall.currentStreak}d`}
+            value={`${liveOverall.currentStreak}d`}
             description={t("stats.currentStreakDesc")}
           />
           <StatCard
             icon={<TrendingUp className="h-4 w-4" />}
             title={t("stats.avgDaily")}
-            value={formatTime(overall.avgDailyTime)}
+            value={formatTime(liveOverall.avgDailyTime)}
             description={t("stats.avgDailyDesc")}
           />
         </div>
@@ -327,7 +348,7 @@ export function ReadingStatsPanel() {
         {/* Chart content */}
         {chartView === "heatmap" ? (
           <>
-            <HeatmapChart dailyStats={dailyStats} lang={lang} />
+            <HeatmapChart dailyStats={liveDailyStats} lang={lang} />
             <HeatmapLegend />
           </>
         ) : (
@@ -357,14 +378,14 @@ export function ReadingStatsPanel() {
       </div>
 
       {/* Longest Streak */}
-      {overall && overall.longestStreak > 0 && (
+      {liveOverall && liveOverall.longestStreak > 0 && (
         <div className="flex items-center gap-3 rounded-xl border border-border p-4">
           <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-orange-500/10">
             <Flame className="h-5 w-5 text-orange-500" />
           </div>
           <div>
             <p className="text-sm font-semibold text-foreground">
-              {t("stats.longestStreak", { days: overall.longestStreak })}
+              {t("stats.longestStreak", { days: liveOverall.longestStreak })}
             </p>
             <p className="text-xs text-muted-foreground">{t("stats.longestStreakDesc")}</p>
           </div>

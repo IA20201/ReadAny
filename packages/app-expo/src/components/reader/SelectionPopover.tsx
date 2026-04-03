@@ -19,7 +19,7 @@ import * as Speech from "expo-speech";
  * Provides highlight (5 colors), note, copy, translate, AI chat, TTS, and delete actions.
  * Matches app-mobile styling with icon buttons and expandable color picker.
  */
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Dimensions,
@@ -78,6 +78,10 @@ export function SelectionPopover({
   const [showColors, setShowColors] = useState(!!existingHighlight);
   const [noteContent, setNoteContent] = useState(existingHighlight?.note || "");
 
+  useEffect(() => {
+    setNoteContent(existingHighlight?.note || "");
+  }, [existingHighlight?.id, existingHighlight?.note, selection.cfi]);
+
   const buttonCount =
     5 + (onNote ? 1 : 0) + (onTranslate ? 1 : 0) + (existingHighlight && onRemoveHighlight ? 1 : 0);
   const colorRowHeight = showColors ? 40 : 0;
@@ -131,8 +135,8 @@ export function SelectionPopover({
   }, []);
 
   const handleSaveNote = useCallback(() => {
-    if (onNote && noteContent.trim()) {
-      onNote(noteContent.trim(), selection.cfi);
+    if (onNote) {
+      onNote(noteContent, selection.cfi);
     }
     setShowNoteModal(false);
     onDismiss();

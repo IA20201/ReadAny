@@ -1,10 +1,10 @@
 import { ConfigGuideDialog, type ConfigGuideType } from "@/components/shared/ConfigGuideDialog";
 import { useResolvedSrc } from "@/hooks/use-resolved-src";
+import { openDesktopBook } from "@/lib/library/open-book";
 /**
  * BookCard — Readest-inspired book card with realistic cover rendering
  */
 import { triggerVectorizeBook } from "@/lib/rag/vectorize-trigger";
-import { useAppStore } from "@/stores/app-store";
 import { useLibraryStore } from "@/stores/library-store";
 import { useVectorModelStore } from "@/stores/vector-model-store";
 import type { Book, VectorizeProgress } from "@readany/core/types";
@@ -27,7 +27,6 @@ interface BookCardProps {
 
 export const BookCard = memo(function BookCard({ book }: BookCardProps) {
   const { t } = useTranslation();
-  const addTab = useAppStore((s) => s.addTab);
   const removeBook = useLibraryStore((s) => s.removeBook);
   const allTags = useLibraryStore((s) => s.allTags);
   const addTagToBook = useLibraryStore((s) => s.addTagToBook);
@@ -48,8 +47,8 @@ export const BookCard = memo(function BookCard({ book }: BookCardProps) {
   const progressPct = Math.round(book.progress * 100);
   const coverSrc = useResolvedSrc(book.meta.coverUrl);
 
-  const handleOpen = () => {
-    addTab({ id: `reader-${book.id}`, type: "reader", title: book.meta.title, bookId: book.id });
+  const handleOpen = async () => {
+    await openDesktopBook({ book, t });
   };
 
   const handleDelete = useCallback(
@@ -180,6 +179,28 @@ export const BookCard = memo(function BookCard({ book }: BookCardProps) {
           </div>
         )}
 
+        {/* Remote status overlay (on-demand download) */}
+        {book.syncStatus === "remote" && !vectorizing && (
+          <div
+            className="absolute inset-0 z-15 flex items-center justify-center rounded"
+            style={{ backgroundColor: "rgba(59, 130, 246, 0.6)" }}
+          >
+            <div className="rounded bg-black/40 px-2 py-1 text-xs font-medium text-white">
+              {t("home.remote", "需下载")}
+            </div>
+          </div>
+        )}
+
+        {/* Downloading status overlay */}
+        {book.syncStatus === "downloading" && !vectorizing && (
+          <div className="absolute inset-0 z-15 flex flex-col items-center justify-center rounded bg-black/50">
+            <Loader2 className="h-6 w-6 animate-spin text-white" />
+            <span className="mt-1.5 text-sm font-medium text-white">
+              {t("home.downloading", "下载中")}
+            </span>
+          </div>
+        )}
+
         {/* Vectorized badge — top-left corner */}
         {book.isVectorized && !vectorizing && (
           <div className="absolute left-1 top-1 z-10 flex items-center gap-0.5 rounded bg-green-600/80 px-1 py-0.5 backdrop-blur-sm">
@@ -231,11 +252,11 @@ export const BookCard = memo(function BookCard({ book }: BookCardProps) {
               id="tour-vectorize"
               type="button"
               className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs transition-colors ${
-                vectorizing
+                vectorizing || book.syncStatus !== "local"
                   ? "text-muted-foreground opacity-50 cursor-not-allowed"
                   : "text-foreground hover:bg-muted"
               }`}
-              disabled={vectorizing}
+              disabled={vectorizing || book.syncStatus !== "local"}
               onClick={handleVectorize}
             >
               {book.isVectorized ? (
@@ -246,7 +267,9 @@ export const BookCard = memo(function BookCard({ book }: BookCardProps) {
               ) : (
                 <>
                   <Database className="h-3.5 w-3.5" />
-                  {t("home.vec_vectorize")}
+                  {book.syncStatus === "local"
+                    ? t("home.vec_vectorize")
+                    : t("home.remote", "需下载")}
                 </>
               )}
             </button>

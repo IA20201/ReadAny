@@ -2,8 +2,9 @@ import { useResolvedSrc } from "@/hooks/use-resolved-src";
 /**
  * BookList — list view for books
  */
-import { useAppStore } from "@/stores/app-store";
+import { openDesktopBook } from "@/lib/library/open-book";
 import type { Book } from "@readany/core/types";
+import { Loader2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 interface BookListProps {
@@ -19,6 +20,8 @@ function BookListItem({ book, onOpen }: BookListItemProps) {
   const { t } = useTranslation();
   const coverSrc = useResolvedSrc(book.meta.coverUrl);
   const pct = Math.round(book.progress * 100);
+  const isRemote = book.syncStatus === "remote";
+  const isDownloading = book.syncStatus === "downloading";
 
   return (
     <div
@@ -41,7 +44,16 @@ function BookListItem({ book, onOpen }: BookListItemProps) {
         )}
       </div>
       <div>
-        {pct === 0 ? (
+        {isDownloading ? (
+          <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
+            <Loader2 className="h-3 w-3 animate-spin" />
+            {t("home.downloading", "下载中")}
+          </span>
+        ) : isRemote ? (
+          <span className="rounded-full bg-sky-500/12 px-2 py-0.5 text-[10px] font-medium text-sky-700">
+            {t("home.remote", "需下载")}
+          </span>
+        ) : pct === 0 ? (
           <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
             {t("home.new")}
           </span>
@@ -58,10 +70,10 @@ function BookListItem({ book, onOpen }: BookListItemProps) {
 }
 
 export function BookList({ books }: BookListProps) {
-  const addTab = useAppStore((s) => s.addTab);
+  const { t } = useTranslation();
 
-  const handleOpen = (book: Book) => {
-    addTab({ id: `reader-${book.id}`, type: "reader", title: book.meta.title, bookId: book.id });
+  const handleOpen = async (book: Book) => {
+    await openDesktopBook({ book, t });
   };
 
   return (

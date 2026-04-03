@@ -3,7 +3,12 @@
  * Uses last-write-wins merge strategy based on updated_at timestamps.
  */
 
-import { ensureNoTransaction, getDB } from "../db/database";
+import {
+  cleanupOrphanedSyncRows,
+  ensureNoTransaction,
+  getDB,
+  getDeviceId as getLocalDeviceId,
+} from "../db/database";
 import type { ISyncBackend } from "./sync-backend";
 import {
   REMOTE_DATA,
@@ -74,23 +79,14 @@ const SYNC_TABLES: SyncTableConfig[] = [
 /** Max age for tombstone records (30 days) */
 const TOMBSTONE_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 
+function isForeignKeyConstraintError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return message.includes("FOREIGN KEY constraint failed") || message.includes("(code: 787)");
+}
+
 /** Get or create device ID */
 export async function getDeviceId(): Promise<string> {
-  const db = await getDB();
-  const rows = await db.select<{ value: string }>("SELECT value FROM sync_metadata WHERE key = ?", [
-    SYNC_META_KEYS.DEVICE_ID,
-  ]);
-
-  if (rows[0]?.value) {
-    return rows[0].value;
-  }
-
-  const deviceId = `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
-  await db.execute("INSERT OR REPLACE INTO sync_metadata (key, value) VALUES (?, ?)", [
-    SYNC_META_KEYS.DEVICE_ID,
-    deviceId,
-  ]);
-  return deviceId;
+  return getLocalDeviceId();
 }
 
 /** Get last sync timestamp for this device */
@@ -115,6 +111,7 @@ export async function setLastSyncTimestamp(timestamp: number): Promise<void> {
 export async function collectLocalChanges(since: number): Promise<SyncDelta> {
   await ensureNoTransaction();
   const db = await getDB();
+  await cleanupOrphanedSyncRows(db);
   const deviceId = await getDeviceId();
   const toTimestamp = Date.now();
 
@@ -171,6 +168,7 @@ export async function applyRemoteDelta(delta: SyncDelta): Promise<{
 }> {
   await ensureNoTransaction();
   const db = await getDB();
+  await cleanupOrphanedSyncRows(db);
   let applied = 0;
   let conflicts = 0;
 
@@ -198,14 +196,36 @@ export async function applyRemoteDelta(delta: SyncDelta): Promise<{
       if (existing.length > 0) {
         const localTimestamp = existing[0][timestampCol] as number;
         if (remoteTimestamp > localTimestamp) {
-          await upsertRecord(db, table, record, pk);
-          applied++;
+          try {
+            await upsertRecord(db, table, record, pk);
+            applied++;
+          } catch (error) {
+            if (isForeignKeyConstraintError(error)) {
+              console.warn(
+                `[IncrementalSync] Skipping orphaned ${table} record ${String(pkValue)}: ${error instanceof Error ? error.message : String(error)}`,
+              );
+              conflicts++;
+              continue;
+            }
+            throw error;
+          }
         } else {
           conflicts++;
         }
       } else {
-        await upsertRecord(db, table, record, pk);
-        applied++;
+        try {
+          await upsertRecord(db, table, record, pk);
+          applied++;
+        } catch (error) {
+          if (isForeignKeyConstraintError(error)) {
+            console.warn(
+              `[IncrementalSync] Skipping orphaned ${table} record ${String(pkValue)}: ${error instanceof Error ? error.message : String(error)}`,
+            );
+            conflicts++;
+            continue;
+          }
+          throw error;
+        }
       }
     }
 

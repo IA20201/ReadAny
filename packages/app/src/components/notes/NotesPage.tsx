@@ -3,6 +3,7 @@ import { Input } from "@/components/ui/input";
 import { MarkdownEditor } from "@/components/ui/markdown-editor";
 import { useResolvedSrc } from "@/hooks/use-resolved-src";
 import type { HighlightWithBook } from "@/lib/db/database";
+import { openDesktopBook } from "@/lib/library/open-book";
 import { useAnnotationStore } from "@/stores/annotation-store";
 import { useAppStore } from "@/stores/app-store";
 import { useLibraryStore } from "@/stores/library-store";
@@ -169,22 +170,30 @@ export function NotesPage() {
     return chapters;
   }, [currentList, t]);
 
-  const handleOpenBook = (bookId: string, title: string, cfi?: string) => {
-    const tabId = `reader-${bookId}`;
-    addTab({ id: tabId, type: "reader", title, bookId, initialCfi: cfi });
-    setActiveTab(tabId);
+  const handleOpenBook = async (bookId: string, title: string, cfi?: string) => {
+    const book = books.find((item) => item.id === bookId);
+    if (!book) {
+      const tabId = `reader-${bookId}`;
+      addTab({ id: tabId, type: "reader", title, bookId, initialCfi: cfi });
+      setActiveTab(tabId);
+      return;
+    }
+
+    await openDesktopBook({
+      book,
+      t,
+      initialCfi: cfi,
+    });
   };
 
   // Delete only the note text, keep the highlight
   const handleDeleteNote = (highlight: HighlightWithBook) => {
     updateHighlight(highlight.id, { note: undefined });
-    loadStats();
   };
 
   // Delete the entire highlight record
   const handleDeleteHighlight = (highlight: HighlightWithBook) => {
     removeHighlight(highlight.id);
-    loadStats();
   };
 
   const startEditNote = (highlight: HighlightWithBook) => {

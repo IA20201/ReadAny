@@ -37,6 +37,7 @@ import { type ThemeColors, fontSize, fontWeight, radius, useColors } from "@/sty
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { readingContextService } from "@readany/core/ai/reading-context-service";
 import { useReadingSession } from "@readany/core/hooks/use-reading-session";
+import { createSelectionNoteMutation } from "@readany/core/reader";
 import { getPlatformService } from "@readany/core/services";
 import type { TOCItem } from "@readany/core/types";
 import { eventBus } from "@readany/core/utils/event-bus";
@@ -253,7 +254,7 @@ export function ReaderScreen({ route, navigation }: Props) {
   const [noteViewHighlight, setNoteViewHighlight] = useState<{
     id: string;
     text: string;
-    note: string;
+    note?: string;
     cfi: string;
     color: string;
   } | null>(null);
@@ -264,7 +265,7 @@ export function ReaderScreen({ route, navigation }: Props) {
     cfi: string;
     position: { x: number; y: number; selectionTop: number; selectionBottom: number };
   } | null>(null);
-  const noteTooltipTimer = useRef<NodeJS.Timeout | null>(null);
+  const noteTooltipTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const assetLoadedRef = useRef(false);
   const pendingBookmarkRef = useRef(false);
 
@@ -292,8 +293,8 @@ export function ReaderScreen({ route, navigation }: Props) {
   const settingFontTheme = readSettings.fontTheme;
   const settingViewMode = readSettings.viewMode;
 
-  const controlsTimer = useRef<NodeJS.Timeout | null>(null);
-  const searchDebounceRef = useRef<NodeJS.Timeout | null>(null);
+  const controlsTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const TOOLBAR_HIDE_OFFSET = 200;
   const toolbarAnim = useRef(new Animated.Value(TOOLBAR_HIDE_OFFSET)).current;
   const lastCfiRef = useRef<string>("");
@@ -315,6 +316,7 @@ export function ReaderScreen({ route, navigation }: Props) {
   ).current;
   const {
     addHighlight,
+    updateHighlight,
     removeHighlight,
     loadAnnotations,
     highlights,
@@ -1000,6 +1002,9 @@ export function ReaderScreen({ route, navigation }: Props) {
   const percent = Math.round(progress * 100);
 
   const isPanelOpen = showTOC || showSettings || showSearch || showNotebook || showTranslation;
+  const existingSelectionHighlight = selection
+    ? highlights.find((highlight) => highlight.cfi === selection.cfi) ?? null
+    : null;
 
   return (
     <View style={[s.container, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
@@ -1060,30 +1065,45 @@ export function ReaderScreen({ route, navigation }: Props) {
             });
           }}
           onNote={(text, cfi) => {
-            const highlight = {
-              id: `hl-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+            const mutation = createSelectionNoteMutation({
               bookId,
               cfi,
               text: selection.text,
-              color: "yellow" as const,
               note: text,
               chapterTitle: currentChapter,
-              createdAt: Date.now(),
-              updatedAt: Date.now(),
-            };
-            addHighlight(highlight);
-            bridge.addAnnotation({ value: cfi, type: "highlight", color: "yellow", note: text });
+              existingHighlight: existingSelectionHighlight,
+              defaultColor: "yellow",
+            });
+
+            if (mutation.kind === "create") {
+              addHighlight(mutation.highlight);
+              bridge.addAnnotation({
+                value: cfi,
+                type: "highlight",
+                color: mutation.highlight.color,
+                note: mutation.highlight.note,
+              });
+              return;
+            }
+
+            updateHighlight(mutation.id, mutation.updates);
+            bridge.addAnnotation({
+              value: cfi,
+              type: "highlight",
+              color: existingSelectionHighlight?.color || "yellow",
+              note: mutation.updates.note,
+            });
           }}
           onTranslate={(text) => {
             setShowTranslation(true);
             setTranslationText(text);
           }}
           existingHighlight={
-            highlights.find((h) => h.cfi === selection.cfi)
+            existingSelectionHighlight
               ? {
-                  id: highlights.find((h) => h.cfi === selection.cfi)!.id,
-                  color: highlights.find((h) => h.cfi === selection.cfi)!.color,
-                  note: highlights.find((h) => h.cfi === selection.cfi)!.note,
+                  id: existingSelectionHighlight.id,
+                  color: existingSelectionHighlight.color,
+                  note: existingSelectionHighlight.note,
                 }
               : null
           }
@@ -1763,7 +1783,7 @@ export function ReaderScreen({ route, navigation }: Props) {
                         style={s.noteViewCancelBtn}
                         onPress={() => {
                           setNoteViewEditing(false);
-                          setNoteViewContent(noteViewHighlight.note);
+                          setNoteViewContent(noteViewHighlight.note || "");
                         }}
                       >
                         <XIcon size={14} color={colors.mutedForeground} />
@@ -1772,21 +1792,32 @@ export function ReaderScreen({ route, navigation }: Props) {
                       <TouchableOpacity
                         style={s.noteViewSaveBtn}
                         onPress={() => {
-                          if (noteViewContent.trim()) {
-                            const { updateHighlight } = useAnnotationStore.getState();
-                            updateHighlight(noteViewHighlight.id, { note: noteViewContent.trim() });
-                            bridge.removeAnnotation({ value: noteViewHighlight.cfi });
-                            bridge.addAnnotation({
-                              value: noteViewHighlight.cfi,
-                              type: "highlight",
-                              color: noteViewHighlight.color,
-                              note: noteViewContent.trim(),
-                            });
-                            setNoteViewHighlight({
-                              ...noteViewHighlight,
-                              note: noteViewContent.trim(),
-                            });
+                          const mutation = createSelectionNoteMutation({
+                            bookId,
+                            cfi: noteViewHighlight.cfi,
+                            text: noteViewHighlight.text,
+                            note: noteViewContent,
+                            existingHighlight: noteViewHighlight,
+                          });
+
+                          if (mutation.kind !== "update") {
+                            setNoteViewEditing(false);
+                            return;
                           }
+
+                          const { updateHighlight } = useAnnotationStore.getState();
+                          updateHighlight(mutation.id, mutation.updates);
+                          bridge.removeAnnotation({ value: noteViewHighlight.cfi });
+                          bridge.addAnnotation({
+                            value: noteViewHighlight.cfi,
+                            type: "highlight",
+                            color: noteViewHighlight.color,
+                            note: mutation.updates.note,
+                          });
+                          setNoteViewHighlight({
+                            ...noteViewHighlight,
+                            note: mutation.updates.note,
+                          });
                           setNoteViewEditing(false);
                         }}
                       >
@@ -1798,13 +1829,13 @@ export function ReaderScreen({ route, navigation }: Props) {
                 ) : (
                   <>
                     <ScrollView style={s.noteViewBody} showsVerticalScrollIndicator={false}>
-                      <MarkdownRenderer content={noteViewHighlight.note} />
+                      <MarkdownRenderer content={noteViewHighlight.note || ""} />
                     </ScrollView>
                     <View style={s.noteViewActions}>
                       <TouchableOpacity
                         style={s.noteViewEditBtn}
                         onPress={() => {
-                          setNoteViewContent(noteViewHighlight.note);
+                          setNoteViewContent(noteViewHighlight.note || "");
                           setNoteViewEditing(true);
                         }}
                       >

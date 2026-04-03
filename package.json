@@ -5,6 +5,8 @@
   "scripts": {
     "dev": "pnpm --filter app dev",
     "build": "pnpm --filter app build",
+    "test": "pnpm --filter @readany/core test",
+    "test:core": "pnpm --filter @readany/core test",
     "tauri": "pnpm --filter app tauri",
     "expo:start": "pnpm --filter @readany/app-expo start",
     "expo:ios": "pnpm --filter @readany/app-expo ios",

@@ -21,3 +21,7 @@ export type { ProgressData } from "./progress";
 // Session detection
 export { createSessionDetector } from "./session-detector";
 export type { SessionEvent, SessionDetector } from "./session-detector";
+
+// Annotation mutations
+export { createSelectionNoteMutation } from "./selection-note";
+export type { SelectionNoteMutation, SelectionNoteMutationInput } from "./selection-note";

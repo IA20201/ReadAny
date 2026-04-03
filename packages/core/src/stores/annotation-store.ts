@@ -6,6 +6,7 @@ import * as db from "../db/database";
  * Connected to SQLite for persistence via core db module
  */
 import type { Bookmark, Highlight, HighlightColor, Note } from "../types";
+import { eventBus } from "../utils/event-bus";
 
 export interface HighlightStats {
   totalHighlights: number;
@@ -44,6 +45,21 @@ export interface AnnotationState {
   loadStats: () => Promise<void>;
 }
 
+async function refreshDerivedAnnotationState(
+  set: (partial: Partial<AnnotationState>) => void,
+  limit = 500,
+): Promise<void> {
+  try {
+    const [highlightsWithBooks, stats] = await Promise.all([
+      db.getAllHighlightsWithBooks(limit),
+      db.getHighlightStats(),
+    ]);
+    set({ highlightsWithBooks, stats });
+  } catch (err) {
+    console.error("Failed to refresh derived annotation state:", err);
+  }
+}
+
 export const useAnnotationStore = create<AnnotationState>((set) => ({
   highlights: [],
   highlightsWithBooks: [],
@@ -54,7 +70,16 @@ export const useAnnotationStore = create<AnnotationState>((set) => ({
   setHighlights: (highlights) => set({ highlights }),
   addHighlight: (highlight) => {
     set((state) => ({ highlights: [...state.highlights, highlight] }));
-    db.insertHighlight(highlight).catch((err) => console.error("Failed to insert highlight:", err));
+    db.insertHighlight(highlight)
+      .then(async () => {
+        eventBus.emit("annotation:added", {
+          bookId: highlight.bookId,
+          annotationId: highlight.id,
+          type: "highlight",
+        });
+        await refreshDerivedAnnotationState(set);
+      })
+      .catch((err) => console.error("Failed to insert highlight:", err));
   },
   updateHighlight: (id, updates) => {
     set((state) => ({
@@ -63,26 +88,38 @@ export const useAnnotationStore = create<AnnotationState>((set) => ({
         h.id === id ? { ...h, ...updates } : h,
       ),
     }));
-    db.updateHighlight(id, updates).catch((err) =>
-      console.error("Failed to update highlight:", err),
-    );
+    db.updateHighlight(id, updates)
+      .then(async () => {
+        await refreshDerivedAnnotationState(set);
+      })
+      .catch((err) => console.error("Failed to update highlight:", err));
   },
   removeHighlight: (id) => {
     set((state) => ({
       highlights: state.highlights.filter((h) => h.id !== id),
       highlightsWithBooks: state.highlightsWithBooks.filter((h) => h.id !== id),
     }));
-    db.deleteHighlight(id).catch((err) => console.error("Failed to delete highlight:", err));
+    db.deleteHighlight(id)
+      .then(async () => {
+        eventBus.emit("annotation:removed", { id, type: "highlight" });
+        await refreshDerivedAnnotationState(set);
+      })
+      .catch((err) => console.error("Failed to delete highlight:", err));
   },
   changeHighlightColor: (id, color) => {
     set((state) => ({
       highlights: state.highlights.map((h) =>
         h.id === id ? { ...h, color, updatedAt: Date.now() } : h,
       ),
+      highlightsWithBooks: state.highlightsWithBooks.map((h) =>
+        h.id === id ? { ...h, color, updatedAt: Date.now() } : h,
+      ),
     }));
-    db.updateHighlight(id, { color }).catch((err) =>
-      console.error("Failed to update highlight color:", err),
-    );
+    db.updateHighlight(id, { color })
+      .then(async () => {
+        await refreshDerivedAnnotationState(set);
+      })
+      .catch((err) => console.error("Failed to update highlight color:", err));
   },
 
   setNotes: (notes) => set({ notes }),
