@@ -17,7 +17,12 @@ import {
 } from "@/styles/theme";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import { getPlatformService } from "@readany/core/services";
-import { readingStatsService } from "@readany/core/stats";
+import {
+  mergeCurrentSessionIntoDailyStats,
+  mergeCurrentSessionIntoOverallStats,
+  readingStatsService,
+} from "@readany/core/stats";
+import { eventBus } from "@readany/core/utils/event-bus";
 import type { DailyStats, OverallStats, PeriodBookStats, TrendPoint } from "@readany/core/stats";
 /**
  * StatsScreen — Full reading stats page matching Tauri mobile MobileStatsPage.
@@ -692,6 +697,7 @@ export default function StatsScreen() {
   const { t, i18n } = useTranslation();
   const nav = useNavigation();
   const saveCurrentSession = useReadingSessionStore((s) => s.saveCurrentSession);
+  const currentSession = useReadingSessionStore((s) => s.currentSession);
 
   const [loading, setLoading] = useState(true);
   const [overallStats, setOverallStats] = useState<OverallStats | null>(null);
@@ -734,6 +740,12 @@ export default function StatsScreen() {
       void loadData();
     }, [loadData]),
   );
+
+  useEffect(() => {
+    return eventBus.on("sync:completed", () => {
+      void loadData();
+    });
+  }, [loadData]);
 
   // Resolve cover URLs from relative paths to absolute paths
   useEffect(() => {
@@ -858,10 +870,19 @@ export default function StatsScreen() {
     }));
   }, [chartData, chartMode, i18n.language]);
 
-  const booksRead = overallStats?.totalBooks ?? 0;
-  const totalTime = overallStats ? formatTime(overallStats.totalReadingTime) : "0m";
-  const streak = overallStats?.currentStreak ?? 0;
-  const avgDaily = overallStats ? formatTime(overallStats.avgDailyTime) : "0m";
+  const liveHeatmapData = useMemo(
+    () => mergeCurrentSessionIntoDailyStats(heatmapData, currentSession),
+    [heatmapData, currentSession],
+  );
+  const liveOverallStats = useMemo(
+    () => mergeCurrentSessionIntoOverallStats(overallStats, heatmapData, currentSession),
+    [overallStats, heatmapData, currentSession],
+  );
+
+  const booksRead = liveOverallStats?.totalBooks ?? 0;
+  const totalTime = liveOverallStats ? formatTime(liveOverallStats.totalReadingTime) : "0m";
+  const streak = liveOverallStats?.currentStreak ?? 0;
+  const avgDaily = liveOverallStats ? formatTime(liveOverallStats.avgDailyTime) : "0m";
 
   if (loading) {
     return (
@@ -972,7 +993,7 @@ export default function StatsScreen() {
             {/* Chart content */}
             {chartView === "heatmap" ? (
               <>
-                <FullHeatmap dailyStats={heatmapData} />
+                <FullHeatmap dailyStats={liveHeatmapData} />
                 <View style={s.heatmapLegend}>
                   <Text style={s.legendText}>{t("common.less", "少")}</Text>
                   {[
@@ -1010,7 +1031,7 @@ export default function StatsScreen() {
         </View>
 
         {/* Longest streak */}
-        {overallStats && overallStats.longestStreak > 0 && (
+        {liveOverallStats && liveOverallStats.longestStreak > 0 && (
           <View style={s.section}>
             <View style={s.streakCard}>
               <View style={s.streakIconWrap}>
@@ -1018,7 +1039,7 @@ export default function StatsScreen() {
               </View>
               <View style={s.streakInfo}>
                 <Text style={s.streakLabel}>
-                  {t("stats.longestStreak", { days: overallStats.longestStreak })}
+                  {t("stats.longestStreak", { days: liveOverallStats.longestStreak })}
                 </Text>
                 <Text style={s.streakDesc}>
                   {t("stats.longestStreakDesc", "历史最长连续阅读记录")}

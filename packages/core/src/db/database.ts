@@ -18,15 +18,42 @@ let localDbInitialized = false;
 
 const DB_NAME = "sqlite:readany.db";
 const LOCAL_DB_NAME = "sqlite:readany_local.db";
+const DEVICE_ID_STORAGE_KEY = "sync_device_id";
 
 // Cached device ID for sync tracking
 let cachedDeviceId: string | null = null;
 
 async function configureDatabaseConnection(database: IDatabase): Promise<void> {
   try {
+    await database.execute("PRAGMA foreign_keys = ON");
+  } catch {
+    // Some adapters may not support PRAGMA configuration
+  }
+  try {
     await database.execute("PRAGMA busy_timeout = 15000");
   } catch {
     // Some adapters may not support PRAGMA configuration
+  }
+}
+
+export async function cleanupOrphanedSyncRows(databaseArg?: IDatabase): Promise<void> {
+  const database = databaseArg ?? (await getDB());
+
+  const cleanupStatements = [
+    "DELETE FROM highlights WHERE book_id NOT IN (SELECT id FROM books)",
+    "DELETE FROM notes WHERE book_id NOT IN (SELECT id FROM books)",
+    "DELETE FROM bookmarks WHERE book_id NOT IN (SELECT id FROM books)",
+    "DELETE FROM reading_sessions WHERE book_id NOT IN (SELECT id FROM books)",
+    "DELETE FROM book_tags WHERE book_id NOT IN (SELECT id FROM books) OR tag_id NOT IN (SELECT id FROM tags)",
+    "DELETE FROM messages WHERE thread_id NOT IN (SELECT id FROM threads)",
+  ];
+
+  for (const sql of cleanupStatements) {
+    try {
+      await database.execute(sql);
+    } catch {
+      // Ignore partial cleanup failures on older schema variants.
+    }
   }
 }
 
@@ -105,18 +132,44 @@ export function resetLocalDBCache(): void {
 /** Get or create device ID for sync tracking */
 export async function getDeviceId(): Promise<string> {
   if (cachedDeviceId) return cachedDeviceId;
-  const database = await getDB();
+
+  const platform = getPlatformService();
+  let kvAvailable = true;
+
   try {
-    const rows = await database.select<{ value: string }>(
-      "SELECT value FROM sync_metadata WHERE key = 'device_id'",
-    );
-    if (rows.length > 0) {
-      cachedDeviceId = rows[0].value;
-      return cachedDeviceId;
+    const storedDeviceId = await platform.kvGetItem(DEVICE_ID_STORAGE_KEY);
+    if (storedDeviceId) {
+      cachedDeviceId = storedDeviceId;
+      try {
+        const database = await getDB();
+        await database.execute(
+          "INSERT OR REPLACE INTO sync_metadata (key, value) VALUES ('device_id', ?)",
+          [storedDeviceId],
+        );
+      } catch {
+        // Table might not exist yet during init
+      }
+      return storedDeviceId;
     }
   } catch {
-    // Table might not exist yet
+    kvAvailable = false;
   }
+
+  const database = await getDB();
+  if (!kvAvailable) {
+    try {
+      const rows = await database.select<{ value: string }>(
+        "SELECT value FROM sync_metadata WHERE key = 'device_id'",
+      );
+      if (rows.length > 0 && rows[0].value) {
+        cachedDeviceId = rows[0].value;
+        return rows[0].value;
+      }
+    } catch {
+      // Table might not exist yet
+    }
+  }
+
   // Generate new device ID
   const id = generateId();
   try {
@@ -126,6 +179,11 @@ export async function getDeviceId(): Promise<string> {
     );
   } catch {
     // Table might not exist yet during init
+  }
+  try {
+    await platform.kvSetItem(DEVICE_ID_STORAGE_KEY, id);
+  } catch {
+    // Ignore KV persistence errors; DB copy will still exist.
   }
   cachedDeviceId = id;
   return id;
@@ -137,6 +195,21 @@ async function nextSyncVersion(database: IDatabase, table: string): Promise<numb
     `SELECT MAX(sync_version) as max_v FROM ${table}`,
   );
   return (rows[0]?.max_v || 0) + 1;
+}
+
+async function nextUpdatedAt(database: IDatabase, table: string, id: string): Promise<number> {
+  const now = Date.now();
+
+  try {
+    const rows = await database.select<{ updated_at: number | null }>(
+      `SELECT updated_at FROM ${table} WHERE id = ?`,
+      [id],
+    );
+    const current = rows[0]?.updated_at ?? 0;
+    return Math.max(now, current + 1);
+  } catch {
+    return now;
+  }
 }
 
 /** Insert a tombstone record for sync deletion tracking */
@@ -454,6 +527,8 @@ export async function initDatabase(): Promise<void> {
   } catch {
     // Column already exists or table doesn't exist yet
   }
+
+  await cleanupOrphanedSyncRows(database);
 
   dbInitialized = true;
 
@@ -778,8 +853,9 @@ export async function updateBook(id: string, updates: Partial<Book>): Promise<vo
   // Add sync tracking fields
   const deviceId = await getDeviceId();
   const syncVersion = await nextSyncVersion(database, "books");
+  const updatedAt = await nextUpdatedAt(database, "books", id);
   sets.push("updated_at = ?");
-  values.push(Date.now());
+  values.push(updatedAt);
   sets.push("sync_version = ?");
   values.push(syncVersion);
   sets.push("last_modified_by = ?");
@@ -995,20 +1071,20 @@ export async function updateHighlight(id: string, updates: Partial<Highlight>): 
     sets.push("color = ?");
     values.push(updates.color);
   }
-  if (updates.note !== undefined) {
+  if (Object.prototype.hasOwnProperty.call(updates, "note")) {
     sets.push("note = ?");
-    values.push(updates.note);
+    values.push(updates.note ?? null);
   }
   if (updates.text !== undefined) {
     sets.push("text = ?");
     values.push(updates.text);
   }
-  sets.push("updated_at = ?");
-  values.push(Date.now());
-
   // Add sync tracking
   const deviceId = await getDeviceId();
   const syncVersion = await nextSyncVersion(database, "highlights");
+  const updatedAt = await nextUpdatedAt(database, "highlights", id);
+  sets.push("updated_at = ?");
+  values.push(updatedAt);
   sets.push("sync_version = ?");
   values.push(syncVersion);
   sets.push("last_modified_by = ?");
@@ -1124,12 +1200,12 @@ export async function updateNote(id: string, updates: Partial<Note>): Promise<vo
     sets.push("tags = ?");
     values.push(JSON.stringify(updates.tags));
   }
-  sets.push("updated_at = ?");
-  values.push(Date.now());
-
   // Add sync tracking
   const deviceId = await getDeviceId();
   const syncVersion = await nextSyncVersion(database, "notes");
+  const updatedAt = await nextUpdatedAt(database, "notes", id);
+  sets.push("updated_at = ?");
+  values.push(updatedAt);
   sets.push("sync_version = ?");
   values.push(syncVersion);
   sets.push("last_modified_by = ?");
@@ -1273,9 +1349,10 @@ export async function updateThreadTitle(id: string, title: string): Promise<void
   const database = await getDB();
   const deviceId = await getDeviceId();
   const syncVersion = await nextSyncVersion(database, "threads");
+  const updatedAt = await nextUpdatedAt(database, "threads", id);
   await database.execute(
     "UPDATE threads SET title = ?, updated_at = ?, sync_version = ?, last_modified_by = ? WHERE id = ?",
-    [title, Date.now(), syncVersion, deviceId, id],
+    [title, updatedAt, syncVersion, deviceId, id],
   );
 }
 
@@ -1460,8 +1537,9 @@ export async function updateReadingSession(
 
   if (sets.length === 0) return;
 
+  const updatedAt = await nextUpdatedAt(database, "reading_sessions", id);
   sets.push("updated_at = ?");
-  values.push(Date.now());
+  values.push(updatedAt);
   sets.push("sync_version = ?");
   values.push(syncVersion);
   sets.push("last_modified_by = ?");
@@ -1659,12 +1737,12 @@ export async function updateSkill(id: string, updates: Partial<Skill>): Promise<
     sets.push("prompt = ?");
     values.push(updates.prompt);
   }
-  sets.push("updated_at = ?");
-  values.push(Date.now());
-
   // Add sync tracking
   const deviceId = await getDeviceId();
   const syncVersion = await nextSyncVersion(database, "skills");
+  const updatedAt = await nextUpdatedAt(database, "skills", id);
+  sets.push("updated_at = ?");
+  values.push(updatedAt);
   sets.push("sync_version = ?");
   values.push(syncVersion);
   sets.push("last_modified_by = ?");
