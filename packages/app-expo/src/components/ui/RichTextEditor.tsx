@@ -1,5 +1,6 @@
 import { MarkdownRenderer } from "@/components/chat/MarkdownRenderer";
 import {
+  BookmarkIcon,
   BoldIcon,
   CodeIcon,
   EditIcon,
@@ -12,13 +13,17 @@ import {
   ListIcon,
   ListOrderedIcon,
   QuoteIcon,
+  SparklesIcon,
   StrikethroughIcon,
   XIcon,
 } from "@/components/ui/Icon";
 import { radius, useColors } from "@/styles/theme";
-import { useCallback, useRef, useState } from "react";
+import { useAnnotationStore } from "@readany/core/stores/annotation-store";
+import type { Highlight } from "@readany/core/types";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
+  FlatList,
   Modal,
   ScrollView,
   StyleSheet,
@@ -33,6 +38,9 @@ interface RichTextEditorProps {
   onChange?: (markdown: string) => void;
   placeholder?: string;
   autoFocus?: boolean;
+  bookId?: string;
+  /** Called when user taps the AI action button with selected text + cursor range */
+  onAIAction?: (selectedText: string, selection: { start: number; end: number }) => void;
 }
 
 export function RichTextEditor({
@@ -40,6 +48,8 @@ export function RichTextEditor({
   onChange,
   placeholder,
   autoFocus = false,
+  bookId,
+  onAIAction,
 }: RichTextEditorProps) {
   const colors = useColors();
   const { t } = useTranslation();
@@ -49,11 +59,25 @@ export function RichTextEditor({
   const [linkUrl, setLinkUrl] = useState("");
   const [linkText, setLinkText] = useState("");
   const [previewMode, setPreviewMode] = useState(false);
+  const [showHighlightPicker, setShowHighlightPicker] = useState(false);
+  const [highlightSearch, setHighlightSearch] = useState("");
   const inputRef = useRef<TextInput>(null);
   const selectionRef = useRef<{ start: number; end: number }>({
     start: initialContent.length,
     end: initialContent.length,
   });
+
+  const { highlights } = useAnnotationStore();
+  const bookHighlights = useMemo(() => {
+    if (!bookId) return [];
+    return highlights.filter((h) => h.bookId === bookId);
+  }, [highlights, bookId]);
+
+  const filteredHighlights = useMemo(() => {
+    if (!highlightSearch.trim()) return bookHighlights;
+    const q = highlightSearch.toLowerCase();
+    return bookHighlights.filter((h) => h.text?.toLowerCase().includes(q));
+  }, [bookHighlights, highlightSearch]);
 
   const handleChange = useCallback(
     (text: string) => {
@@ -63,12 +87,34 @@ export function RichTextEditor({
     [onChange],
   );
 
+  const handleInsertHighlight = useCallback(
+    (h: Highlight) => {
+      const { start, end } = selectionRef.current;
+      const chapterLabel = h.chapterTitle ? `\n> — *${h.chapterTitle}*` : "";
+      const noteLabel = h.note ? `\n> 📝 *${h.note}*` : "";
+      const snippet = `\n> ${h.text}${chapterLabel}${noteLabel}\n`;
+      const newText = value.substring(0, start) + snippet + value.substring(end);
+      handleChange(newText);
+      setShowHighlightPicker(false);
+      setHighlightSearch("");
+    },
+    [value, handleChange],
+  );
+
   const handleSelectionChange = useCallback(
     (e: { nativeEvent: { selection: { start: number; end: number } } }) => {
       selectionRef.current = e.nativeEvent.selection;
     },
     [],
   );
+
+  const handleAIAction = useCallback(() => {
+    const { start, end } = selectionRef.current;
+    const selected = start !== end ? value.substring(start, end) : value;
+    const effectiveStart = start !== end ? start : 0;
+    const effectiveEnd = start !== end ? end : value.length;
+    onAIAction?.(selected, { start: effectiveStart, end: effectiveEnd });
+  }, [value, onAIAction]);
 
   const wrapSelection = useCallback(
     (prefix: string, suffix: string) => {
@@ -216,6 +262,36 @@ export function RichTextEditor({
                 <QuoteIcon size={16} color={colors.mutedForeground} />
               </ToolbarButton>
             </View>
+
+            {bookId && (
+              <>
+                <View style={styles.toolbarDivider} />
+                <View style={styles.toolbarGroup}>
+                  <ToolbarButton
+                    onPress={() => setShowHighlightPicker(true)}
+                    colors={colors}
+                    styles={styles}
+                  >
+                    <BookmarkIcon size={16} color={colors.mutedForeground} />
+                  </ToolbarButton>
+                </View>
+              </>
+            )}
+
+            {onAIAction && (
+              <>
+                <View style={styles.toolbarDivider} />
+                <View style={styles.toolbarGroup}>
+                  <ToolbarButton
+                    onPress={handleAIAction}
+                    colors={colors}
+                    styles={styles}
+                  >
+                    <SparklesIcon size={16} color={colors.mutedForeground} />
+                  </ToolbarButton>
+                </View>
+              </>
+            )}
           </>
         )}
       </ScrollView>
@@ -301,6 +377,66 @@ export function RichTextEditor({
                 <Text style={styles.linkConfirmText}>{t("common.confirm", "确定")}</Text>
               </TouchableOpacity>
             </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={showHighlightPicker}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowHighlightPicker(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.highlightModal}>
+            <View style={styles.linkModalHeader}>
+              <Text style={styles.linkModalTitle}>
+                {t("knowledge.insertHighlight", "插入划线引用")}
+              </Text>
+              <TouchableOpacity
+                onPress={() => {
+                  setShowHighlightPicker(false);
+                  setHighlightSearch("");
+                }}
+              >
+                <XIcon size={20} color={colors.mutedForeground} />
+              </TouchableOpacity>
+            </View>
+            <TextInput
+              style={[styles.linkInput, { marginBottom: 8 }]}
+              value={highlightSearch}
+              onChangeText={setHighlightSearch}
+              placeholder={t("knowledge.searchHighlights", "搜索划线...")}
+              placeholderTextColor={colors.mutedForeground}
+            />
+            {filteredHighlights.length === 0 ? (
+              <View style={styles.highlightEmpty}>
+                <Text style={styles.highlightEmptyText}>
+                  {t("knowledge.noHighlightsFound", "暂无划线")}
+                </Text>
+              </View>
+            ) : (
+              <FlatList
+                data={filteredHighlights}
+                keyExtractor={(item) => item.id}
+                style={styles.highlightList}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    style={styles.highlightItem}
+                    onPress={() => handleInsertHighlight(item)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.highlightItemText} numberOfLines={3}>
+                      {item.text}
+                    </Text>
+                    {item.chapterTitle ? (
+                      <Text style={styles.highlightItemChapter}>{item.chapterTitle}</Text>
+                    ) : null}
+                  </TouchableOpacity>
+                )}
+                ItemSeparatorComponent={() => <View style={styles.highlightSeparator} />}
+              />
+            )}
           </View>
         </View>
       </Modal>
@@ -467,5 +603,42 @@ const makeStyles = (colors: ReturnType<typeof useColors>) =>
       color: colors.primaryForeground,
       fontSize: 15,
       fontWeight: "500",
+    },
+    highlightModal: {
+      backgroundColor: colors.card,
+      borderRadius: radius.lg,
+      padding: 16,
+      width: "92%",
+      maxWidth: 400,
+      maxHeight: "75%",
+    },
+    highlightList: {
+      flexGrow: 0,
+    },
+    highlightItem: {
+      paddingVertical: 10,
+      paddingHorizontal: 4,
+    },
+    highlightItemText: {
+      fontSize: 14,
+      lineHeight: 20,
+      color: colors.foreground,
+    },
+    highlightItemChapter: {
+      fontSize: 12,
+      color: colors.mutedForeground,
+      marginTop: 3,
+    },
+    highlightSeparator: {
+      height: StyleSheet.hairlineWidth,
+      backgroundColor: colors.border,
+    },
+    highlightEmpty: {
+      paddingVertical: 24,
+      alignItems: "center",
+    },
+    highlightEmptyText: {
+      fontSize: 14,
+      color: colors.mutedForeground,
     },
   });

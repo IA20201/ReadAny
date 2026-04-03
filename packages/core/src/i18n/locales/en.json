@@ -28,6 +28,7 @@
     "more": "More",
     "success": "Success!",
     "failed": "Failed",
+    "saved": "Saved!",
     "testing": "Testing...",
     "minutes": "minutes",
     "hours": "hours"
@@ -862,6 +863,25 @@
     "notConfigured": "Please configure a vector model first",
     "notConfiguredDesc": "You need to download a built-in model or configure a remote vector model before vectorizing.",
     "goSettings": "Go to Settings"
+  },
+  "knowledge": {
+    "title": "Knowledge",
+    "newDoc": "New Document",
+    "newDocPlaceholder": "New document title...",
+    "untitled": "Untitled",
+    "empty": "No knowledge documents yet",
+    "selectOrCreate": "Select a document or create a new one",
+    "fullscreen": "Full Screen",
+    "editorPlaceholder": "Start writing your knowledge notes...",
+    "aiExpand": "AI Expand",
+    "aiExplain": "AI Explain",
+    "aiExpandPrompt": "Expand the following text with more detail and explanation:",
+    "aiExplainPrompt": "Explain the following text in simple terms:",
+    "insertHighlight": "Insert Highlight",
+    "searchHighlights": "Search highlights...",
+    "noHighlightsFound": "No highlights found",
+    "saveToKnowledge": "Save to Knowledge Base",
+    "noDocuments": "No knowledge documents yet"
   },
   "tts": {
     "title": "Text-to-Speech",

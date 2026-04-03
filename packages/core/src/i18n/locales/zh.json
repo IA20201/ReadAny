@@ -28,6 +28,7 @@
     "more": "多",
     "success": "成功！",
     "failed": "失败",
+    "saved": "已保存！",
     "testing": "测试中...",
     "minutes": "分钟",
     "hours": "小时"
@@ -891,5 +892,24 @@
       "title": "多平台同步",
       "desc": "选择 WebDAV、S3 或局域网同步，让你的书库在不同设备间保持同步。支持二维码配对，快速完成设置。"
     }
+  },
+  "knowledge": {
+    "title": "知识库",
+    "newDoc": "新建文档",
+    "newDocPlaceholder": "新文档标题...",
+    "untitled": "无标题",
+    "empty": "暂无知识文档",
+    "selectOrCreate": "选择一篇文档或新建文档",
+    "fullscreen": "全屏编辑",
+    "editorPlaceholder": "开始记录知识笔记...",
+    "aiExpand": "AI 扩写",
+    "aiExplain": "AI 解释",
+    "aiExpandPrompt": "请对以下内容进行扩写，加入更多细节和说明：",
+    "aiExplainPrompt": "请用简单易懂的语言解释以下内容：",
+    "insertHighlight": "插入划线引用",
+    "searchHighlights": "搜索划线内容...",
+    "noHighlightsFound": "未找到划线内容",
+    "saveToKnowledge": "保存到知识库",
+    "noDocuments": "暂无知识文档"
   }
 }

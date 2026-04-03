@@ -5,7 +5,7 @@ import { getPlatformService } from "../services/platform";
  * Uses getPlatformService().loadDatabase() to obtain a database connection.
  * No direct dependency on Tauri or any platform-specific package.
  */
-import type { Book, Bookmark, Chunk, Highlight, Message, Note, Skill, Thread } from "../types";
+import type { Book, Bookmark, Chunk, Highlight, KnowledgeNote, Message, Note, Skill, Thread } from "../types";
 import type { ReadingSession } from "../types/reading";
 import { generateId } from "../utils/generate-id";
 
@@ -454,6 +454,24 @@ export async function initDatabase(): Promise<void> {
   } catch {
     // Column already exists or table doesn't exist yet
   }
+
+  // Migration 11: knowledge_notes table for Book Knowledge Base feature
+  await database.execute(`
+    CREATE TABLE IF NOT EXISTS knowledge_notes (
+      id TEXT PRIMARY KEY,
+      book_id TEXT NOT NULL,
+      title TEXT NOT NULL DEFAULT 'Untitled',
+      content TEXT NOT NULL DEFAULT '',
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      sync_version INTEGER DEFAULT 0,
+      last_modified_by TEXT,
+      FOREIGN KEY (book_id) REFERENCES books(id) ON DELETE CASCADE
+    )
+  `);
+  await database.execute(
+    "CREATE INDEX IF NOT EXISTS idx_knowledge_notes_book ON knowledge_notes(book_id)",
+  );
 
   dbInitialized = true;
 
@@ -1679,4 +1697,82 @@ export async function deleteSkill(id: string): Promise<void> {
   const database = await getDB();
   await insertTombstone(database, id, "skills");
   await database.execute("DELETE FROM skills WHERE id = ?", [id]);
+}
+
+// --- Knowledge Notes ---
+
+export async function getKnowledgeNotes(bookId: string): Promise<KnowledgeNote[]> {
+  const database = await getDB();
+  const rows = await database.select<{
+    id: string;
+    book_id: string;
+    title: string;
+    content: string;
+    created_at: number;
+    updated_at: number;
+  }>("SELECT * FROM knowledge_notes WHERE book_id = ? ORDER BY updated_at DESC", [bookId]);
+  return rows.map((r) => ({
+    id: r.id,
+    bookId: r.book_id,
+    title: r.title,
+    content: r.content,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+  }));
+}
+
+export async function insertKnowledgeNote(note: KnowledgeNote): Promise<void> {
+  const database = await getDB();
+  const deviceId = await getDeviceId();
+  const syncVersion = await nextSyncVersion(database, "knowledge_notes");
+  await database.execute(
+    "INSERT INTO knowledge_notes (id, book_id, title, content, created_at, updated_at, sync_version, last_modified_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+    [
+      note.id,
+      note.bookId,
+      note.title,
+      note.content,
+      note.createdAt,
+      note.updatedAt,
+      syncVersion,
+      deviceId,
+    ],
+  );
+}
+
+export async function updateKnowledgeNote(
+  id: string,
+  updates: Partial<Pick<KnowledgeNote, "title" | "content">>,
+): Promise<void> {
+  const database = await getDB();
+  const sets: string[] = [];
+  const values: unknown[] = [];
+
+  if (updates.title !== undefined) {
+    sets.push("title = ?");
+    values.push(updates.title);
+  }
+  if (updates.content !== undefined) {
+    sets.push("content = ?");
+    values.push(updates.content);
+  }
+  sets.push("updated_at = ?");
+  values.push(Date.now());
+
+  const deviceId = await getDeviceId();
+  const syncVersion = await nextSyncVersion(database, "knowledge_notes");
+  sets.push("sync_version = ?");
+  values.push(syncVersion);
+  sets.push("last_modified_by = ?");
+  values.push(deviceId);
+
+  if (sets.length === 0) return;
+  values.push(id);
+  await database.execute(`UPDATE knowledge_notes SET ${sets.join(", ")} WHERE id = ?`, values);
+}
+
+export async function deleteKnowledgeNote(id: string): Promise<void> {
+  const database = await getDB();
+  await insertTombstone(database, id, "knowledge_notes");
+  await database.execute("DELETE FROM knowledge_notes WHERE id = ?", [id]);
 }

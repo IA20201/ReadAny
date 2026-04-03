@@ -1,6 +1,7 @@
 import { OnboardingNavigator } from "@/components/onboarding/OnboardingNavigator";
 import { BookChatScreen } from "@/screens/BookChatScreen";
 import { FullScreenNotesScreen } from "@/screens/FullScreenNotesScreen";
+import { KnowledgeEditorScreen } from "@/screens/KnowledgeEditorScreen";
 import { ReaderScreen } from "@/screens/ReaderScreen";
 import SkillsScreen from "@/screens/SkillsScreen";
 import StatsScreen from "@/screens/StatsScreen";
@@ -33,6 +34,7 @@ export type RootStackParamList = {
   SyncSettings: undefined;
   About: undefined;
   FullScreenNotes: { bookId: string };
+  KnowledgeEditor: { bookId: string; docId?: string };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -85,6 +87,11 @@ export function RootNavigator() {
           <Stack.Screen
             name="FullScreenNotes"
             component={FullScreenNotesScreen}
+            options={{ animation: "slide_from_right" }}
+          />
+          <Stack.Screen
+            name="KnowledgeEditor"
+            component={KnowledgeEditorScreen}
             options={{ animation: "slide_from_right" }}
           />
         </>

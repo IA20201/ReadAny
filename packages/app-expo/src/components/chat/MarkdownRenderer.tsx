@@ -1,7 +1,9 @@
 import { MermaidView } from "@/components/common/MermaidView";
-import { fontSize as fs, radius, useColors } from "@/styles/theme";
+import { fontSize as fs, radius, useColors, withOpacity } from "@/styles/theme";
 import type { ThemeColors } from "@/styles/theme";
 import type { CitationPart } from "@readany/core/types/message";
+import type { Highlight } from "@readany/core/types";
+import { useAnnotationStore } from "@readany/core/stores/annotation-store";
 import * as Clipboard from "expo-clipboard";
 import { Fragment, type ReactNode, useMemo } from "react";
 import { useTranslation } from "react-i18next";
@@ -14,6 +16,76 @@ interface MarkdownRendererProps {
   styleOverrides?: Record<string, any>;
   citations?: CitationPart[];
   onCitationClick?: (citation: CitationPart) => void;
+}
+
+function HighlightRefCard({
+  highlightId,
+  colors,
+}: { highlightId: string; colors: ThemeColors }) {
+  const { highlights } = useAnnotationStore();
+  const h = highlights.find((x) => x.id === highlightId);
+
+  return (
+    <View
+      style={{
+        borderLeftWidth: 3,
+        borderLeftColor: colors.primary,
+        paddingLeft: 10,
+        paddingVertical: 6,
+        marginVertical: 4,
+        backgroundColor: withOpacity(colors.primary, 0.05),
+        borderRadius: radius.sm,
+      }}
+    >
+      <Text
+        style={{
+          fontSize: fs.sm,
+          lineHeight: 20,
+          color: colors.foreground,
+          fontStyle: "italic",
+          opacity: 0.9,
+        }}
+      >
+        {h?.text ?? highlightId}
+      </Text>
+      {h?.chapterTitle ? (
+        <Text
+          style={{
+            fontSize: fs.xs,
+            color: colors.mutedForeground,
+            marginTop: 3,
+          }}
+        >
+          — {h.chapterTitle}
+        </Text>
+      ) : null}
+    </View>
+  );
+}
+
+/**
+ * Pre-process markdown content to extract highlight-ref blockquote lines.
+ * Transforms:
+ *   > <!-- highlight-ref:ID -->
+ *   > quoted text
+ *   > — *chapter*
+ * into a sentinel token `%%HIGHLIGHT_REF:ID%%` that we handle in the blockquote rule.
+ */
+function preprocessHighlightRefs(content: string): string {
+  // Replace > <!-- highlight-ref:ID --> ... blockquote blocks
+  return content.replace(
+    /> <!-- highlight-ref:([a-zA-Z0-9_-]+) -->/g,
+    (_match, id) => `> %%HIGHLIGHT_REF:${id}%%`,
+  );
+}
+
+/** Recursively extract all text content from an AST node tree */
+function extractASTText(node: ASTNode): string {
+  if (node.content) return node.content;
+  if (node.children && node.children.length > 0) {
+    return node.children.map(extractASTText).join("");
+  }
+  return "";
 }
 
 function CodeBlockWithCopy({
@@ -168,6 +240,8 @@ export function MarkdownRenderer({
   // This ensures custom styles (like tooltip dark background) are not overridden
   const styles = styleOverrides || baseStyles;
 
+  const processedContent = useMemo(() => preprocessHighlightRefs(content), [content]);
+
   const rules = useMemo<RenderRules>(
     () => ({
       fence: (node: ASTNode, children: ReactNode[], parentNodes: ASTNode[], style: any) => {
@@ -192,6 +266,19 @@ export function MarkdownRenderer({
           <CodeBlockWithCopy key={node.key} code={code} style={style.code_block} colors={colors} />
         );
       },
+      blockquote: (node: ASTNode, children: ReactNode[], parentNodes: ASTNode[], style: any) => {
+        // Check if this blockquote contains a highlight-ref sentinel
+        const rawContent = extractASTText(node);
+        const refMatch = rawContent.match(/%%HIGHLIGHT_REF:([a-zA-Z0-9_-]+)%%/);
+        if (refMatch) {
+          return <HighlightRefCard key={node.key} highlightId={refMatch[1]} colors={colors} />;
+        }
+        return (
+          <View key={node.key} style={style.blockquote}>
+            {children}
+          </View>
+        );
+      },
       text: (node: ASTNode, children: ReactNode[], parentNodes: ASTNode[], style: any) => {
         const text = node.content || "";
         if (citations && citations.length > 0 && /\[\d+\]/.test(text)) {
@@ -214,7 +301,7 @@ export function MarkdownRenderer({
   return (
     <View>
       <Markdown style={styles} rules={rules} mergeStyle>
-        {content}
+        {processedContent}
       </Markdown>
     </View>
   );

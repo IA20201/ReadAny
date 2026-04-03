@@ -307,6 +307,7 @@ export function ChatPanel({ book, onNavigateToCitation }: ChatPanelProps) {
             currentStep={currentStep}
             onStop={stopStream}
             onCitationClick={onNavigateToCitation}
+            bookId={bookId}
           />
         ) : (
           <div className="flex h-full flex-col items-start justify-end gap-3 overflow-y-auto p-4 pb-6">

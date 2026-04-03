@@ -43,6 +43,7 @@ export interface SyncDelta {
     threads?: TableDelta;
     messages?: TableDelta;
     skills?: TableDelta;
+    knowledge_notes?: TableDelta;
   };
 }
 
@@ -68,6 +69,7 @@ const SYNC_TABLES: SyncTableConfig[] = [
   { name: "threads", pk: "id", timestampCol: "updated_at" },
   { name: "messages", pk: "id", timestampCol: "created_at" },
   { name: "skills", pk: "id", timestampCol: "updated_at" },
+  { name: "knowledge_notes", pk: "id", timestampCol: "updated_at" },
   // NOT synced: chunks (large vector data, regenerated locally)
 ] as const;
 

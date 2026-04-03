@@ -14,7 +14,10 @@ import type {
   TextPart,
   ToolCallPart,
 } from "@readany/core/types/message";
-import { useEffect, useState } from "react";
+import { useAnnotationStore } from "@readany/core/stores/annotation-store";
+import type { KnowledgeNote } from "@readany/core/types";
+import { generateId } from "@readany/core/utils";
+import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   ActivityIndicator,
@@ -30,9 +33,10 @@ interface PartProps {
   part: Part;
   citations?: CitationPart[];
   onCitationClick?: (citation: CitationPart) => void;
+  bookId?: string;
 }
 
-export function PartRenderer({ part, citations, onCitationClick }: PartProps) {
+export function PartRenderer({ part, citations, onCitationClick, bookId }: PartProps) {
   switch (part.type) {
     case "text":
       return <TextPartView part={part} citations={citations} onCitationClick={onCitationClick} />;
@@ -43,7 +47,7 @@ export function PartRenderer({ part, citations, onCitationClick }: PartProps) {
     case "citation":
       return null;
     case "mindmap":
-      return <MindmapPartView part={part} />;
+      return <MindmapPartView part={part} bookId={bookId} />;
     case "mermaid":
       return <MermaidPartView part={part} />;
     case "aborted":
@@ -53,8 +57,57 @@ export function PartRenderer({ part, citations, onCitationClick }: PartProps) {
   }
 }
 
-function MindmapPartView({ part }: { part: MindmapPart }) {
-  return <MindmapView markdown={part.markdown} title={part.title} />;
+function MindmapPartView({ part, bookId }: { part: MindmapPart; bookId?: string }) {
+  const { t } = useTranslation();
+  const colors = useColors();
+  const { addKnowledgeNote } = useAnnotationStore();
+  const [saved, setSaved] = useState(false);
+
+  const handleSave = useCallback(() => {
+    if (!bookId) return;
+    const now = Date.now();
+    const note: KnowledgeNote = {
+      id: generateId(),
+      bookId,
+      title: part.title || t("knowledge.untitled", "无标题"),
+      content: part.markdown,
+      createdAt: now,
+      updatedAt: now,
+    };
+    addKnowledgeNote(note);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  }, [bookId, part.title, part.markdown, addKnowledgeNote, t]);
+
+  return (
+    <View>
+      {bookId && (
+        <TouchableOpacity
+          onPress={handleSave}
+          disabled={saved}
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            alignSelf: "flex-end",
+            gap: 4,
+            paddingHorizontal: 10,
+            paddingVertical: 5,
+            marginBottom: 4,
+            borderRadius: radius.md,
+            borderWidth: 0.5,
+            borderColor: colors.border,
+            backgroundColor: colors.card,
+            opacity: saved ? 0.6 : 1,
+          }}
+        >
+          <Text style={{ fontSize: fs.xs, color: colors.mutedForeground }}>
+            {saved ? t("common.saved", "已保存！") : t("knowledge.saveToKnowledge", "保存到知识库")}
+          </Text>
+        </TouchableOpacity>
+      )}
+      <MindmapView markdown={part.markdown} title={part.title} />
+    </View>
+  );
 }
 
 function MermaidPartView({ part }: { part: MermaidPart }) {

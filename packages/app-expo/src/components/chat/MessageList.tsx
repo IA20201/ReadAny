@@ -25,6 +25,7 @@ interface MessageListProps {
   isStreaming?: boolean;
   currentStep?: "thinking" | "tool_calling" | "responding" | "idle";
   onCitationClick?: (citation: CitationPart) => void;
+  bookId?: string;
 }
 
 const BOTTOM_THRESHOLD = 80;
@@ -34,6 +35,7 @@ export function MessageList({
   isStreaming,
   currentStep,
   onCitationClick,
+  bookId,
 }: MessageListProps) {
   const { t } = useTranslation();
   const colors = useColors();
@@ -128,10 +130,11 @@ export function MessageList({
           isStreaming={isLastMsgStreaming}
           currentStep={currentStep}
           onCitationClick={onCitationClick}
+          bookId={bookId}
         />
       );
     },
-    [colors, messages.length, isStreaming, currentStep, onCitationClick],
+    [colors, messages.length, isStreaming, currentStep, onCitationClick, bookId],
   );
 
   // Show indicator when streaming but no assistant content yet
@@ -226,6 +229,7 @@ interface MessageBubbleProps {
   isStreaming?: boolean;
   currentStep?: "thinking" | "tool_calling" | "responding" | "idle";
   onCitationClick?: (citation: CitationPart) => void;
+  bookId?: string;
 }
 
 function MessageBubble({
@@ -234,6 +238,7 @@ function MessageBubble({
   isStreaming,
   currentStep,
   onCitationClick,
+  bookId,
 }: MessageBubbleProps) {
   const s = makeStyles(colors);
 
@@ -296,6 +301,7 @@ function MessageBubble({
           part={part}
           citations={citations}
           onCitationClick={onCitationClick}
+          bookId={bookId}
         />
       ))}
       {showGapIndicator && <StreamingIndicator step="thinking" />}

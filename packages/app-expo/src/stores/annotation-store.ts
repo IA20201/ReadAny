@@ -3,7 +3,7 @@ import * as db from "@readany/core/db/database";
 /**
  * Annotation store — highlights, notes, bookmarks management
  */
-import type { Bookmark, Highlight, HighlightColor, Note } from "@readany/core/types";
+import type { Bookmark, Highlight, HighlightColor, KnowledgeNote, Note } from "@readany/core/types";
 import { create } from "zustand";
 
 export interface HighlightStats {
@@ -19,6 +19,7 @@ export interface AnnotationState {
   highlightsWithBooks: HighlightWithBook[];
   notes: Note[];
   bookmarks: Bookmark[];
+  knowledgeNotes: KnowledgeNote[];
   stats: HighlightStats | null;
 
   setHighlights: (highlights: Highlight[]) => void;
@@ -36,6 +37,12 @@ export interface AnnotationState {
   addBookmark: (bookmark: Bookmark) => void;
   removeBookmark: (id: string) => void;
 
+  // Knowledge Notes
+  loadKnowledgeNotes: (bookId: string) => Promise<void>;
+  addKnowledgeNote: (note: KnowledgeNote) => void;
+  updateKnowledgeNote: (id: string, updates: Partial<Pick<KnowledgeNote, "title" | "content">>) => void;
+  removeKnowledgeNote: (id: string) => void;
+
   loadAnnotations: (bookId: string) => Promise<void>;
   loadAllHighlights: (limit?: number) => Promise<void>;
   loadAllHighlightsWithBooks: (limit?: number) => Promise<void>;
@@ -47,6 +54,7 @@ export const useAnnotationStore = create<AnnotationState>((set) => ({
   highlightsWithBooks: [],
   notes: [],
   bookmarks: [],
+  knowledgeNotes: [],
   stats: null,
 
   setHighlights: (highlights) => set({ highlights }),
@@ -111,6 +119,40 @@ export const useAnnotationStore = create<AnnotationState>((set) => ({
       bookmarks: state.bookmarks.filter((b) => b.id !== id),
     }));
     db.deleteBookmark(id).catch((err) => console.error("Failed to delete bookmark:", err));
+  },
+
+  // Knowledge Notes
+  loadKnowledgeNotes: async (bookId) => {
+    try {
+      const knowledgeNotes = await db.getKnowledgeNotes(bookId);
+      set({ knowledgeNotes });
+    } catch (err) {
+      console.error("Failed to load knowledge notes:", err);
+    }
+  },
+  addKnowledgeNote: (note) => {
+    set((state) => ({ knowledgeNotes: [note, ...state.knowledgeNotes] }));
+    db.insertKnowledgeNote(note).catch((err) =>
+      console.error("Failed to insert knowledge note:", err),
+    );
+  },
+  updateKnowledgeNote: (id, updates) => {
+    set((state) => ({
+      knowledgeNotes: state.knowledgeNotes.map((n) =>
+        n.id === id ? { ...n, ...updates, updatedAt: Date.now() } : n,
+      ),
+    }));
+    db.updateKnowledgeNote(id, updates).catch((err) =>
+      console.error("Failed to update knowledge note:", err),
+    );
+  },
+  removeKnowledgeNote: (id) => {
+    set((state) => ({
+      knowledgeNotes: state.knowledgeNotes.filter((n) => n.id !== id),
+    }));
+    db.deleteKnowledgeNote(id).catch((err) =>
+      console.error("Failed to delete knowledge note:", err),
+    );
   },
 
   loadAnnotations: async (bookId) => {

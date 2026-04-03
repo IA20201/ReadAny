@@ -12,6 +12,9 @@ import type {
   TextPart,
   ToolCallPart,
 } from "@readany/core/types/message";
+import { useAnnotationStore } from "@readany/core/stores/annotation-store";
+import type { KnowledgeNote } from "@readany/core/types";
+import { generateId } from "@readany/core/utils";
 import { cn } from "@readany/core/utils";
 import {
   Brain,
@@ -20,10 +23,11 @@ import {
   Circle,
   Loader2,
   OctagonX,
+  Save,
   Wrench,
   XCircle,
 } from "lucide-react";
-import { Suspense, lazy, useEffect, useRef, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { MarkdownRenderer } from "./MarkdownRenderer";
 
@@ -73,9 +77,10 @@ interface PartProps {
   part: Part;
   citations?: CitationPart[];
   onCitationClick?: (citation: CitationPart) => void;
+  bookId?: string;
 }
 
-export function PartRenderer({ part, citations, onCitationClick }: PartProps) {
+export function PartRenderer({ part, citations, onCitationClick, bookId }: PartProps) {
   switch (part.type) {
     case "text":
       return <TextPartView part={part} citations={citations} onCitationClick={onCitationClick} />;
@@ -86,7 +91,7 @@ export function PartRenderer({ part, citations, onCitationClick }: PartProps) {
     case "citation":
       return null;
     case "mindmap":
-      return <MindmapPartView part={part} />;
+      return <MindmapPartView part={part} bookId={bookId} />;
     case "aborted":
       return <AbortedPartView part={part} />;
     default:
@@ -322,10 +327,42 @@ function ToolCallPartView({ part }: { part: ToolCallPart }) {
   );
 }
 
-function MindmapPartView({ part }: { part: MindmapPart }) {
+function MindmapPartView({ part, bookId }: { part: MindmapPart; bookId?: string }) {
   const { t } = useTranslation();
+  const { addKnowledgeNote } = useAnnotationStore();
+  const [saved, setSaved] = useState(false);
+
+  const handleSave = useCallback(() => {
+    if (!bookId) return;
+    const now = Date.now();
+    const note: KnowledgeNote = {
+      id: generateId(),
+      bookId,
+      title: part.title || t("knowledge.untitled"),
+      content: part.markdown,
+      createdAt: now,
+      updatedAt: now,
+    };
+    addKnowledgeNote(note);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  }, [bookId, part.title, part.markdown, addKnowledgeNote, t]);
+
   return (
     <div className="my-2">
+      {bookId && (
+        <div className="mb-1 flex justify-end">
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={saved}
+            className="flex items-center gap-1 rounded-md border border-border/50 bg-background px-2 py-1 text-xs text-muted-foreground hover:bg-muted hover:text-foreground transition-colors disabled:opacity-60"
+          >
+            <Save className="h-3 w-3" />
+            {saved ? t("common.saved") : t("knowledge.saveToKnowledge")}
+          </button>
+        </div>
+      )}
       <Suspense
         fallback={
           <div className="p-4 text-sm text-muted-foreground">{t("streaming.loadingMindmap")}</div>

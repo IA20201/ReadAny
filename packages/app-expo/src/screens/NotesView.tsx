@@ -3,9 +3,13 @@ import {
   BookOpenIcon,
   CheckIcon,
   ChevronLeftIcon,
+  ChevronRightIcon,
   EditIcon,
+  ScrollTextIcon,
   HighlighterIcon,
+  LibraryIcon,
   NotebookPenIcon,
+  PlusIcon,
   SearchIcon,
   ShareIcon,
   Trash2Icon,
@@ -60,7 +64,7 @@ const NOTE_PNG = require("../../assets/note.png");
 const NOTE_DARK_PNG = require("../../assets/note-dark.png");
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
-type DetailTab = "notes" | "highlights";
+type DetailTab = "notes" | "highlights" | "knowledge";
 type Props = BottomTabScreenProps<TabParamList, "Notes">;
 
 export function NotesView({
@@ -86,6 +90,8 @@ export function NotesView({
     updateHighlight,
     stats,
     loadStats,
+    knowledgeNotes,
+    loadKnowledgeNotes,
   } = useAnnotationStore();
   const books = useLibraryStore((s) => s.books);
 
@@ -123,6 +129,13 @@ export function NotesView({
       setDetailTab("notes");
     }
   }, [initialBookId]);
+
+  // Load knowledge notes when a book is selected
+  useEffect(() => {
+    if (selectedBookId) {
+      loadKnowledgeNotes(selectedBookId);
+    }
+  }, [selectedBookId, loadKnowledgeNotes]);
 
   // Group by book — matching Tauri exactly
   const bookNotebooks = useMemo(() => {
@@ -175,7 +188,6 @@ export function NotesView({
         for (const book of bookNotebooks) {
           if (!book.coverUrl) continue;
 
-          // If already absolute, use as-is
           if (
             book.coverUrl.startsWith("http") ||
             book.coverUrl.startsWith("blob") ||
@@ -185,7 +197,6 @@ export function NotesView({
             continue;
           }
 
-          // Resolve relative path
           try {
             const absPath = await platform.joinPath(appData, book.coverUrl);
             newMap.set(book.bookId, absPath);
@@ -379,14 +390,14 @@ export function NotesView({
 
   // Detail view
   if (selectedBookId && selectedBook) {
+    const bookKnowledgeNotes = knowledgeNotes.filter((n) => n.bookId === selectedBookId);
     return (
       <SafeAreaView style={[s.container, { backgroundColor: colors.background }]} edges={edges}>
-        {/* Detail header - hide entirely when from reader and empty */}
+        {/* Detail header */}
         {!(hideDetailHeader && selectedBook.highlights.length === 0) && (
           <View style={s.detailHeader}>
             {!hideDetailHeader && (
               <View style={s.detailHeaderTop}>
-                {/* Back button - return to list when in tab navigation */}
                 {showBackButton && (
                   <TouchableOpacity style={s.backBtn} onPress={() => setSelectedBookId(null)}>
                     <ChevronLeftIcon size={20} color={colors.foreground} />
@@ -404,7 +415,7 @@ export function NotesView({
                   />
                 ) : (
                   <View style={s.detailCoverFallback}>
-                    <BookOpenIcon size={16} color={colors.mutedForeground} />
+                    <BookOpenIcon size={14} color={colors.mutedForeground} />
                   </View>
                 )}
 
@@ -412,71 +423,154 @@ export function NotesView({
                   <Text style={s.detailTitle} numberOfLines={1}>
                     {selectedBook.title}
                   </Text>
-                  <Text style={s.detailAuthor}>{selectedBook.author}</Text>
+                  <Text style={s.detailAuthor} numberOfLines={1}>{selectedBook.author}</Text>
                 </View>
 
-                {/* Export button */}
                 <TouchableOpacity
                   style={s.exportBtn}
                   onPress={() => setShowExportMenu(!showExportMenu)}
                 >
-                  <ShareIcon size={16} color={colors.foreground} />
+                  <ShareIcon size={16} color={colors.mutedForeground} />
                 </TouchableOpacity>
               </View>
             )}
 
-            {/* Tabs + search */}
-            <View style={s.detailTabRow}>
+            {/* Pill segment tabs */}
+            <View style={s.tabRow}>
               <View style={s.tabSwitcher}>
                 <TouchableOpacity
                   style={[s.tabBtn, detailTab === "notes" && s.tabBtnActive]}
                   onPress={() => setDetailTab("notes")}
                 >
                   <NotebookPenIcon
-                    size={12}
-                    color={
-                      detailTab === "notes" ? colors.primaryForeground : colors.mutedForeground
-                    }
+                    size={11}
+                    color={detailTab === "notes" ? colors.primary : colors.mutedForeground}
                   />
                   <Text style={[s.tabBtnText, detailTab === "notes" && s.tabBtnTextActive]}>
-                    {t("notebook.notesSection", "笔记")} ({selectedBook.notesCount || 0})
+                    {t("notebook.notesSection", "笔记")}
                   </Text>
+                  <View style={[s.tabCount, detailTab === "notes" && s.tabCountActive]}>
+                    <Text style={[s.tabCountText, detailTab === "notes" && s.tabCountTextActive]}>
+                      {selectedBook.notesCount || 0}
+                    </Text>
+                  </View>
                 </TouchableOpacity>
+
                 <TouchableOpacity
                   style={[s.tabBtn, detailTab === "highlights" && s.tabBtnActive]}
                   onPress={() => setDetailTab("highlights")}
                 >
                   <HighlighterIcon
-                    size={12}
-                    color={
-                      detailTab === "highlights" ? colors.primaryForeground : colors.mutedForeground
-                    }
+                    size={11}
+                    color={detailTab === "highlights" ? colors.primary : colors.mutedForeground}
                   />
                   <Text style={[s.tabBtnText, detailTab === "highlights" && s.tabBtnTextActive]}>
-                    {t("notebook.highlightsSection", "高亮")} (
-                    {selectedBook.highlightsOnlyCount || 0})
+                    {t("notebook.highlightsSection", "高亮")}
                   </Text>
+                  <View style={[s.tabCount, detailTab === "highlights" && s.tabCountActive]}>
+                    <Text style={[s.tabCountText, detailTab === "highlights" && s.tabCountTextActive]}>
+                      {selectedBook.highlightsOnlyCount || 0}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[s.tabBtn, detailTab === "knowledge" && s.tabBtnActive]}
+                  onPress={() => setDetailTab("knowledge")}
+                >
+                  <LibraryIcon
+                    size={11}
+                    color={detailTab === "knowledge" ? colors.primary : colors.mutedForeground}
+                  />
+                  <Text style={[s.tabBtnText, detailTab === "knowledge" && s.tabBtnTextActive]}>
+                    {t("knowledge.title", "知识")}
+                  </Text>
+                  <View style={[s.tabCount, detailTab === "knowledge" && s.tabCountActive]}>
+                    <Text style={[s.tabCountText, detailTab === "knowledge" && s.tabCountTextActive]}>
+                      {bookKnowledgeNotes.length}
+                    </Text>
+                  </View>
                 </TouchableOpacity>
               </View>
 
-              <View style={s.detailSearch}>
-                <SearchIcon size={14} color={colors.mutedForeground} />
-                <TextInput
-                  style={s.detailSearchInput}
-                  placeholder={t("notes.searchPlaceholder", "搜索...")}
-                  placeholderTextColor={colors.mutedForeground}
-                  value={searchQuery}
-                  onChangeText={setSearchQuery}
-                />
-              </View>
+              {detailTab !== "knowledge" && (
+                <View style={s.detailSearch}>
+                  <SearchIcon size={13} color={colors.mutedForeground} />
+                  <TextInput
+                    style={s.detailSearchInput}
+                    placeholder={t("notes.searchPlaceholder", "搜索...")}
+                    placeholderTextColor={colors.mutedForeground}
+                    value={searchQuery}
+                    onChangeText={setSearchQuery}
+                  />
+                </View>
+              )}
             </View>
           </View>
         )}
 
         {/* Detail content */}
-        {currentList.length === 0 ? (
+        {detailTab === "knowledge" ? (
+          <View style={{ flex: 1 }}>
+            {bookKnowledgeNotes.length === 0 ? (
+              <View style={s.detailEmpty}>
+                <View style={s.detailEmptyIconWrap}>
+                  <ScrollTextIcon size={28} color={colors.mutedForeground} />
+                </View>
+                <Text style={s.detailEmptyTitle}>{t("knowledge.noDocuments", "暂无知识文档")}</Text>
+                <Text style={s.detailEmptyHint}>{t("knowledge.noDocumentsHint", "点击右下角 + 新建一篇")}</Text>
+              </View>
+            ) : (
+              <ScrollView style={s.detailList} showsVerticalScrollIndicator={false}>
+                {bookKnowledgeNotes
+                  .sort((a, b) => b.updatedAt - a.updatedAt)
+                  .map((doc) => (
+                    <TouchableOpacity
+                      key={doc.id}
+                      style={s.knowledgeCard}
+                      activeOpacity={0.7}
+                      onPress={() =>
+                        nav.navigate("KnowledgeEditor", {
+                          bookId: selectedBookId!,
+                          docId: doc.id,
+                        })
+                      }
+                    >
+                      <View style={s.knowledgeCardIcon}>
+                        <ScrollTextIcon size={16} color={colors.primary} />
+                      </View>
+                      <View style={s.knowledgeCardBody}>
+                        <Text style={s.knowledgeCardTitle} numberOfLines={1}>
+                          {doc.title || t("knowledge.untitled", "无标题")}
+                        </Text>
+                        <Text style={s.knowledgeCardDate}>
+                          {new Date(doc.updatedAt).toLocaleDateString()}
+                        </Text>
+                      </View>
+                      <ChevronRightIcon size={16} color={colors.mutedForeground} />
+                    </TouchableOpacity>
+                  ))}
+                <View style={{ height: 100 }} />
+              </ScrollView>
+            )}
+            {/* FAB to create new knowledge doc */}
+            <TouchableOpacity
+              style={s.fab}
+              activeOpacity={0.85}
+              onPress={() => nav.navigate("KnowledgeEditor", { bookId: selectedBookId! })}
+            >
+              <PlusIcon size={22} color="#fff" />
+            </TouchableOpacity>
+          </View>
+        ) : currentList.length === 0 ? (
           <View style={s.detailEmpty}>
-            <Text style={s.detailEmptyText}>
+            <View style={s.detailEmptyIconWrap}>
+              {detailTab === "notes"
+                ? <NotebookPenIcon size={28} color={colors.mutedForeground} />
+                : <HighlighterIcon size={28} color={colors.mutedForeground} />
+              }
+            </View>
+            <Text style={s.detailEmptyTitle}>
               {searchQuery
                 ? t("notes.noSearchResults", "没有匹配结果")
                 : detailTab === "notes"
@@ -488,10 +582,13 @@ export function NotesView({
           <ScrollView style={s.detailList} showsVerticalScrollIndicator={false}>
             {itemsByChapter.map(({ chapter, items }) => (
               <View key={chapter} style={s.chapterGroup}>
-                {/* Chapter divider */}
+                {/* Chapter pill divider */}
                 <View style={s.chapterDivider}>
                   <View style={s.chapterLine} />
-                  <Text style={s.chapterName}>{chapter}</Text>
+                  <View style={s.chapterPill}>
+                    <BookOpenIcon size={10} color={colors.mutedForeground} />
+                    <Text style={s.chapterName}>{chapter}</Text>
+                  </View>
                   <View style={s.chapterLine} />
                 </View>
 
@@ -578,19 +675,19 @@ export function NotesView({
 
         {/* Stats row */}
         <View style={s.statsRow}>
-          <View style={s.statBadge}>
-            <HighlighterIcon size={14} color={colors.amber} />
-            <Text style={s.statValue}>{totalHighlights}</Text>
+          <View style={[s.statBadge, { backgroundColor: withOpacity(colors.amber, 0.12) }]}>
+            <HighlighterIcon size={13} color={colors.amber} />
+            <Text style={[s.statValue, { color: colors.amber }]}>{totalHighlights}</Text>
             <Text style={s.statLabel}>{t("notebook.highlightsSection", "高亮")}</Text>
           </View>
-          <View style={s.statBadge}>
-            <NotebookPenIcon size={14} color={colors.blue} />
-            <Text style={s.statValue}>{totalNotes}</Text>
+          <View style={[s.statBadge, { backgroundColor: withOpacity(colors.blue, 0.12) }]}>
+            <NotebookPenIcon size={13} color={colors.blue} />
+            <Text style={[s.statValue, { color: colors.blue }]}>{totalNotes}</Text>
             <Text style={s.statLabel}>{t("notebook.notesSection", "笔记")}</Text>
           </View>
-          <View style={s.statBadge}>
-            <BookOpenIcon size={14} color={colors.emerald} />
-            <Text style={s.statValue}>{totalBooks}</Text>
+          <View style={[s.statBadge, { backgroundColor: withOpacity(colors.emerald, 0.12) }]}>
+            <BookOpenIcon size={13} color={colors.emerald} />
+            <Text style={[s.statValue, { color: colors.emerald }]}>{totalBooks}</Text>
             <Text style={s.statLabel}>{t("profile.booksUnit", "本")}</Text>
           </View>
         </View>
@@ -638,7 +735,7 @@ export function NotesView({
   );
 }
 
-/** NotebookCard with cover — matching Tauri exactly */
+/** NotebookCard */
 function NotebookCard({
   book,
   onPress,
@@ -660,22 +757,28 @@ function NotebookCard({
   const s = makeStyles(colors);
 
   return (
-    <TouchableOpacity style={s.notebookCard} activeOpacity={0.7} onPress={onPress}>
+    <TouchableOpacity style={s.notebookCard} activeOpacity={0.75} onPress={onPress}>
       {/* Cover */}
-      {resolvedCoverUrl || book.coverUrl ? (
-        <Image
-          source={{ uri: resolvedCoverUrl || book.coverUrl || "" }}
-          style={s.notebookCover}
-          resizeMode="cover"
-        />
-      ) : (
-        <View style={s.notebookCoverFallback}>
-          <BookOpenIcon size={20} color={colors.mutedForeground} />
+      <View style={s.notebookCoverWrap}>
+        {resolvedCoverUrl || book.coverUrl ? (
+          <Image
+            source={{ uri: resolvedCoverUrl || book.coverUrl || "" }}
+            style={s.notebookCover}
+            resizeMode="cover"
+          />
+        ) : (
+          <View style={s.notebookCoverFallback}>
+            <BookOpenIcon size={22} color={colors.mutedForeground} />
+          </View>
+        )}
+        {/* Total count overlay */}
+        <View style={s.notebookCountBadge}>
+          <Text style={s.notebookCountText}>{book.highlights.length}</Text>
         </View>
-      )}
+      </View>
 
       <View style={s.notebookInfo}>
-        <Text style={s.notebookTitle} numberOfLines={1}>
+        <Text style={s.notebookTitle} numberOfLines={2}>
           {book.title}
         </Text>
         <Text style={s.notebookAuthor} numberOfLines={1}>
@@ -683,24 +786,23 @@ function NotebookCard({
         </Text>
         <View style={s.notebookStats}>
           <View style={s.notebookStatItem}>
-            <NotebookPenIcon size={12} color={colors.mutedForeground} />
+            <NotebookPenIcon size={11} color={colors.mutedForeground} />
             <Text style={s.notebookStatText}>{book.notesCount}</Text>
           </View>
+          <View style={s.notebookStatDivider} />
           <View style={s.notebookStatItem}>
-            <HighlighterIcon size={12} color={colors.mutedForeground} />
+            <HighlighterIcon size={11} color={colors.mutedForeground} />
             <Text style={s.notebookStatText}>{book.highlightsOnlyCount}</Text>
           </View>
         </View>
       </View>
 
-      <View style={s.notebookBadge}>
-        <Text style={s.notebookBadgeText}>{book.highlights.length}</Text>
-      </View>
+      <ChevronRightIcon size={16} color={colors.mutedForeground} />
     </TouchableOpacity>
   );
 }
 
-/** Note detail card — matching Tauri NoteDetailCard */
+/** Note detail card */
 function NoteCard({
   highlight,
   isEditing,
@@ -726,67 +828,67 @@ function NoteCard({
 }) {
   const colors = useColors();
   const s = makeStyles(colors);
+  const accentColor = HIGHLIGHT_COLOR_HEX[highlight.color] || colors.amber;
 
   return (
     <View style={s.noteCard}>
-      <TouchableOpacity style={s.noteCardTop} onPress={onNavigate}>
-        <View
-          style={[
-            s.colorDot,
-            { backgroundColor: HIGHLIGHT_COLOR_HEX[highlight.color] || colors.amber },
-          ]}
-        />
-        <Text style={s.noteQuote} numberOfLines={2}>
-          "{highlight.text}"
-        </Text>
-      </TouchableOpacity>
+      {/* Left color accent bar */}
+      <View style={[s.noteAccentBar, { backgroundColor: accentColor }]} />
 
-      {isEditing ? (
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
-          style={s.editArea}
-        >
-          <View style={s.editorContainer}>
-            <RichTextEditor
-              initialContent={editNote}
-              onChange={setEditNote}
-              placeholder={t("notebook.addNote", "添加笔记...")}
-              autoFocus
-            />
-          </View>
-          <View style={s.editActions}>
-            <TouchableOpacity style={s.editCancelBtn} onPress={onCancelEdit}>
-              <XIcon size={14} color={colors.mutedForeground} />
-              <Text style={s.editCancelText}>{t("common.cancel", "取消")}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={s.editSaveBtn} onPress={onSaveNote}>
-              <CheckIcon size={14} color={colors.primaryForeground} />
-              <Text style={s.editSaveText}>{t("common.save", "保存")}</Text>
-            </TouchableOpacity>
-          </View>
-        </KeyboardAvoidingView>
-      ) : (
-        <>
-          {highlight.note && (
-            <TouchableOpacity style={s.noteBody} onPress={onNavigate}>
-              <MarkdownRenderer content={highlight.note} />
-            </TouchableOpacity>
-          )}
-          <View style={s.noteActions}>
-            <TouchableOpacity style={s.noteActionBtn} onPress={onStartEdit}>
-              <EditIcon size={14} color={colors.mutedForeground} />
-            </TouchableOpacity>
-            <TouchableOpacity style={s.noteActionBtn} onPress={onDeleteNote}>
-              <Trash2Icon size={14} color={colors.mutedForeground} />
-            </TouchableOpacity>
-          </View>
-        </>
-      )}
+      <View style={s.noteCardContent}>
+        <TouchableOpacity onPress={onNavigate}>
+          <Text style={s.noteQuote} numberOfLines={3}>
+            {highlight.text}
+          </Text>
+        </TouchableOpacity>
+
+        {isEditing ? (
+          <KeyboardAvoidingView
+            behavior={Platform.OS === "ios" ? "padding" : "height"}
+            style={s.editArea}
+          >
+            <View style={s.editorContainer}>
+              <RichTextEditor
+                initialContent={editNote}
+                onChange={setEditNote}
+                placeholder={t("notebook.addNote", "添加笔记...")}
+                autoFocus
+              />
+            </View>
+            <View style={s.editActions}>
+              <TouchableOpacity style={s.editCancelBtn} onPress={onCancelEdit}>
+                <XIcon size={13} color={colors.mutedForeground} />
+                <Text style={s.editCancelText}>{t("common.cancel", "取消")}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={s.editSaveBtn} onPress={onSaveNote}>
+                <CheckIcon size={13} color={colors.primaryForeground} />
+                <Text style={s.editSaveText}>{t("common.save", "保存")}</Text>
+              </TouchableOpacity>
+            </View>
+          </KeyboardAvoidingView>
+        ) : (
+          <>
+            {highlight.note && (
+              <TouchableOpacity style={s.noteBody} onPress={onNavigate}>
+                <MarkdownRenderer content={highlight.note} />
+              </TouchableOpacity>
+            )}
+            <View style={s.noteActions}>
+              <TouchableOpacity style={s.noteActionBtn} onPress={onStartEdit}>
+                <EditIcon size={13} color={colors.mutedForeground} />
+              </TouchableOpacity>
+              <TouchableOpacity style={s.noteActionBtn} onPress={onDeleteNote}>
+                <Trash2Icon size={13} color={colors.mutedForeground} />
+              </TouchableOpacity>
+            </View>
+          </>
+        )}
+      </View>
     </View>
   );
 }
 
-/** Highlight detail card — matching Tauri HighlightDetailCard */
+/** Highlight detail card */
 function HighlightCard({
   highlight,
   onDelete,
@@ -798,25 +900,24 @@ function HighlightCard({
 }) {
   const colors = useColors();
   const s = makeStyles(colors);
+  const accentColor = HIGHLIGHT_COLOR_HEX[highlight.color] || colors.amber;
+
   return (
     <View style={s.highlightCard}>
-      <TouchableOpacity
-        style={[
-          s.colorDot,
-          { backgroundColor: HIGHLIGHT_COLOR_HEX[highlight.color] || colors.amber, marginTop: 4 },
-        ]}
-        onPress={onNavigate}
-      />
+      {/* Left color accent bar */}
+      <View style={[s.highlightAccentBar, { backgroundColor: accentColor }]} />
       <View style={s.highlightBody}>
         <TouchableOpacity onPress={onNavigate}>
-          <Text style={s.highlightText} numberOfLines={2}>
-            "{highlight.text}"
+          <Text style={s.highlightText} numberOfLines={4}>
+            {highlight.text}
           </Text>
         </TouchableOpacity>
-        {highlight.chapterTitle && <Text style={s.highlightChapter}>{highlight.chapterTitle}</Text>}
+        {highlight.chapterTitle && (
+          <Text style={s.highlightChapter}>{highlight.chapterTitle}</Text>
+        )}
       </View>
       <TouchableOpacity style={s.highlightDeleteBtn} onPress={onDelete}>
-        <Trash2Icon size={14} color={colors.mutedForeground} />
+        <Trash2Icon size={13} color={colors.mutedForeground} />
       </TouchableOpacity>
     </View>
   );
@@ -830,12 +931,13 @@ const makeStyles = (colors: ThemeColors) =>
       width: 32,
       height: 32,
       borderRadius: 16,
-      borderWidth: 2,
-      borderColor: withOpacity(colors.primary, 0.3),
+      borderWidth: 2.5,
+      borderColor: withOpacity(colors.primary, 0.2),
       borderTopColor: colors.primary,
     },
     loadingText: { fontSize: fontSize.sm, color: colors.mutedForeground },
-    // Header
+
+    // ── Header ─────────────────────────────────────────────
     header: {
       paddingHorizontal: 16,
       paddingTop: 12,
@@ -848,6 +950,7 @@ const makeStyles = (colors: ThemeColors) =>
       fontSize: fontSize["2xl"],
       fontWeight: fontWeight.bold,
       color: colors.foreground,
+      letterSpacing: -0.5,
     },
     searchToggle: {
       width: 36,
@@ -855,105 +958,121 @@ const makeStyles = (colors: ThemeColors) =>
       borderRadius: radius.full,
       alignItems: "center",
       justifyContent: "center",
+      backgroundColor: colors.muted,
     },
-    statsRow: { flexDirection: "row", gap: 12, marginTop: 10 },
+    statsRow: { flexDirection: "row", gap: 8, marginTop: 12 },
     statBadge: {
       flexDirection: "row",
       alignItems: "center",
-      gap: 6,
-      backgroundColor: colors.muted,
-      borderRadius: radius.lg,
+      gap: 5,
+      borderRadius: radius.full,
       paddingHorizontal: 10,
-      paddingVertical: 6,
+      paddingVertical: 5,
     },
-    statValue: { fontSize: fontSize.sm, fontWeight: fontWeight.semibold, color: colors.foreground },
-    statLabel: { fontSize: 12, color: colors.mutedForeground },
+    statValue: { fontSize: fontSize.sm, fontWeight: fontWeight.semibold },
+    statLabel: { fontSize: 11, color: colors.mutedForeground },
     searchBar: {
       flexDirection: "row",
       alignItems: "center",
-      backgroundColor: colors.muted,
-      borderRadius: radius.lg,
+      backgroundColor: withOpacity(colors.muted, 0.6),
+      borderRadius: radius.full,
+      borderWidth: 0.5,
+      borderColor: colors.border,
       paddingHorizontal: 12,
       height: 36,
       gap: 8,
       marginTop: 10,
     },
     searchInput: { flex: 1, fontSize: fontSize.sm, color: colors.foreground, padding: 0 },
-    // Empty
-    emptyWrap: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 24 },
-    emptyIconWrap: {
-      width: 80,
-      height: 80,
-      borderRadius: radius.full,
-      backgroundColor: colors.muted,
-      alignItems: "center",
-      justifyContent: "center",
-      marginBottom: 16,
-    },
+
+    // ── Empty ───────────────────────────────────────────────
+    emptyWrap: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 32, gap: 10 },
     emptyTitle: {
       fontSize: fontSize.lg,
       fontWeight: fontWeight.semibold,
       color: colors.foreground,
-      marginBottom: 8,
     },
     emptyHint: {
       fontSize: fontSize.sm,
       color: colors.mutedForeground,
       textAlign: "center",
-      maxWidth: 260,
+      lineHeight: 20,
     },
-    // Notebook list
-    listContent: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 24 },
+
+    // ── Notebook list ───────────────────────────────────────
+    listContent: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 32 },
     notebookCard: {
       flexDirection: "row",
-      alignItems: "flex-start",
+      alignItems: "center",
       backgroundColor: colors.card,
       borderRadius: radius.xl,
       borderWidth: 0.5,
       borderColor: colors.border,
       padding: 12,
-      marginBottom: 12,
+      marginBottom: 10,
       gap: 12,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.04,
+      shadowRadius: 4,
+      elevation: 1,
     },
+    notebookCoverWrap: { position: "relative" },
     notebookCover: {
-      width: 44,
-      height: 64,
+      width: 48,
+      height: 68,
       borderRadius: radius.sm,
       backgroundColor: colors.muted,
     },
     notebookCoverFallback: {
-      width: 44,
-      height: 64,
+      width: 48,
+      height: 68,
       borderRadius: radius.sm,
       backgroundColor: colors.muted,
       alignItems: "center",
       justifyContent: "center",
     },
-    notebookInfo: { flex: 1, gap: 4 },
+    notebookCountBadge: {
+      position: "absolute",
+      bottom: -4,
+      right: -4,
+      backgroundColor: colors.primary,
+      borderRadius: radius.full,
+      minWidth: 18,
+      height: 18,
+      alignItems: "center",
+      justifyContent: "center",
+      paddingHorizontal: 4,
+      borderWidth: 1.5,
+      borderColor: colors.card,
+    },
+    notebookCountText: { fontSize: 10, fontWeight: fontWeight.bold, color: colors.primaryForeground },
+    notebookInfo: { flex: 1, gap: 3 },
     notebookTitle: {
       fontSize: fontSize.sm,
-      fontWeight: fontWeight.medium,
+      fontWeight: fontWeight.semibold,
       color: colors.foreground,
+      lineHeight: 19,
     },
-    notebookAuthor: { fontSize: fontSize.xs, color: colors.mutedForeground },
-    notebookStats: { flexDirection: "row", alignItems: "center", gap: 12, marginTop: 4 },
+    notebookAuthor: { fontSize: 12, color: colors.mutedForeground },
+    notebookStats: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 5 },
     notebookStatItem: { flexDirection: "row", alignItems: "center", gap: 4 },
-    notebookStatText: { fontSize: fontSize.xs, color: colors.mutedForeground },
-    notebookBadge: {
-      backgroundColor: colors.muted,
-      borderRadius: radius.full,
-      paddingHorizontal: 8,
-      paddingVertical: 2,
+    notebookStatDivider: { width: 1, height: 10, backgroundColor: colors.border },
+    notebookStatText: { fontSize: 11, color: colors.mutedForeground },
+
+    // ── Detail header ───────────────────────────────────────
+    detailHeader: {
+      borderBottomWidth: 0.5,
+      borderBottomColor: colors.border,
+      backgroundColor: colors.background,
     },
-    notebookBadgeText: { fontSize: fontSize.xs, color: colors.mutedForeground },
-    // Detail header
-    detailHeader: { borderBottomWidth: 0.5, borderBottomColor: colors.border },
     detailHeaderTop: {
       flexDirection: "row",
       alignItems: "center",
-      gap: 12,
+      gap: 10,
       paddingHorizontal: 16,
-      paddingVertical: 12,
+      paddingTop: 12,
+      paddingBottom: 10,
     },
     backBtn: {
       width: 32,
@@ -961,6 +1080,7 @@ const makeStyles = (colors: ThemeColors) =>
       borderRadius: radius.full,
       alignItems: "center",
       justifyContent: "center",
+      backgroundColor: colors.muted,
     },
     detailCover: { width: 28, height: 40, borderRadius: 4, backgroundColor: colors.muted },
     detailCoverFallback: {
@@ -971,98 +1091,167 @@ const makeStyles = (colors: ThemeColors) =>
       alignItems: "center",
       justifyContent: "center",
     },
-    detailHeaderInfo: { flex: 1, minWidth: 0 },
+    detailHeaderInfo: { flex: 1, minWidth: 0, gap: 1 },
     detailTitle: {
       fontSize: fontSize.sm,
       fontWeight: fontWeight.semibold,
       color: colors.foreground,
     },
-    detailAuthor: { fontSize: fontSize.xs, color: colors.mutedForeground },
+    detailAuthor: { fontSize: 11, color: colors.mutedForeground },
     exportBtn: {
       width: 32,
       height: 32,
       borderRadius: radius.full,
       alignItems: "center",
       justifyContent: "center",
+      backgroundColor: colors.muted,
     },
-    // Tabs
-    detailTabRow: {
-      flexDirection: "column",
+
+    // ── Pill segment tabs ───────────────────────────────────
+    tabRow: {
       gap: 8,
       paddingHorizontal: 16,
-      paddingVertical: 12,
+      paddingTop: 10,
+      paddingBottom: 12,
     },
     tabSwitcher: {
       flexDirection: "row",
+      backgroundColor: withOpacity(colors.muted, 0.7),
+      borderRadius: radius.full,
       borderWidth: 0.5,
       borderColor: colors.border,
-      borderRadius: radius.lg,
-      padding: 2,
+      padding: 3,
+      gap: 2,
     },
     tabBtn: {
       flex: 1,
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "center",
-      gap: 6,
-      paddingHorizontal: 12,
+      gap: 4,
+      paddingHorizontal: 8,
       paddingVertical: 6,
-      borderRadius: radius.md,
+      borderRadius: radius.full,
     },
-    tabBtnActive: { backgroundColor: colors.primary },
+    tabBtnActive: {
+      backgroundColor: colors.background,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.08,
+      shadowRadius: 3,
+      elevation: 2,
+    },
     tabBtnText: {
-      fontSize: fontSize.xs,
+      fontSize: 11,
       fontWeight: fontWeight.medium,
       color: colors.mutedForeground,
     },
-    tabBtnTextActive: { color: colors.primaryForeground },
+    tabBtnTextActive: { color: colors.primary },
+    tabCount: {
+      backgroundColor: withOpacity(colors.mutedForeground, 0.15),
+      borderRadius: radius.full,
+      minWidth: 16,
+      height: 16,
+      alignItems: "center",
+      justifyContent: "center",
+      paddingHorizontal: 4,
+    },
+    tabCountActive: { backgroundColor: withOpacity(colors.primary, 0.15) },
+    tabCountText: { fontSize: 10, fontWeight: fontWeight.semibold, color: colors.mutedForeground },
+    tabCountTextActive: { color: colors.primary },
     detailSearch: {
       flexDirection: "row",
       alignItems: "center",
       gap: 8,
-      backgroundColor: colors.muted,
-      borderRadius: radius.lg,
+      backgroundColor: withOpacity(colors.muted, 0.5),
+      borderRadius: radius.full,
+      borderWidth: 0.5,
+      borderColor: colors.border,
       paddingHorizontal: 12,
       height: 32,
     },
     detailSearchInput: { flex: 1, fontSize: fontSize.sm, color: colors.foreground, padding: 0 },
-    // Detail empty
-    detailEmpty: { flex: 1, alignItems: "center", justifyContent: "center", padding: 24 },
+
+    // ── Detail empty ────────────────────────────────────────
+    detailEmpty: { flex: 1, alignItems: "center", justifyContent: "center", padding: 32, gap: 10 },
+    detailEmptyIconWrap: {
+      width: 64,
+      height: 64,
+      borderRadius: radius.xl,
+      backgroundColor: withOpacity(colors.muted, 0.7),
+      alignItems: "center",
+      justifyContent: "center",
+      marginBottom: 4,
+    },
+    detailEmptyTitle: { fontSize: fontSize.sm, fontWeight: fontWeight.medium, color: colors.mutedForeground },
+    detailEmptyHint: { fontSize: 12, color: withOpacity(colors.mutedForeground, 0.7), textAlign: "center" },
     detailEmptyText: { fontSize: fontSize.sm, color: colors.mutedForeground },
-    // Detail list
-    detailList: { flex: 1, paddingHorizontal: 16 },
+
+    // ── Detail list ─────────────────────────────────────────
+    detailList: { flex: 1, paddingHorizontal: 16, paddingTop: 4 },
     chapterGroup: { marginBottom: 16 },
-    chapterDivider: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 8 },
+    chapterDivider: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 10, marginTop: 4 },
     chapterLine: { flex: 1, height: 0.5, backgroundColor: colors.border },
+    chapterPill: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 4,
+      borderWidth: 0.5,
+      borderColor: withOpacity(colors.border, 0.8),
+      borderRadius: radius.full,
+      paddingHorizontal: 8,
+      paddingVertical: 3,
+      backgroundColor: withOpacity(colors.muted, 0.4),
+    },
     chapterName: {
-      fontSize: fontSize.xs,
+      fontSize: 11,
       fontWeight: fontWeight.medium,
       color: colors.mutedForeground,
-      paddingHorizontal: 8,
     },
-    // Note card
+
+    // ── Note card ───────────────────────────────────────────
     noteCard: {
+      flexDirection: "row",
       backgroundColor: colors.card,
-      borderRadius: radius.lg,
+      borderRadius: radius.xl,
       borderWidth: 0.5,
       borderColor: colors.border,
-      padding: 12,
       marginBottom: 8,
+      overflow: "hidden",
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.03,
+      shadowRadius: 3,
+      elevation: 1,
     },
-    noteCardTop: { flexDirection: "row", alignItems: "flex-start", gap: 8 },
-    colorDot: { width: 10, height: 10, borderRadius: 5, marginTop: 4 },
-    noteQuote: { flex: 1, fontSize: fontSize.sm, color: colors.foreground, lineHeight: 20 },
+    noteAccentBar: {
+      width: 3,
+      alignSelf: "stretch",
+    },
+    noteCardContent: {
+      flex: 1,
+      padding: 11,
+    },
+    noteQuote: {
+      fontSize: fontSize.sm,
+      color: withOpacity(colors.foreground, 0.75),
+      lineHeight: 20,
+      fontStyle: "italic",
+    },
     noteBody: {
       marginTop: 8,
-      backgroundColor: colors.muted,
-      borderRadius: radius.sm,
-      paddingHorizontal: 8,
-      paddingVertical: 6,
+      backgroundColor: withOpacity(colors.muted, 0.6),
+      borderRadius: radius.md,
+      paddingHorizontal: 10,
+      paddingVertical: 7,
     },
-    noteText: { fontSize: fontSize.xs, color: colors.mutedForeground, lineHeight: 16 },
-    noteActions: { flexDirection: "row", justifyContent: "flex-end", gap: 4, marginTop: 8 },
-    noteActionBtn: { padding: 6, borderRadius: radius.sm },
-    // Edit
+    noteActions: { flexDirection: "row", justifyContent: "flex-end", gap: 2, marginTop: 6 },
+    noteActionBtn: {
+      padding: 6,
+      borderRadius: radius.md,
+    },
+
+    // ── Edit ────────────────────────────────────────────────
     editArea: { marginTop: 8 },
     editorContainer: {
       flex: 1,
@@ -1072,38 +1261,15 @@ const makeStyles = (colors: ThemeColors) =>
       borderColor: colors.border,
       overflow: "hidden",
     },
-    editInput: {
-      minHeight: 80,
-      backgroundColor: colors.muted,
-      borderRadius: radius.md,
-      padding: 12,
-      fontSize: fontSize.sm,
-      color: colors.foreground,
-      textAlignVertical: "top",
-    },
-    editTabs: { flexDirection: "row", gap: 12, marginBottom: 8, paddingHorizontal: 4 },
-    editTabBtn: { paddingBottom: 4 },
-    editTabBtnActive: { borderBottomWidth: 2, borderBottomColor: colors.primary },
-    editTabText: {
-      fontSize: fontSize.xs,
-      color: colors.mutedForeground,
-      fontWeight: fontWeight.medium,
-    },
-    editTabTextActive: { color: colors.primary },
-    editPreviewArea: {
-      minHeight: 80,
-      backgroundColor: colors.muted,
-      borderRadius: radius.md,
-      padding: 12,
-    },
     editActions: { flexDirection: "row", justifyContent: "flex-end", gap: 8, marginTop: 8 },
     editCancelBtn: {
       flexDirection: "row",
       alignItems: "center",
       gap: 4,
-      paddingHorizontal: 8,
-      paddingVertical: 4,
+      paddingHorizontal: 10,
+      paddingVertical: 5,
       borderRadius: radius.md,
+      backgroundColor: colors.muted,
     },
     editCancelText: { fontSize: fontSize.xs, color: colors.mutedForeground },
     editSaveBtn: {
@@ -1111,45 +1277,111 @@ const makeStyles = (colors: ThemeColors) =>
       alignItems: "center",
       gap: 4,
       backgroundColor: colors.primary,
-      paddingHorizontal: 8,
-      paddingVertical: 4,
+      paddingHorizontal: 12,
+      paddingVertical: 5,
       borderRadius: radius.md,
     },
-    editSaveText: { fontSize: fontSize.xs, color: colors.primaryForeground },
-    // Highlight card
+    editSaveText: { fontSize: fontSize.xs, fontWeight: fontWeight.medium, color: colors.primaryForeground },
+
+    // ── Highlight card ──────────────────────────────────────
     highlightCard: {
       flexDirection: "row",
-      alignItems: "flex-start",
-      gap: 8,
+      alignItems: "stretch",
       backgroundColor: colors.card,
-      borderRadius: radius.lg,
+      borderRadius: radius.xl,
+      borderWidth: 0.5,
+      borderColor: colors.border,
+      marginBottom: 8,
+      overflow: "hidden",
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.03,
+      shadowRadius: 3,
+      elevation: 1,
+    },
+    highlightAccentBar: {
+      width: 3,
+      alignSelf: "stretch",
+    },
+    highlightBody: { flex: 1, paddingVertical: 11, paddingHorizontal: 11 },
+    highlightText: {
+      fontSize: fontSize.sm,
+      color: colors.foreground,
+      lineHeight: 21,
+      fontStyle: "italic",
+    },
+    highlightChapter: { fontSize: 11, color: colors.mutedForeground, marginTop: 5 },
+    highlightDeleteBtn: { padding: 11, justifyContent: "center" },
+
+    // ── Export ──────────────────────────────────────────────
+    exportOverlay: { flex: 1 },
+    exportDropdown: {
+      position: "absolute",
+      top: 60,
+      right: 16,
+      minWidth: 140,
+      backgroundColor: colors.card,
+      borderRadius: radius.xl,
+      borderWidth: 0.5,
+      borderColor: colors.border,
+      padding: 4,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 8 },
+      shadowOpacity: 0.15,
+      shadowRadius: 16,
+      elevation: 8,
+    },
+    exportItem: { paddingHorizontal: 14, paddingVertical: 10, borderRadius: radius.lg },
+    exportItemText: { fontSize: fontSize.sm, color: colors.foreground },
+
+    // ── Knowledge docs ──────────────────────────────────────
+    knowledgeCard: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: colors.card,
+      borderRadius: radius.xl,
       borderWidth: 0.5,
       borderColor: colors.border,
       padding: 12,
       marginBottom: 8,
-    },
-    highlightBody: { flex: 1, minWidth: 0 },
-    highlightText: { fontSize: fontSize.sm, color: colors.foreground, lineHeight: 20 },
-    highlightChapter: { fontSize: fontSize.xs, color: colors.mutedForeground, marginTop: 4 },
-    highlightDeleteBtn: { padding: 6, borderRadius: radius.sm },
-    // Export
-    exportOverlay: { flex: 1 },
-    exportDropdown: {
-      position: "absolute",
-      top: 56,
-      right: 16,
-      minWidth: 140,
-      backgroundColor: colors.card,
-      borderRadius: radius.lg,
-      borderWidth: 0.5,
-      borderColor: colors.border,
-      padding: 4,
-      elevation: 5,
+      gap: 10,
       shadowColor: "#000",
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.3,
-      shadowRadius: 8,
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.03,
+      shadowRadius: 3,
+      elevation: 1,
     },
-    exportItem: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: radius.md },
-    exportItemText: { fontSize: fontSize.sm, color: colors.foreground },
+    knowledgeCardIcon: {
+      width: 36,
+      height: 36,
+      borderRadius: radius.lg,
+      backgroundColor: withOpacity(colors.primary, 0.1),
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    knowledgeCardBody: { flex: 1, minWidth: 0, gap: 2 },
+    knowledgeCardTitle: {
+      fontSize: fontSize.sm,
+      fontWeight: fontWeight.medium,
+      color: colors.foreground,
+    },
+    knowledgeCardDate: { fontSize: 11, color: colors.mutedForeground },
+
+    // ── FAB ─────────────────────────────────────────────────
+    fab: {
+      position: "absolute",
+      bottom: 24,
+      right: 20,
+      width: 52,
+      height: 52,
+      borderRadius: 26,
+      backgroundColor: colors.primary,
+      alignItems: "center",
+      justifyContent: "center",
+      shadowColor: colors.primary,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.4,
+      shadowRadius: 8,
+      elevation: 6,
+    },
   });

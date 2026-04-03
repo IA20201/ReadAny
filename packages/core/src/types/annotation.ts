@@ -51,4 +51,14 @@ export interface Bookmark {
   createdAt: number;
 }
 
+/** A rich knowledge document attached to a book, stored as Markdown */
+export interface KnowledgeNote {
+  id: string;
+  bookId: string;
+  title: string;
+  content: string; // Markdown string
+  createdAt: number;
+  updatedAt: number;
+}
+
 export type Annotation = Highlight | Note | Bookmark;

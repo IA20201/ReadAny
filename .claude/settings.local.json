@@ -44,7 +44,21 @@
       "WebFetch(domain:vlcn.io)",
       "WebFetch(domain:docs.expo.dev)",
       "WebFetch(domain:crates.io)",
-      "WebFetch(domain:expo.dev)"
+      "WebFetch(domain:expo.dev)",
+      "mcp__pencil__get_editor_state",
+      "Bash(xargs cat:*)",
+      "Bash(sort -k6,7)",
+      "Bash(cp /tmp/readany_ai_infrastructure_summary.md ~/ReadAny-AI-Infrastructure-Summary.md)",
+      "Bash(cp /tmp/ARCHITECTURE_QUICK_REFERENCE.md ~/ReadAny-AI-Architecture-Quick-Reference.md)",
+      "Bash(cp /tmp/EXACT_FUNCTION_SIGNATURES.md ~/ReadAny-AI-Function-Signatures.md)",
+      "Bash(node_modules/.bin/node -e \"const r = require\\('packages/app/node_modules/@tiptap/react'\\); console.log\\(Object.keys\\(r\\).filter\\(k=>k.includes\\('Bubble'\\)\\)\\)\")",
+      "WebFetch(domain:docs.anthropic.com)",
+      "WebFetch(domain:skills.sh)",
+      "Bash(cat ~/.agents/skills/ui-ux-pro-max/*.md)",
+      "Bash(ln -sf ~/.agents/skills/ui-ux-pro-max ~/.claude/skills/ui-ux-pro-max)",
+      "Bash(cat ~/.agents/skills/ui-ux-pro-max/scripts/*.js)",
+      "Bash(awk -F',' 'NR==1 || /Productivity/' ~/.agents/skills/ui-ux-pro-max/data/colors.csv)",
+      "Bash(find:*)"
     ]
   }
 }

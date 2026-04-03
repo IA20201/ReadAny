@@ -345,6 +345,7 @@ export function BookChatScreen({ route, navigation }: Props) {
               isStreaming={isStreaming}
               currentStep={currentStep}
               onCitationClick={handleCitationClick}
+              bookId={bookId}
             />
           ) : (
             <TouchableWithoutFeedback onPress={Keyboard.dismiss}>

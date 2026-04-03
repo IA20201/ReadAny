@@ -15,6 +15,7 @@ interface MessageListProps {
   isStreaming?: boolean;
   currentStep?: "thinking" | "tool_calling" | "responding" | "idle";
   onStop?: () => void;
+  bookId?: string;
 }
 
 /** Threshold (px) to consider the user "at the bottom" */
@@ -25,6 +26,7 @@ export function MessageList({
   onCitationClick,
   isStreaming,
   currentStep,
+  bookId,
 }: MessageListProps) {
   const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -112,6 +114,7 @@ export function MessageList({
             onCitationClick={onCitationClick}
             isStreaming={idx === messages.length - 1 && isLastMsgStreaming}
             currentStep={currentStep}
+            bookId={bookId}
           />
         ))}
         {showStreamingIndicator && <StreamingIndicator step={currentStep!} />}
@@ -139,6 +142,7 @@ interface MessageBubbleProps {
   onCitationClick?: (citation: CitationPart) => void;
   isStreaming?: boolean;
   currentStep?: "thinking" | "tool_calling" | "responding" | "idle";
+  bookId?: string;
 }
 
 /** Inline quote block component for user messages */
@@ -156,7 +160,7 @@ function UserQuoteBlock({ part }: { part: QuotePart }) {
   );
 }
 
-function MessageBubble({ message, onCitationClick, isStreaming, currentStep }: MessageBubbleProps) {
+function MessageBubble({ message, onCitationClick, isStreaming, currentStep, bookId }: MessageBubbleProps) {
   if (message.role === "user") {
     const quoteParts = message.parts.filter((p) => p.type === "quote") as QuotePart[];
     const textParts = message.parts.filter((p) => p.type === "text");
@@ -219,6 +223,7 @@ function MessageBubble({ message, onCitationClick, isStreaming, currentStep }: M
           part={part}
           citations={citations}
           onCitationClick={onCitationClick}
+          bookId={bookId}
         />
       ))}
       {showGapIndicator && <StreamingIndicator step="thinking" />}

@@ -22,6 +22,11 @@ export {
   type StreamingChatOptions,
   type StreamingState,
 } from "./use-streaming-chat";
+export {
+  useAITextAction,
+  type AITextActionType,
+  type AITextActionResult,
+} from "./use-ai-text-action";
 
 // Reader hooks
 export {
