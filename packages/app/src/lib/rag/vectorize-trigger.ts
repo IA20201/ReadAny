@@ -1,5 +1,6 @@
 import { useLibraryStore } from "@/stores/library-store";
 import { useVectorModelStore } from "@/stores/vector-model-store";
+import { resolveDesktopDataPath } from "@/lib/storage/desktop-library-root";
 /**
  * Vectorize Trigger — app-layer adapter that bridges platform-specific
  * concerns (Zustand stores, book file extraction) with the core vectorization pipeline.
@@ -32,9 +33,7 @@ export async function triggerVectorizeBook(
     !filePath.startsWith("asset://") &&
     !filePath.startsWith("http")
   ) {
-    const { appDataDir, join } = await import("@tauri-apps/api/path");
-    const appData = await appDataDir();
-    resolvedPath = await join(appData, filePath);
+    resolvedPath = await resolveDesktopDataPath(filePath);
   }
 
   const vmState = useVectorModelStore.getState();

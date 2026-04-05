@@ -12,6 +12,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -43,6 +44,16 @@ export default function TranslationSettingsScreen() {
 
   const selectedEndpointId = translationConfig.provider.endpointId || aiConfig.activeEndpointId;
   const selectedModel = translationConfig.provider.model || aiConfig.activeModel;
+
+  const handleProviderChange = (providerId: "ai" | "deepl", providerName: string) => {
+    updateTranslationConfig({
+      provider: {
+        ...translationConfig.provider,
+        id: providerId,
+        name: providerName,
+      },
+    });
+  };
 
   const handleModelSelect = (endpointId: string, model: string) => {
     updateTranslationConfig({
@@ -86,11 +97,7 @@ export default function TranslationSettingsScreen() {
                     styles.listItem,
                     idx < TRANSLATOR_PROVIDERS.length - 1 && styles.listItemBorder,
                   ]}
-                  onPress={() =>
-                    updateTranslationConfig({
-                      provider: { id: p.id, name: p.name },
-                    })
-                  }
+                  onPress={() => handleProviderChange(p.id, p.name)}
                   activeOpacity={0.7}
                 >
                   <View>
@@ -112,9 +119,7 @@ export default function TranslationSettingsScreen() {
           {/* DeepL API Key */}
           {translationConfig.provider.id === "deepl" && (
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>
-                {t("translation.deeplApiKey", "DeepL API Key")}
-              </Text>
+              <Text style={styles.sectionTitle}>{t("translation.deeplApiKey", "DeepL API Key")}</Text>
               <PasswordInput
                 style={styles.apiKeyInput}
                 value={translationConfig.provider.apiKey || ""}
@@ -129,6 +134,36 @@ export default function TranslationSettingsScreen() {
                 placeholder={t("translation.deeplApiKeyPlaceholder", "输入 DeepL API Key")}
                 placeholderTextColor={colors.mutedForeground}
               />
+              <Text style={styles.fieldHint}>{t("settings.deeplKeyHint", "DeepL API 密钥")}</Text>
+
+              <Text style={[styles.sectionTitle, styles.subSectionTitle]}>
+                {t("translation.deeplBaseUrl", "DeepL 请求地址")}
+              </Text>
+              <TextInput
+                style={styles.apiKeyInput}
+                value={translationConfig.provider.baseUrl || ""}
+                onChangeText={(v) =>
+                  updateTranslationConfig({
+                    provider: {
+                      ...translationConfig.provider,
+                      baseUrl: v,
+                    },
+                  })
+                }
+                placeholder={t(
+                  "translation.deeplBaseUrlPlaceholder",
+                  "https://api-free.deepl.com/v2",
+                )}
+                placeholderTextColor={colors.mutedForeground}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+              <Text style={styles.fieldHint}>
+                {t(
+                  "translation.deeplBaseUrlHint",
+                  "填写基础地址，也支持直接粘贴完整的 /translate 地址。",
+                )}
+              </Text>
             </View>
           )}
 
@@ -293,6 +328,14 @@ const makeStyles = (colors: ThemeColors) =>
       paddingVertical: 12,
       fontSize: fontSize.sm,
       color: colors.foreground,
+    },
+    fieldHint: {
+      fontSize: fontSize.xs,
+      color: colors.mutedForeground,
+      marginTop: 6,
+    },
+    subSectionTitle: {
+      marginTop: 8,
     },
     langItem: {
       flexDirection: "row",

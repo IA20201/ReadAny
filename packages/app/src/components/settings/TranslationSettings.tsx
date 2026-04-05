@@ -1,3 +1,4 @@
+import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
 /**
  * TranslationSettings — translation provider config
@@ -43,10 +44,9 @@ export function TranslationSettings() {
   const handleProviderChange = (providerId: string) => {
     updateTranslationConfig({
       provider: {
+        ...translationConfig.provider,
         id: providerId as "ai" | "deepl",
         name: TRANSLATOR_PROVIDERS.find((p) => p.id === providerId)?.name || "",
-        model: providerId === "ai" ? translationConfig.provider.model : undefined,
-        endpointId: providerId === "ai" ? translationConfig.provider.endpointId : undefined,
       },
     });
   };
@@ -67,6 +67,15 @@ export function TranslationSettings() {
       provider: {
         ...translationConfig.provider,
         apiKey,
+      },
+    });
+  };
+
+  const handleBaseUrlChange = (baseUrl: string) => {
+    updateTranslationConfig({
+      provider: {
+        ...translationConfig.provider,
+        baseUrl,
       },
     });
   };
@@ -196,14 +205,28 @@ export function TranslationSettings() {
 
           {/* DeepL API Key (only show for DeepL) */}
           {!isAIProvider && (
-            <div className="space-y-2">
-              <label className="text-sm text-foreground">{t("settings.apiKey")}</label>
-              <PasswordInput
-                placeholder={t("settings.apiKeyPlaceholder")}
-                value={translationConfig.provider.apiKey || ""}
-                onChange={(e) => handleApiKeyChange(e.target.value)}
-              />
-              <p className="text-xs text-muted-foreground">{t("settings.deeplKeyHint")}</p>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <label className="text-sm text-foreground">{t("settings.apiKey")}</label>
+                <PasswordInput
+                  placeholder={t("settings.apiKeyPlaceholder")}
+                  value={translationConfig.provider.apiKey || ""}
+                  onChange={(e) => handleApiKeyChange(e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">{t("settings.deeplKeyHint")}</p>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm text-foreground">{t("translation.deeplBaseUrl")}</label>
+                <Input
+                  placeholder={t("translation.deeplBaseUrlPlaceholder")}
+                  value={translationConfig.provider.baseUrl || ""}
+                  onChange={(e) => handleBaseUrlChange(e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">
+                  {t("translation.deeplBaseUrlHint")}
+                </p>
+              </div>
             </div>
           )}
         </div>

@@ -8,6 +8,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useSettingsStore } from "@readany/core/stores/settings-store";
+import { testDeepLConnection } from "@readany/core/translation/providers";
 import { AlertCircle, CheckCircle2, Loader2 } from "lucide-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -20,17 +21,15 @@ export function TranslationPage({ onNext, onPrev, step, totalSteps }: any) {
 
   const [provider, setProvider] = useState<"ai" | "deepl">(translationConfig.provider.id);
   const [apiKey, setApiKey] = useState(translationConfig.provider.apiKey || "");
+  const [baseUrl, setBaseUrl] = useState(translationConfig.provider.baseUrl || "");
   const [status, setStatus] = useState<"idle" | "testing" | "success" | "error">("idle");
 
   const testConnection = async () => {
     setStatus("testing");
     try {
-      const res = await fetch("https://api-free.deepl.com/v2/usage", {
-        headers: { Authorization: `DeepL-Auth-Key ${apiKey}` },
-      });
-      if (res.ok) setStatus("success");
-      else throw new Error("Failed");
-    } catch (e) {
+      await testDeepLConnection(apiKey, baseUrl);
+      setStatus("success");
+    } catch {
       setStatus("error");
     }
   };
@@ -38,9 +37,11 @@ export function TranslationPage({ onNext, onPrev, step, totalSteps }: any) {
   const handleNext = () => {
     updateTranslationConfig({
       provider: {
+        ...translationConfig.provider,
         id: provider,
         name: provider === "ai" ? "AI Translation" : "DeepL",
         apiKey: provider === "deepl" ? apiKey : undefined,
+        baseUrl: provider === "deepl" ? baseUrl : undefined,
       },
     });
     onNext();
@@ -114,9 +115,33 @@ export function TranslationPage({ onNext, onPrev, step, totalSteps }: any) {
               <Input
                 type="password"
                 value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
+                onChange={(e) => {
+                  setApiKey(e.target.value);
+                  setStatus("idle");
+                }}
                 className="h-9 text-sm"
               />
+              <label className="pt-2 text-xs font-medium text-muted-foreground">
+                {t("translation.deeplBaseUrl", "DeepL Request URL")}
+              </label>
+              <Input
+                value={baseUrl}
+                onChange={(e) => {
+                  setBaseUrl(e.target.value);
+                  setStatus("idle");
+                }}
+                placeholder={t(
+                  "translation.deeplBaseUrlPlaceholder",
+                  "https://api-free.deepl.com/v2",
+                )}
+                className="h-9 text-sm"
+              />
+              <p className="text-xs text-muted-foreground">
+                {t(
+                  "translation.deeplBaseUrlHint",
+                  "Use the base URL. Pasting a full /translate URL is also supported.",
+                )}
+              </p>
             </div>
           )}
         </div>

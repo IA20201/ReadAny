@@ -83,6 +83,7 @@ export function useTranslator(options: UseTranslatorOptions = {}) {
             sourceLang,
             targetLanguage,
             apiKey,
+            translationConfig.provider.baseUrl,
           );
         } else {
           throw new Error(`Unknown translation provider: ${providerId}`);

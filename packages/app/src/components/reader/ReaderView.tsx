@@ -26,6 +26,7 @@ import { useNotebookStore } from "@/stores/notebook-store";
 import { useReaderStore } from "@/stores/reader-store";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useTTSStore } from "@/stores/tts-store";
+import { resolveDesktopDataPath } from "@/lib/storage/desktop-library-root";
 import type { CitationPart, HighlightColor } from "@readany/core/types";
 import { eventBus } from "@readany/core/utils/event-bus";
 import { throttle } from "@readany/core/utils/throttle";
@@ -55,9 +56,7 @@ async function loadFileAsBlob(filePath: string): Promise<Blob> {
     !filePath.startsWith("asset://") &&
     !filePath.startsWith("http")
   ) {
-    const { appDataDir, join } = await import("@tauri-apps/api/path");
-    const appData = await appDataDir();
-    resolvedPath = await join(appData, filePath);
+    resolvedPath = await resolveDesktopDataPath(filePath);
   }
 
   try {

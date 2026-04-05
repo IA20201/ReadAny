@@ -210,20 +210,112 @@ function parseNumberedTranslation(content: string, expectedCount: number): strin
 }
 
 /** DeepL Translation */
-export async function deeplTranslate(
+const DEFAULT_DEEPL_BASE_URL = "https://api-free.deepl.com/v2";
+
+type DeepLBackendMode = "deepl" | "deeplx";
+
+interface ResolvedDeepLConfig {
+  mode: DeepLBackendMode;
+  requestBaseUrl: string;
+  apiKey?: string;
+  exactTranslateUrl?: string;
+}
+
+export function normalizeDeepLBaseUrl(baseUrl?: string): string {
+  const trimmed = baseUrl?.trim();
+  if (!trimmed) {
+    return DEFAULT_DEEPL_BASE_URL;
+  }
+
+  const withoutTrailingSlash = trimmed.replace(/\/+$/, "");
+  return withoutTrailingSlash.replace(/\/translate$/i, "");
+}
+
+export function getDeepLUrl(baseUrl: string | undefined, path: "translate" | "usage"): string {
+  return `${normalizeDeepLBaseUrl(baseUrl)}/${path}`;
+}
+
+function isOfficialDeepLHost(hostname: string): boolean {
+  return hostname === "api.deepl.com" || hostname === "api-free.deepl.com" || hostname.endsWith(".deepl.com");
+}
+
+function resolveDeepLConfig(baseUrl: string | undefined, apiKey: string): ResolvedDeepLConfig {
+  const rawBaseUrl = baseUrl?.trim();
+  const normalizedBaseUrl = normalizeDeepLBaseUrl(rawBaseUrl);
+  const url = new URL(normalizedBaseUrl);
+  const rawPathSegments = (rawBaseUrl ? new URL(rawBaseUrl) : url).pathname.split("/").filter(Boolean);
+  const pathSegments = [...rawPathSegments];
+  const hasTranslateSuffix = (rawBaseUrl || "").replace(/\/+$/, "").endsWith("/translate");
+  const exactTranslateUrl = hasTranslateSuffix ? (rawBaseUrl || "").replace(/\/+$/, "") : undefined;
+  if (hasTranslateSuffix) {
+    pathSegments.pop();
+  }
+  const lastPathSegment = pathSegments[pathSegments.length - 1];
+  const isOfficial = isOfficialDeepLHost(url.hostname) || lastPathSegment === "v2";
+
+  if (isOfficial) {
+    return {
+      mode: "deepl",
+      requestBaseUrl: normalizedBaseUrl,
+      apiKey,
+      exactTranslateUrl,
+    };
+  }
+
+  const remainingSegments = [...pathSegments];
+  let resolvedApiKey = apiKey.trim();
+
+  if (remainingSegments.length > 0) {
+    const lastSegment = remainingSegments[remainingSegments.length - 1] || "";
+    if (!resolvedApiKey || lastSegment === resolvedApiKey) {
+      resolvedApiKey = resolvedApiKey || lastSegment;
+      remainingSegments.pop();
+    }
+  }
+
+  return {
+    mode: "deeplx",
+    requestBaseUrl: `${url.origin}${remainingSegments.length ? `/${remainingSegments.join("/")}` : ""}`,
+    apiKey: resolvedApiKey || undefined,
+    exactTranslateUrl,
+  };
+}
+
+function extractDeepLXTranslation(data: any): string | null {
+  const candidate = typeof data?.data === "string" ? data.data : typeof data?.translation === "string" ? data.translation : null;
+  if (!candidate) {
+    return null;
+  }
+
+  if (/^https:\/\/linux\.do\/t\/topic\/111737\/?$/i.test(candidate.trim())) {
+    throw new Error(
+      "DeepLX endpoint returned the Linux.do announcement link instead of a translation. Please refresh the DeepLX Connect URL or API key.",
+    );
+  }
+
+  return candidate;
+}
+
+function normalizeDeepLXLang(code: string, isSource: boolean): string {
+  if (isSource && code === "AUTO") {
+    return "auto";
+  }
+
+  const normalized = code.toUpperCase().replace("-", "_");
+  if (normalized === "ZH_CN" || normalized === "ZH_TW") {
+    return "ZH";
+  }
+
+  return normalized;
+}
+
+async function deeplTranslateOfficial(
   texts: string[],
   sourceLang: string,
   targetLang: string,
   apiKey: string,
-  baseUrl?: string,
+  requestBaseUrl: string,
 ): Promise<string[]> {
-  if (!apiKey) {
-    throw new Error("DeepL API key is required");
-  }
-
-  const apiBaseUrl = baseUrl || "https://api-free.deepl.com/v2";
-
-  // Build URLSearchParams properly
   const params = new URLSearchParams();
   texts.forEach((text) => params.append("text", text));
   params.append("target_lang", targetLang.toUpperCase().replace("-", "_"));
@@ -231,7 +323,7 @@ export async function deeplTranslate(
     params.append("source_lang", sourceLang.toUpperCase());
   }
 
-  const response = await fetch(`${apiBaseUrl}/translate`, {
+  const response = await fetch(`${requestBaseUrl}/translate`, {
     method: "POST",
     headers: {
       "Content-Type": "application/x-www-form-urlencoded",
@@ -247,6 +339,116 @@ export async function deeplTranslate(
 
   const data = await response.json();
   return texts.map((_, i) => data.translations?.[i]?.text || texts[i]);
+}
+
+async function deeplTranslateDeepLX(
+  texts: string[],
+  sourceLang: string,
+  targetLang: string,
+  apiKey: string | undefined,
+  requestBaseUrl: string,
+  exactTranslateUrl?: string,
+): Promise<string[]> {
+  const normalizedSource = normalizeDeepLXLang(sourceLang, true);
+  const normalizedTarget = normalizeDeepLXLang(targetLang, false);
+
+  const results: string[] = [];
+  const endpointCandidates = [exactTranslateUrl, `${requestBaseUrl}/translate`].filter(
+    (value, index, array): value is string => Boolean(value) && array.indexOf(value) === index,
+  );
+
+  // DeepLX public endpoints generally accept one text per request.
+  for (const text of texts) {
+    let lastError: Error | null = null;
+
+    for (const endpoint of endpointCandidates) {
+      const translateUrl = new URL(endpoint);
+      if (apiKey) {
+        translateUrl.searchParams.set("token", apiKey);
+      }
+
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+      };
+      if (apiKey) {
+        headers.Authorization = `Bearer ${apiKey}`;
+      }
+
+      const response = await fetch(translateUrl.toString(), {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          text,
+          source_lang: normalizedSource,
+          target_lang: normalizedTarget,
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.text();
+        lastError = new Error(`DeepLX API error (${response.status}): ${error}`);
+        continue;
+      }
+
+      const data = await response.json();
+      const translated = extractDeepLXTranslation(data);
+      if (translated) {
+        results.push(translated);
+        lastError = null;
+        break;
+      }
+
+      lastError = new Error("DeepLX API returned an unexpected response payload.");
+    }
+
+    if (lastError) {
+      throw lastError;
+    }
+  }
+
+  return results;
+}
+
+export async function testDeepLConnection(apiKey: string, baseUrl?: string): Promise<boolean> {
+  await deeplTranslate(["Connection test"], "AUTO", "ZH", apiKey, baseUrl);
+  return true;
+}
+
+export async function deeplTranslate(
+  texts: string[],
+  sourceLang: string,
+  targetLang: string,
+  apiKey: string,
+  baseUrl?: string,
+): Promise<string[]> {
+  const resolvedConfig = resolveDeepLConfig(baseUrl, apiKey);
+
+  if (resolvedConfig.mode === "deeplx") {
+    if (!resolvedConfig.apiKey && !resolvedConfig.exactTranslateUrl) {
+      throw new Error("DeepLX API key is required");
+    }
+
+    return deeplTranslateDeepLX(
+      texts,
+      sourceLang,
+      targetLang,
+      resolvedConfig.apiKey,
+      resolvedConfig.requestBaseUrl,
+      resolvedConfig.exactTranslateUrl,
+    );
+  }
+
+  if (!resolvedConfig.apiKey) {
+    throw new Error("DeepL API key is required");
+  }
+
+  return deeplTranslateOfficial(
+    texts,
+    sourceLang,
+    targetLang,
+    resolvedConfig.apiKey,
+    resolvedConfig.requestBaseUrl,
+  );
 }
 
 /** Provider interface for internal use */

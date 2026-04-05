@@ -1,5 +1,9 @@
 import * as db from "@/lib/db/database";
 import { triggerVectorizeBook } from "@/lib/rag/vectorize-trigger";
+import {
+  getDesktopLibraryRoot,
+  resolveDesktopDataPath,
+} from "@/lib/storage/desktop-library-root";
 import { debouncedSave, loadFromFS } from "@readany/core/stores/persist";
 import { useVectorModelStore } from "@readany/core/stores/vector-model-store";
 import type { Book, LibraryFilter, SortField, SortOrder } from "@readany/core/types";
@@ -182,11 +186,9 @@ async function generatePdfCover(fileBytes: Uint8Array): Promise<Blob | null> {
   }
 }
 
-/** Resolve a relative path (e.g. "books/xxx.epub") to an absolute path in appDataDir */
+/** Resolve a relative path (e.g. "books/xxx.epub") to an absolute path on desktop. */
 async function resolveAppPath(relativePath: string): Promise<string> {
-  const { appDataDir, join } = await import("@tauri-apps/api/path");
-  const appData = await appDataDir();
-  return join(appData, relativePath);
+  return resolveDesktopDataPath(relativePath);
 }
 
 /** Check if a path is relative (not absolute or a protocol URL) */
@@ -215,17 +217,17 @@ export async function resolveFileSrc(path: string): Promise<string> {
   return convertFileSrc(path);
 }
 
-/** Copy book file into appDataDir/books/{id}.{ext} and return relative path */
+/** Copy book file into desktop library root/books/{id}.{ext} and return relative path */
 async function copyBookToAppData(
   bookId: string,
   ext: string,
   srcPath: string,
 ): Promise<{ relativePath: string; fileBytes: Uint8Array }> {
   const { readFile, writeFile, mkdir } = await import("@tauri-apps/plugin-fs");
-  const { appDataDir, join } = await import("@tauri-apps/api/path");
+  const { join } = await import("@tauri-apps/api/path");
 
-  const appData = await appDataDir();
-  const booksDir = await join(appData, "books");
+  const libraryRoot = await getDesktopLibraryRoot();
+  const booksDir = await join(libraryRoot, "books");
   try {
     await mkdir(booksDir, { recursive: true });
   } catch {
@@ -233,19 +235,19 @@ async function copyBookToAppData(
   }
 
   const relativePath = `books/${bookId}.${ext}`;
-  const destPath = await join(appData, relativePath);
+  const destPath = await join(libraryRoot, relativePath);
   const fileBytes = await readFile(srcPath);
   await writeFile(destPath, fileBytes);
   return { relativePath, fileBytes };
 }
 
-/** Save cover image to appData and return a relative path (covers/{id}.{ext}) */
+/** Save cover image to desktop library root and return a relative path (covers/{id}.{ext}) */
 async function saveCoverToAppData(bookId: string, coverBlob: Blob): Promise<string> {
   const { writeFile, mkdir } = await import("@tauri-apps/plugin-fs");
-  const { appDataDir, join } = await import("@tauri-apps/api/path");
+  const { join } = await import("@tauri-apps/api/path");
 
-  const appData = await appDataDir();
-  const coversDir = await join(appData, "covers");
+  const libraryRoot = await getDesktopLibraryRoot();
+  const coversDir = await join(libraryRoot, "covers");
 
   // Ensure covers directory exists
   try {
@@ -256,7 +258,7 @@ async function saveCoverToAppData(bookId: string, coverBlob: Blob): Promise<stri
 
   const ext = coverBlob.type.includes("png") ? "png" : "jpg";
   const relativePath = `covers/${bookId}.${ext}`;
-  const coverPath = await join(appData, relativePath);
+  const coverPath = await join(libraryRoot, relativePath);
   const arrayBuffer = await coverBlob.arrayBuffer();
   await writeFile(coverPath, new Uint8Array(arrayBuffer));
 
@@ -548,19 +550,21 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
             const result = await converter.convert({ file: txtFile });
             title = result.bookTitle;
             if (result.language) author = "";
-            // Write the converted EPUB to a temp location for copyBookToAppData
-            const { writeFile, BaseDirectory } = await import("@tauri-apps/plugin-fs");
+            // Write the converted EPUB directly into the managed library location
+            const { writeFile, mkdir } = await import("@tauri-apps/plugin-fs");
+            const { join } = await import("@tauri-apps/api/path");
             const epubBytes = new Uint8Array(await result.file.arrayBuffer());
-            const tmpPath = `books/${bookId}.epub`;
-            await writeFile(tmpPath, epubBytes, { baseDir: BaseDirectory.AppData });
+            await mkdir(await join(await getDesktopLibraryRoot(), "books"), { recursive: true });
+            const tmpPath = await resolveAppPath(`books/${bookId}.epub`);
+            await writeFile(tmpPath, epubBytes);
           }
 
-          // Copy book file into app data dir (books/{id}.{ext})
+          // Copy book file into the managed library root (books/{id}.{ext})
           const { relativePath, fileBytes } = ext === "txt"
             ? await (async () => {
-                const { readFile, BaseDirectory } = await import("@tauri-apps/plugin-fs");
+                const { readFile } = await import("@tauri-apps/plugin-fs");
                 const relPath = `books/${bookId}.epub`;
-                const bytes = await readFile(relPath, { baseDir: BaseDirectory.AppData });
+                const bytes = await readFile(await resolveAppPath(relPath));
                 return { relativePath: relPath, fileBytes: bytes };
               })()
             : await copyBookToAppData(bookId, ext, filePath);

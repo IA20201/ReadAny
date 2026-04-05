@@ -3,6 +3,7 @@ import { useTheme } from "@/styles/theme";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useSettingsStore } from "@readany/core/stores/settings-store";
+import { testDeepLConnection } from "@readany/core/translation/providers";
 import { AlertCircle, Check, CheckCircle2 } from "lucide-react-native";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -33,14 +34,17 @@ export function TranslationPage() {
     translationConfig.provider.id as "ai" | "deepl",
   );
   const [apiKey, setApiKey] = useState(translationConfig.provider.apiKey || "");
+  const [baseUrl, setBaseUrl] = useState(translationConfig.provider.baseUrl || "");
   const [status, setStatus] = useState<"idle" | "testing" | "success" | "error">("idle");
 
-  const syncToStore = (p: "ai" | "deepl", key: string) => {
+  const syncToStore = (p: "ai" | "deepl", key: string, nextBaseUrl: string) => {
     updateTranslationConfig({
       provider: {
+        ...translationConfig.provider,
         id: p,
         name: p === "ai" ? "AI Translation" : "DeepL",
         apiKey: p === "deepl" ? key : undefined,
+        baseUrl: p === "deepl" ? nextBaseUrl : undefined,
       },
     });
   };
@@ -48,22 +52,26 @@ export function TranslationPage() {
   const handleProviderChange = (p: "ai" | "deepl") => {
     setProvider(p);
     setStatus("idle");
-    syncToStore(p, apiKey);
+    syncToStore(p, apiKey, baseUrl);
   };
 
   const handleApiKeyChange = (key: string) => {
     setApiKey(key);
-    syncToStore(provider, key);
+    setStatus("idle");
+    syncToStore(provider, key, baseUrl);
+  };
+
+  const handleBaseUrlChange = (nextBaseUrl: string) => {
+    setBaseUrl(nextBaseUrl);
+    setStatus("idle");
+    syncToStore(provider, apiKey, nextBaseUrl);
   };
 
   const testConnection = async () => {
     setStatus("testing");
     try {
-      const res = await fetch("https://api-free.deepl.com/v2/usage", {
-        headers: { Authorization: `DeepL-Auth-Key ${apiKey}` },
-      });
-      if (res.ok) setStatus("success");
-      else throw new Error("Failed");
+      await testDeepLConnection(apiKey, baseUrl);
+      setStatus("success");
     } catch {
       setStatus("error");
     }
@@ -179,6 +187,37 @@ export function TranslationPage() {
                   placeholderTextColor={colors.mutedForeground}
                   secureTextEntry
                 />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={[styles.inputLabel, { color: colors.mutedForeground }]}>
+                  {t("translation.deeplBaseUrl", "DeepL 请求地址")}
+                </Text>
+                <TextInput
+                  style={[
+                    styles.input,
+                    {
+                      backgroundColor: colors.background,
+                      borderColor: colors.border,
+                      color: colors.foreground,
+                    },
+                  ]}
+                  value={baseUrl}
+                  onChangeText={handleBaseUrlChange}
+                  placeholder={t(
+                    "translation.deeplBaseUrlPlaceholder",
+                    "https://api-free.deepl.com/v2",
+                  )}
+                  placeholderTextColor={colors.mutedForeground}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+                <Text style={[styles.inputHint, { color: colors.mutedForeground }]}>
+                  {t(
+                    "translation.deeplBaseUrlHint",
+                    "填写基础地址，也支持直接粘贴完整的 /translate 地址。",
+                  )}
+                </Text>
               </View>
 
               <View style={styles.testRow}>
@@ -313,6 +352,7 @@ const styles = StyleSheet.create({
   deeplSection: { padding: 16, borderRadius: 12, borderWidth: 1, gap: 16 },
   inputGroup: { gap: 8 },
   inputLabel: { fontSize: 12, fontWeight: "500" },
+  inputHint: { fontSize: 12, lineHeight: 18 },
   input: {
     paddingVertical: 12,
     paddingHorizontal: 14,
