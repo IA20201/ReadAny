@@ -4,6 +4,8 @@ title: 安装
 description: 如何在 macOS、Windows 和 Linux 上安装 ReadAny。
 ---
 
+[图片路径：GitHub 发布页下载列表]
+
 ## macOS
 
 ### Apple Silicon (M1/M2/M3/M4)
@@ -34,3 +36,5 @@ description: 如何在 macOS、Windows 和 Linux 上安装 ReadAny。
 ReadAny 内置自动更新功能。有新版本时，**设置 → 关于** 页面会显示更新提示。点击「下载更新」即可在线更新。
 
 也可以手动检查更新：**设置 → 关于 → 检查更新**。
+
+[图片路径：桌面端关于页检查更新]

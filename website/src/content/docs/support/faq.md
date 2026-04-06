@@ -4,67 +4,82 @@ title: FAQ
 description: Frequently asked questions about ReadAny.
 ---
 
+[Image path: support-center-faq-navigation]
+
 ## General
 
 ### Is ReadAny free?
 
-Yes. ReadAny is open source under the GPL-3.0 license and completely free to use.
+Yes. ReadAny is open source and free to use.
 
-### Does ReadAny send my data to the cloud?
+### Does ReadAny upload my books by default?
 
-No. ReadAny is local-first. Your books, annotations, and reading data are stored on your device. AI features require an API key to a provider of your choice, but the book data stays local. The semantic search embedding also runs entirely on your device.
+No. ReadAny is local-first. Books stay on your device unless you explicitly configure cloud AI, sync, export, or LAN transfer features.
 
-### What languages does ReadAny support?
+### Is ReadAny available on desktop and mobile?
 
-The interface is available in English and Chinese. Books in any language can be read. AI chat and translation support all languages provided by your AI provider.
+Yes. Desktop and mobile builds exist, but some workflows and settings differ by platform.
 
-## Books & Formats
+## Books and Reading
 
-### Can ReadAny read DRM-protected books?
+### Does ReadAny support DRM-protected books?
 
-No. ReadAny only supports DRM-free e-books. If your book has DRM protection, you'll need to remove it first using other tools.
+No. DRM-free books only.
 
-### Why does my PDF look strange?
+### Why does a synced book show up before it can open?
 
-PDF is a fixed-layout format not designed for reflowable reading. ReadAny extracts the text layer from PDFs, which works well for text-heavy documents but may not preserve complex layouts, tables, or scanned pages.
+Because metadata and covers can arrive before the full file is downloaded locally. Open the book again and let it download first.
 
-### Can I convert between formats?
+### Can I keep notes without keeping the highlight?
 
-Format conversion (e.g., MOBI to EPUB) is planned for a future release.
+Notes are attached to highlights. Clearing note text should keep the highlight, while deleting the highlight removes both.
 
-## AI Features
+## AI
 
 ### Do I need an API key?
 
-For cloud AI providers (OpenAI, Anthropic, Google, DeepSeek), yes — you need your own API key. For local AI via Ollama, no API key is needed.
+For most cloud providers, yes. For Ollama and LM Studio, usually no.
+
+### What does “Test Connection” actually test?
+
+It performs a real minimal model call, not just a shallow health check.
+
+### Why does model fetching work but chat still fail?
+
+Usually because the selected model name, request path, or custom endpoint mode is wrong.
+
+## Semantic Search
 
 ### What is vectorization?
 
-Vectorization converts your book text into numerical representations (embeddings) that enable semantic search. This process runs locally on your device using your CPU and is done once per book.
+Vectorization builds a local semantic index for a book so you can search by meaning.
 
-### How much does AI usage cost?
+### Are vectors synced?
 
-ReadAny itself is free. AI API calls are billed by your provider at their standard rates. Typical book chat costs a few cents per conversation. Local AI via Ollama is completely free.
+No. Vector indexes stay local to each device.
 
-## Troubleshooting
+## Sync
 
-### ReadAny won't open on macOS
+### Which sync mode should I choose?
 
-If macOS blocks the app with "ReadAny is damaged" or "cannot verify developer":
-1. Go to **System Settings → Privacy & Security**
-2. Scroll down and click **Open Anyway**
-3. Or run in Terminal: `xattr -cr /Applications/ReadAny.app`
+- WebDAV or S3 for long-term multi-device sync
+- LAN quick transfer for one-off device migration
 
-### The AI chat is not responding
+### What is the difference between full upload and full download?
 
-1. Check that your API key is correctly entered in **Settings → AI**
-2. Verify you have a working internet connection (not needed for Ollama)
-3. Try switching to a different model or provider
-4. Check if your API key has available credits/quota
+- **Full Upload** replaces the remote side with this device
+- **Full Download** replaces this device with the remote side
 
-### Sync is not working
+### Why is LAN not treated like normal cloud sync?
 
-1. Verify your WebDAV credentials in **Settings → Sync**
-2. Click **Test Connection** to check connectivity
-3. Ensure your WebDAV service is accessible from your network
-4. Check if the WebDAV server has enough storage space
+Because LAN quick transfer is designed as one-way migration, not long-term two-way background sync.
+
+## Desktop Storage
+
+### Can I move the desktop library off my system drive?
+
+Yes. Use **Settings → General → Desktop Library Storage Location**.
+
+### What gets moved when I change the desktop storage location?
+
+Books, covers, and desktop database files, including vector-related databases.

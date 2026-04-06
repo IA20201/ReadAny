@@ -1,12 +1,12 @@
 ---
 draft: false
 title: Reading Basics
-description: Learn how to navigate and use the ReadAny reader interface.
+description: Learn the reader layout, shortcuts, and desktop/mobile differences.
 ---
 
 ## Opening a Book
 
-Click on any book in your library to open it in the reader. ReadAny will remember your last reading position and restore it automatically.
+Click any book in the library to open it. ReadAny remembers the last position for each book and restores it automatically.
 
 ## Navigation
 
@@ -14,29 +14,57 @@ Click on any book in your library to open it in the reader. ReadAny will remembe
 |---|---|
 | Next page | `→` or `Space` |
 | Previous page | `←` or `Shift+Space` |
-| Table of Contents | `T` |
 | Search in book | `Ctrl/Cmd + F` |
-| Toggle fullscreen | `F11` or `Ctrl/Cmd + Enter` |
+| Fullscreen | `F11` or `Ctrl/Cmd + Enter` |
 
-You can also navigate by:
-- **Table of Contents** — Click the TOC icon in the toolbar to jump to any chapter
-- **Progress bar** — Click or drag the progress bar at the bottom to jump to a specific position
-- **Page slider** — Use the slider to quickly browse through pages
+You can also use:
+
+- table of contents
+- the progress bar
+- the page slider
+
+## Desktop Reader Features
+
+- **Single-page / double-page layout** can be changed in reading settings.
+- **Pinned toolbar** keeps the top toolbar visible and reserves space for content.
+- Space and arrow keys are useful reading shortcuts, but text inputs and note editors will not trigger page turning.
+
+[Image path: desktop-reader-toolbar]
 
 ## Text Selection
 
-Select text in the reader to reveal the action toolbar:
-- **Highlight** — Choose from 5 colors to highlight the selected text
-- **Note** — Add a Markdown note attached to the selection
-- **Copy** — Copy the selected text to clipboard
-- **Translate** — Translate the selected text
-- **Ask AI** — Ask the AI about the selected text
+Selecting text can reveal actions such as:
+
+- highlight
+- note
+- copy
+- translate
+- ask AI
+
+[Image path: reader-selection-actions]
 
 ## Sidebar Panels
 
-The reader sidebar includes:
-- **Table of Contents** — Chapter navigation
-- **Annotations** — View and manage all highlights and notes
-- **Search** — Full-text search within the book
-- **AI Chat** — Chat with AI about the book
-- **Mind Map** — Visual chapter structure overview
+The reader can include:
+
+- table of contents
+- annotations
+- in-book search
+- AI chat
+- other reading tools depending on platform and format
+
+## Mobile Reader Notes
+
+- Mobile reading uses a touch-optimized layout.
+- Toolbars, sheets, and note editing differ from desktop.
+- Translation, note preview, and AI entry points are available from text selection and reader panels.
+
+## Troubleshooting
+
+### Space key turns pages while I type
+
+This should not happen when focus is inside a note editor, input box, or other editable field.
+
+### I cannot open a synced book
+
+If the book came from another device, it may still need to download locally first. Return to the library and open the book again after download starts.

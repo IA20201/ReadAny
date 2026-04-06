@@ -1,36 +1,73 @@
 ---
 draft: false
 title: Semantic Search
-description: Find passages by meaning with AI-powered semantic search.
+description: Understand vectorization, local indexes, and remote embedding options.
 ---
+
+Semantic search helps you find passages by meaning, not only by exact keywords.
 
 ## How It Works
 
-Traditional search finds exact keyword matches. Semantic search understands the **meaning** of your query and finds relevant passages even when the exact words don't match.
+ReadAny combines:
 
-ReadAny uses a hybrid retrieval approach combining:
-- **Vector similarity** — Find passages with similar meaning using embeddings
-- **BM25** — Traditional keyword matching for precision
+- **vector similarity** for meaning-based retrieval
+- **keyword search** for direct term matches
 
-## Vectorizing a Book
+This usually gives better results than plain full-text search alone.
 
-Before using semantic search, you need to vectorize the book:
+## Before You Can Use It
 
-1. Open a book
-2. Click the **vectorize** button in the sidebar (or it may start automatically)
-3. Wait for the process to complete — this runs locally using your CPU
+The book needs to be vectorized first.
 
-The vectorization creates a local embedding index stored on your device. This is a one-time process per book.
+You can usually do this by:
 
-## Using Semantic Search
+1. opening a book
+2. finding the vectorize action
+3. choosing a local or remote embedding source
+4. waiting for indexing to finish
 
-1. Open the **Search** panel in the sidebar
-2. Type a natural language query (e.g., "the protagonist's childhood memories")
-3. Results are ranked by semantic relevance
-4. Click any result to jump to that passage
+[Image path: semantic-search-vectorize]
 
-## Embedding Model
+## Local vs Remote Embedding
 
-ReadAny uses [Transformers.js](https://huggingface.co/docs/transformers.js) to run embedding models locally in the browser. No data leaves your device.
+### Local Embedding
 
-You can configure the embedding model in **Settings → Vector Model**.
+- runs on the current device
+- keeps vectors local
+- can be slower on low-power devices
+
+### Remote Embedding
+
+- uses a remote API provider
+- can be useful on mobile
+- still stores the resulting index locally after processing
+
+[Image path: semantic-search-results-panel]
+
+## Important Sync Note
+
+Vector indexes are local-only.
+
+This means:
+
+- vector files do not sync across devices
+- another device may know about the same book but still need to vectorize it itself
+- sync should not overwrite a device that already has its own local vectors
+
+## Tips for Better Results
+
+- use natural-language queries, not just isolated keywords
+- try shorter intent-based prompts like “the argument about labor value”
+- re-vectorize if you changed embedding provider or local embedding setup significantly
+
+## Troubleshooting
+
+### Semantic search returns nothing
+
+- make sure the book finished vectorization
+- check that the embedding model is configured correctly
+- try a broader, more natural query
+
+### One device has vectors, another does not
+
+This is expected. Vectors are not synced.

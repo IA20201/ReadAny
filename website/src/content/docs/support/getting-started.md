@@ -1,43 +1,59 @@
 ---
 draft: false
 title: Getting Started
-description: Get up and running with ReadAny in minutes.
+description: Get started with ReadAny on desktop or mobile in a few minutes.
 ---
 
-ReadAny is an AI-powered e-book reader that supports EPUB, PDF, MOBI, AZW, AZW3, FB2, CBZ and more. It provides intelligent chat, semantic search, annotations, and knowledge management — all running locally on your device.
+ReadAny is a local-first reader for EPUB, PDF, MOBI, AZW, AZW3, FB2, CBZ, and other common ebook formats. It combines reading, notes, translation, semantic search, and AI chat in a single app.
 
-## Quick Start
+## What ReadAny Does Well
 
-1. **Download** ReadAny from the [download page](https://codedogqby.github.io/ReadAny/#download)
-2. **Install** the application on your platform
-3. **Import** your e-books by dragging them into the library or clicking the import button
-4. **Start reading** — select any book to open it in the reader
+- Read DRM-free books in one library
+- Highlight, annotate, and export your notes
+- Chat with AI about the current book or selected text
+- Build semantic search indexes for deeper lookup
+- Sync books, notes, and reading data across devices
+- Transfer a library quickly over LAN for device migration
 
-## Key Features
+[Image path: app-home-overview]
 
-- **Multi-format support** — EPUB, PDF, MOBI, AZW, AZW3, FB2, FBZ, CBZ
-- **AI Chat** — Ask questions about your books with context-aware AI responses
-- **Semantic Search** — Find passages by meaning, not just keywords
-- **Smart Annotations** — Highlight in 5 colors, take Markdown notes
-- **TTS** — Text-to-speech reading with multiple voices
-- **Translation** — Instant paragraph-level translation
-- **Reading Stats** — Track your reading time and habits
-- **WebDAV Sync** — Sync progress and annotations across devices
-- **Export** — Export notes to Obsidian, Notion, or Markdown
+## 5-Minute Setup
 
-## Supported Platforms
+1. Install ReadAny on your desktop or mobile device.
+2. Import one or more books into the library.
+3. Open a book and try highlighting, note-taking, and search.
+4. If you want AI features, configure an endpoint in **Settings → AI**.
+5. If you use multiple devices, configure sync in **Settings → Sync**.
 
-| Platform | Status |
+[Image path: settings-navigation-ai-and-sync]
+
+## Platform Notes
+
+| Platform | Notes |
 |---|---|
-| macOS (Apple Silicon) | Available |
-| macOS (Intel) | Available |
-| Windows | Available |
-| Linux | Available |
-| iOS | Coming soon |
-| Android | Coming soon |
+| macOS / Windows / Linux | Full reading, AI, sync, and desktop-specific settings |
+| Android / iOS | Mobile reading, AI, sync, and LAN import |
 
-## Next Steps
+## Recommended Order
 
-- [Installation Guide](/ReadAny/support/installation/) — Detailed setup instructions
-- [Importing Books](/ReadAny/support/import-books/) — Learn how to add books to your library
-- [Reading Basics](/ReadAny/support/reading/basics/) — Master the reading interface
+If you are new, this order works well:
+
+1. Install the app
+2. Import a small set of books
+3. Read and add a few highlights
+4. Configure one AI provider
+5. Configure sync only after your library looks right on one device
+
+## What You Do Not Need First
+
+- You do **not** need AI to read books.
+- You do **not** need sync for a single-device workflow.
+- You do **not** need semantic search unless you want AI-powered passage retrieval.
+
+## Where to Go Next
+
+- [Installation Guide](/ReadAny/support/installation/) for desktop package details
+- [Importing Books](/ReadAny/support/import-books/) for formats and library behavior
+- [Reading Basics](/ReadAny/support/reading/basics/) for reader controls and shortcuts
+- [AI Providers](/ReadAny/support/ai/providers/) for endpoint setup and model testing
+- [Sync Overview](/ReadAny/support/sync/overview/) for WebDAV, S3, and LAN transfer

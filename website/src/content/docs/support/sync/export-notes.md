@@ -21,6 +21,8 @@ description: Export your highlights and notes to various formats.
 4. Select your desired format
 5. The file will be saved or copied to clipboard
 
+[Image path: annotations-export-dialog]
+
 ## Export Content
 
 Each export includes:
@@ -37,3 +39,5 @@ When exporting in Obsidian format, the output includes:
 - `[[wiki-links]]` for cross-referencing
 - Callout blocks for different highlight colors
 - Compatible with Obsidian's folder structure
+
+[Image path: obsidian-export-preview]

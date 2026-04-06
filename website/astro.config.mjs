@@ -47,6 +47,7 @@ export default defineConfig({
             { slug: "support/getting-started" },
             { slug: "support/installation" },
             { slug: "support/import-books" },
+            { slug: "support/library/storage-location" },
           ],
         },
         {
@@ -66,12 +67,19 @@ export default defineConfig({
             { slug: "support/ai/chat" },
             { slug: "support/ai/semantic-search" },
             { slug: "support/ai/providers" },
+            { slug: "support/ai/siliconflow" },
           ],
         },
         {
           label: "Sync & Export",
           translations: { "zh-CN": "同步与导出" },
-          items: [{ slug: "support/sync/webdav" }, { slug: "support/sync/export-notes" }],
+          items: [
+            { slug: "support/sync/overview" },
+            { slug: "support/sync/webdav" },
+            { slug: "support/sync/s3" },
+            { slug: "support/sync/lan" },
+            { slug: "support/sync/export-notes" },
+          ],
         },
         {
           label: "FAQ",

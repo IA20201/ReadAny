@@ -1,33 +1,42 @@
 ---
 draft: false
 title: Themes & Appearance
-description: Customize the reading experience with themes and font settings.
+description: Customize themes, typography, and page layout.
 ---
 
-## Reading Themes
+## Themes
 
-ReadAny includes several built-in reading themes:
+ReadAny includes common reading themes such as:
 
-- **Light** — Clean white background
-- **Dark** — Dark background for night reading
-- **Sepia** — Warm toned background for comfortable reading
-- **Custom** — Define your own colors
+- Light
+- Dark
+- Sepia
+- Custom styles depending on platform and build
 
-Switch themes from the **reader toolbar** or via **Settings → Reading**.
+## Typography
 
-## Font Settings
+You can adjust:
 
-Customize your reading font:
-
-- **Font family** — Choose from system fonts or built-in reading fonts
-- **Font size** — Adjust from small to extra large
-- **Line height** — Control the spacing between lines
-- **Text alignment** — Left, justify, or center
+- font family
+- font size
+- line height
+- alignment
 
 ## Layout
 
-- **Pagination** — Traditional page-by-page mode
-- **Scroll** — Continuous scrolling mode
-- **Column count** — Single or dual column layout (desktop)
+- **Pagination** for traditional page-based reading
+- **Page layout** for single-page or double-page reading on desktop
+- **Pinned toolbar** on desktop if you want the top toolbar to stay visible
 
-All appearance settings are saved per-device and applied to all books.
+[Image path: reading-theme-settings]
+[Image path: desktop-single-double-page-layout]
+
+## Good Defaults
+
+- **Long-form reading**: Sepia theme, slightly larger font size, double-page layout on large desktop screens
+- **Focused study**: Light theme, medium font size, pinned toolbar for fast access to search and notes
+- **Night reading**: Dark theme, lower brightness, TTS if you want to rest your eyes
+
+## Sync Notes
+
+Reading appearance settings are device-specific. They are not meant to force the same theme or layout across every device.

@@ -4,6 +4,8 @@ title: Installation
 description: How to install ReadAny on macOS, Windows, and Linux.
 ---
 
+[Image path: github-releases-download-assets]
+
 ## macOS
 
 ### Apple Silicon (M1/M2/M3/M4)
@@ -34,3 +36,5 @@ description: How to install ReadAny on macOS, Windows, and Linux.
 ReadAny includes a built-in auto-updater. When a new version is available, you'll see a notification in **Settings → About**. Click "Download Update" to update in place.
 
 You can also manually check for updates via **Settings → About → Check for Updates**.
+
+[Image path: desktop-about-check-for-updates]

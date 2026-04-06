@@ -25,6 +25,8 @@ description: Configure AI chat and remote embedding models with SiliconFlow.
 2. Click "Create API Key"
 3. Copy the generated API Key (starts with `sk-`)
 
+[Image path: siliconflow-console-api-key-page]
+
 :::warning
 Please keep your API Key safe and do not share it with others.
 :::
@@ -39,6 +41,8 @@ Please keep your API Key safe and do not share it with others.
 4. Enter your API Key
 5. Click "Fetch Models" to get available models
 6. Select the model you want to use
+
+[Image path: siliconflow-ai-endpoint-setup]
 
 ### Recommended Models
 
@@ -78,6 +82,8 @@ After configuration:
 2. Click the "Vectorize" button in the sidebar
 3. Select "Use Remote API"
 4. Wait for processing to complete
+
+[Image path: siliconflow-embedding-setup]
 
 Embedding data will be sent to SiliconFlow servers for processing, and the index will be saved locally after completion.
 

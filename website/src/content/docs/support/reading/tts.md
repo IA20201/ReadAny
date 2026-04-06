@@ -10,6 +10,8 @@ description: Listen to your books with built-in TTS.
 2. Click the **speaker icon** in the toolbar or press the TTS shortcut
 3. ReadAny will start reading from your current position
 
+[Image path: reader-tts-toolbar-controls]
+
 ## Controls
 
 - **Play/Pause** — Toggle TTS playback
@@ -24,6 +26,8 @@ Configure TTS in **Settings → TTS**:
 - **Voice** — Select from available system voices
 - **Speed** — Default reading speed
 - **Auto-advance** — Automatically turn pages and continue reading
+
+[Image path: tts-settings-panel]
 
 ## Platform Notes
 

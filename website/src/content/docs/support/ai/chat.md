@@ -8,11 +8,15 @@ description: Chat with AI about your books for deeper understanding.
 
 ReadAny's AI Chat lets you have context-aware conversations about the book you're reading. The AI knows your current chapter, selected text, and reading progress.
 
+[Image path: ai-chat-sidebar-panel]
+
 ## Getting Started
 
 1. Open a book and click the **AI Chat** icon in the sidebar
 2. Type your question or select text and click "Ask AI"
 3. The AI will respond with context from the book
+
+[Image path: reader-selection-ask-ai-action]
 
 ## What You Can Ask
 

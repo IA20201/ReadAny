@@ -12,6 +12,8 @@ description: Highlight text and take notes while reading.
 
 Available colors: **Yellow**, **Green**, **Blue**, **Pink**, **Purple**
 
+[Image path: reader-selection-highlight-toolbar]
+
 ## Taking Notes
 
 1. Select text and click the **Note** icon in the toolbar
@@ -20,6 +22,8 @@ Available colors: **Yellow**, **Green**, **Blue**, **Pink**, **Purple**
 
 Notes support full Markdown including headings, lists, code blocks, and links.
 
+[Image path: annotation-note-editor]
+
 ## Managing Annotations
 
 Open the **Annotations** panel in the sidebar to:
@@ -27,6 +31,8 @@ Open the **Annotations** panel in the sidebar to:
 - Click any annotation to jump to its position in the book
 - Edit or delete existing notes
 - Filter annotations by color
+
+[Image path: annotations-sidebar-panel]
 
 ## Exporting Annotations
 
@@ -38,3 +44,5 @@ Go to **Annotations Panel → Export** to export your annotations:
 | JSON | Structured data format |
 | Obsidian | With frontmatter, `[[wiki-links]]`, and callout blocks |
 | Notion | Clipboard-friendly formatting |
+
+[Image path: annotations-export-dialog]
