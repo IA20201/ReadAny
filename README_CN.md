@@ -314,6 +314,15 @@ pnpm tauri build
   <img src="assets/微信群.jpg" width="200" alt="微信群">
 </p>
 
+## ☕ 请作者喝杯咖啡
+
+如果你觉得 ReadAny 对你有帮助，欢迎请我喝杯咖啡，支持项目的持续开发！
+
+<p align="center">
+  <img src="assets/微信赞赏码.jpg" width="200" alt="微信赞赏码">
+  <img src="assets/支付宝收款码.jpg" width="200" alt="支付宝收款码">
+</p>
+
 ---
 
 ## Star 历史

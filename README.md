@@ -314,6 +314,15 @@ Thanks to [linux.do](https://linux.do/) — a vibrant Chinese tech community whe
   <img src="assets/微信群.jpg" width="200" alt="微信群">
 </p>
 
+## ☕ Support the Project
+
+If you find ReadAny helpful, consider buying me a coffee to support ongoing development!
+
+<p align="center">
+  <img src="assets/微信赞赏码.jpg" width="200" alt="微信赞赏码">
+  <img src="assets/支付宝收款码.jpg" width="200" alt="支付宝收款码">
+</p>
+
 ---
 
 ## Star History

@@ -64,6 +64,10 @@ export const ui = {
     "community.xiaohongshu": "小红书群",
     "community.wechat": "微信群",
     "community.coming": "Coming soon",
+    "community.sponsor.title": "☕ Support the Project",
+    "community.sponsor.subtitle": "If you find ReadAny helpful, consider buying me a coffee!",
+    "community.sponsor.wechat": "WeChat",
+    "community.sponsor.alipay": "Alipay",
     "footer.github": "Star on GitHub",
     "footer.copyright": "© 2025 ReadAny. GPL-3.0 License.",
     
@@ -199,6 +203,10 @@ export const ui = {
     "community.xiaohongshu": "小红书群",
     "community.wechat": "微信群",
     "community.coming": "即将上线",
+    "community.sponsor.title": "☕ 请作者喝杯咖啡",
+    "community.sponsor.subtitle": "如果你觉得 ReadAny 对你有帮助，欢迎支持项目的持续开发！",
+    "community.sponsor.wechat": "微信赞赏",
+    "community.sponsor.alipay": "支付宝",
     "footer.github": "Star on GitHub",
     "footer.copyright": "© 2025 ReadAny. GPL-3.0 许可证。",
     
