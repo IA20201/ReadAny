@@ -19,26 +19,11 @@ description: 使用硅基流动配置 AI 对话和远程向量模型。
 2. 点击「注册」完成账号注册
 3. 完成实名认证（部分模型需要）
 
-![硅基流动注册页面](./images/siliconflow-register.png)
-*注册硅基流动账号*
-
-![实名认证页面](./images/siliconflow-verify.png)
-*完成实名认证*
-
 ## 获取 API Key
 
 1. 登录后进入 [API 密钥管理](https://cloud.siliconflow.cn/account/ak)
 2. 点击「新建 API 密钥」
 3. 复制生成的 API Key（以 `sk-` 开头）
-
-![API 密钥管理页面](./images/siliconflow-api-keys.png)
-*API 密钥管理页面*
-
-![创建新密钥](./images/siliconflow-create-key.png)
-*点击新建 API 密钥*
-
-![复制 API Key](./images/siliconflow-copy-key.png)
-*复制生成的 API Key*
 
 :::warning
 请妥善保管 API Key，不要泄露给他人。
@@ -54,18 +39,6 @@ description: 使用硅基流动配置 AI 对话和远程向量模型。
 4. 输入 API Key
 5. 点击「获取模型」拉取可用模型列表
 6. 选择要使用的模型
-
-![ReadAny AI 设置页面](./images/readany-ai-settings.png)
-*ReadAny AI 设置页面*
-
-![添加 SiliconFlow 端点](./images/readany-add-siliconflow.png)
-*添加 SiliconFlow 端点*
-
-![输入 API Key](./images/readany-enter-apikey.png)
-*输入 API Key 并获取模型*
-
-![选择模型](./images/readany-select-model.png)
-*选择要使用的模型*
 
 ### 推荐模型
 
@@ -88,12 +61,6 @@ description: 使用硅基流动配置 AI 对话和远程向量模型。
 4. 输入 API Key
 5. 选择 Embedding 模型
 
-![向量模型设置页面](./images/readany-embedding-settings.png)
-*向量模型设置页面*
-
-![选择 SiliconFlow 向量模型](./images/readany-embedding-siliconflow.png)
-*选择 SiliconFlow 作为向量模型提供商*
-
 ### 推荐向量模型
 
 | 模型 | 最大长度 | 说明 |
@@ -112,15 +79,6 @@ description: 使用硅基流动配置 AI 对话和远程向量模型。
 3. 选择「使用远程 API」
 4. 等待处理完成
 
-![书籍向量化按钮](./images/readany-vectorize-button.png)
-*点击向量化按钮*
-
-![选择远程 API](./images/readany-vectorize-remote.png)
-*选择使用远程 API 进行向量化*
-
-![向量化进度](./images/readany-vectorize-progress.png)
-*向量化处理进度*
-
 向量数据会发送到硅基流动服务器进行处理，处理完成后索引保存在本地。
 
 :::info
@@ -135,9 +93,6 @@ description: 使用硅基流动配置 AI 对话和远程向量模型。
 - **向量模型**：按处理 token 数量计费
 
 新用户注册后可获得免费额度，具体以官网为准。
-
-![硅基流动费用页面](./images/siliconflow-billing.png)
-*费用和用量统计页面*
 
 ## 错误排查
 
@@ -209,25 +164,3 @@ description: 使用硅基流动配置 AI 对话和远程向量模型。
 - 降低请求频率
 - 等待一段时间后重试
 - 升级账户等级获取更高限额
-
-## 需要的截图清单
-
-请准备以下截图，放置在 `website/src/content/docs/zh/support/ai/images/` 目录下：
-
-| 文件名 | 说明 |
-|---|---|
-| `siliconflow-register.png` | 硅基流动注册页面 |
-| `siliconflow-verify.png` | 实名认证页面 |
-| `siliconflow-api-keys.png` | API 密钥管理页面 |
-| `siliconflow-create-key.png` | 创建新密钥弹窗 |
-| `siliconflow-copy-key.png` | 复制 API Key |
-| `readany-ai-settings.png` | ReadAny AI 设置页面 |
-| `readany-add-siliconflow.png` | 添加 SiliconFlow 端点 |
-| `readany-enter-apikey.png` | 输入 API Key |
-| `readany-select-model.png` | 选择模型 |
-| `readany-embedding-settings.png` | 向量模型设置页面 |
-| `readany-embedding-siliconflow.png` | 选择 SiliconFlow 向量模型 |
-| `readany-vectorize-button.png` | 书籍向量化按钮 |
-| `readany-vectorize-remote.png` | 选择远程 API |
-| `readany-vectorize-progress.png` | 向量化进度 |
-| `siliconflow-billing.png` | 费用统计页面 |

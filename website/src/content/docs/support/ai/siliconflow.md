@@ -19,26 +19,11 @@ description: Configure AI chat and remote embedding models with SiliconFlow.
 2. Click "Register" to create an account
 3. Complete identity verification (required for some models)
 
-![SiliconFlow Register Page](./images/siliconflow-register.png)
-*Register SiliconFlow Account*
-
-![Identity Verification Page](./images/siliconflow-verify.png)
-*Complete Identity Verification*
-
 ## Get API Key
 
 1. After logging in, go to [API Key Management](https://cloud.siliconflow.cn/account/ak)
 2. Click "Create API Key"
 3. Copy the generated API Key (starts with `sk-`)
-
-![API Key Management Page](./images/siliconflow-api-keys.png)
-*API Key Management Page*
-
-![Create New Key](./images/siliconflow-create-key.png)
-*Click Create API Key*
-
-![Copy API Key](./images/siliconflow-copy-key.png)
-*Copy Generated API Key*
 
 :::warning
 Please keep your API Key safe and do not share it with others.
@@ -54,18 +39,6 @@ Please keep your API Key safe and do not share it with others.
 4. Enter your API Key
 5. Click "Fetch Models" to get available models
 6. Select the model you want to use
-
-![ReadAny AI Settings Page](./images/readany-ai-settings.png)
-*ReadAny AI Settings Page*
-
-![Add SiliconFlow Endpoint](./images/readany-add-siliconflow.png)
-*Add SiliconFlow Endpoint*
-
-![Enter API Key](./images/readany-enter-apikey.png)
-*Enter API Key and Fetch Models*
-
-![Select Model](./images/readany-select-model.png)
-*Select Model to Use*
 
 ### Recommended Models
 
@@ -88,12 +61,6 @@ SiliconFlow provides various Embedding models for book semantic search functiona
 4. Enter your API Key
 5. Select an Embedding model
 
-![Embedding Model Settings Page](./images/readany-embedding-settings.png)
-*Embedding Model Settings Page*
-
-![Select SiliconFlow Embedding Model](./images/readany-embedding-siliconflow.png)
-*Select SiliconFlow as Embedding Model Provider*
-
 ### Recommended Embedding Models
 
 | Model | Max Length | Description |
@@ -112,15 +79,6 @@ After configuration:
 3. Select "Use Remote API"
 4. Wait for processing to complete
 
-![Book Vectorize Button](./images/readany-vectorize-button.png)
-*Click Vectorize Button*
-
-![Select Remote API](./images/readany-vectorize-remote.png)
-*Select Use Remote API for Vectorization*
-
-![Vectorization Progress](./images/readany-vectorize-progress.png)
-*Vectorization Processing Progress*
-
 Embedding data will be sent to SiliconFlow servers for processing, and the index will be saved locally after completion.
 
 :::info
@@ -135,9 +93,6 @@ SiliconFlow uses pay-as-you-go pricing:
 - **Embedding Models**: Charged by processed token count
 
 New users get free credits after registration. Check the official website for details.
-
-![SiliconFlow Billing Page](./images/siliconflow-billing.png)
-*Billing and Usage Statistics Page*
 
 ## Troubleshooting
 
@@ -209,25 +164,3 @@ New users get free credits after registration. Check the official website for de
 - Reduce request frequency
 - Wait for a while and retry
 - Upgrade account level for higher limits
-
-## Screenshot Checklist
-
-Please prepare the following screenshots and place them in `website/src/content/docs/support/ai/images/` directory:
-
-| Filename | Description |
-|---|---|
-| `siliconflow-register.png` | SiliconFlow register page |
-| `siliconflow-verify.png` | Identity verification page |
-| `siliconflow-api-keys.png` | API key management page |
-| `siliconflow-create-key.png` | Create new key popup |
-| `siliconflow-copy-key.png` | Copy API key |
-| `readany-ai-settings.png` | ReadAny AI settings page |
-| `readany-add-siliconflow.png` | Add SiliconFlow endpoint |
-| `readany-enter-apikey.png` | Enter API key |
-| `readany-select-model.png` | Select model |
-| `readany-embedding-settings.png` | Embedding model settings page |
-| `readany-embedding-siliconflow.png` | Select SiliconFlow embedding model |
-| `readany-vectorize-button.png` | Book vectorize button |
-| `readany-vectorize-remote.png` | Select remote API |
-| `readany-vectorize-progress.png` | Vectorization progress |
-| `siliconflow-billing.png` | Billing statistics page |
