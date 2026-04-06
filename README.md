@@ -68,42 +68,42 @@
 ### Hero
 
 <div align="center">
-  <img src="docs/screenshots/hero-screenshot.png" width="80%" alt="ReadAny Hero">
+  <img src="assets/hero-screenshot.png" width="80%" alt="ReadAny Hero">
 </div>
 
 ### AI-Powered Chat
 
 <div align="center">
-  <img src="docs/screenshots/ai-chat-desktop.png" width="60%" alt="AI Chat - Desktop">
-  <img src="docs/screenshots/ai-chat-mobile.png" width="20%" alt="AI Chat - Mobile">
+  <img src="assets/ai-chat-desktop.png" width="60%" alt="AI Chat - Desktop">
+  <img src="assets/ai-chat-mobile.png" width="20%" alt="AI Chat - Mobile">
 </div>
 
 ### Notes & Highlights
 
 <div align="center">
-  <img src="docs/screenshots/notes-desktop.png" width="60%" alt="Notes - Desktop">
-  <img src="docs/screenshots/notes-mobile.png" width="20%" alt="Notes - Mobile">
+  <img src="assets/notes-desktop.png" width="60%" alt="Notes - Desktop">
+  <img src="assets/notes-mobile.png" width="20%" alt="Notes - Mobile">
 </div>
 
 ### Text-to-Speech
 
 <div align="center">
-  <img src="docs/screenshots/tts-desktop.png" width="60%" alt="TTS - Desktop">
-  <img src="docs/screenshots/tts-mobile.png" width="20%" alt="TTS - Mobile">
+  <img src="assets/tts-desktop.png" width="60%" alt="TTS - Desktop">
+  <img src="assets/tts-mobile.png" width="20%" alt="TTS - Mobile">
 </div>
 
 ### Reading Statistics
 
 <div align="center">
-  <img src="docs/screenshots/stats-desktop.png" width="60%" alt="Stats - Desktop">
-  <img src="docs/screenshots/stats-mobile.png" width="20%" alt="Stats - Mobile">
+  <img src="assets/stats-desktop.png" width="60%" alt="Stats - Desktop">
+  <img src="assets/stats-mobile.png" width="20%" alt="Stats - Mobile">
 </div>
 
 ### Cross-Device Sync
 
 <div align="center">
-  <img src="docs/screenshots/sync-desktop.png" width="60%" alt="Sync - Desktop">
-  <img src="docs/screenshots/sync-mobile.png" width="20%" alt="Sync - Mobile">
+  <img src="assets/sync-desktop.png" width="60%" alt="Sync - Desktop">
+  <img src="assets/sync-mobile.png" width="20%" alt="Sync - Mobile">
 </div>
 
 ---
@@ -310,8 +310,8 @@ Thanks to [linux.do](https://linux.do/) — a vibrant Chinese tech community whe
 </p>
 
 <p align="center">
-  <img src="docs/screenshots/小红书群.jpg" width="200" alt="小红书群">
-  <img src="docs/screenshots/微信群.jpg" width="200" alt="微信群">
+  <img src="assets/小红书群.jpg" width="200" alt="小红书群">
+  <img src="assets/微信群.jpg" width="200" alt="微信群">
 </p>
 
 ---

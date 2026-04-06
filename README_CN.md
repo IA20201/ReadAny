@@ -68,42 +68,42 @@
 ### 主界面
 
 <div align="center">
-  <img src="docs/screenshots/hero-screenshot.png" width="80%" alt="ReadAny 主界面">
+  <img src="assets/hero-screenshot.png" width="80%" alt="ReadAny 主界面">
 </div>
 
 ### AI 智能对话
 
 <div align="center">
-  <img src="docs/screenshots/ai-chat-desktop.png" width="60%" alt="AI 对话 - 桌面端">
-  <img src="docs/screenshots/ai-chat-mobile.png" width="20%" alt="AI 对话 - 移动端">
+  <img src="assets/ai-chat-desktop.png" width="60%" alt="AI 对话 - 桌面端">
+  <img src="assets/ai-chat-mobile.png" width="20%" alt="AI 对话 - 移动端">
 </div>
 
 ### 笔记和高亮
 
 <div align="center">
-  <img src="docs/screenshots/notes-desktop.png" width="60%" alt="笔记 - 桌面端">
-  <img src="docs/screenshots/notes-mobile.png" width="20%" alt="笔记 - 移动端">
+  <img src="assets/notes-desktop.png" width="60%" alt="笔记 - 桌面端">
+  <img src="assets/notes-mobile.png" width="20%" alt="笔记 - 移动端">
 </div>
 
 ### TTS 语音朗读
 
 <div align="center">
-  <img src="docs/screenshots/tts-desktop.png" width="60%" alt="语音朗读 - 桌面端">
-  <img src="docs/screenshots/tts-mobile.png" width="20%" alt="语音朗读 - 移动端">
+  <img src="assets/tts-desktop.png" width="60%" alt="语音朗读 - 桌面端">
+  <img src="assets/tts-mobile.png" width="20%" alt="语音朗读 - 移动端">
 </div>
 
 ### 阅读统计
 
 <div align="center">
-  <img src="docs/screenshots/stats-desktop.png" width="60%" alt="阅读统计 - 桌面端">
-  <img src="docs/screenshots/stats-mobile.png" width="20%" alt="阅读统计 - 移动端">
+  <img src="assets/stats-desktop.png" width="60%" alt="阅读统计 - 桌面端">
+  <img src="assets/stats-mobile.png" width="20%" alt="阅读统计 - 移动端">
 </div>
 
 ### 跨设备同步
 
 <div align="center">
-  <img src="docs/screenshots/sync-desktop.png" width="60%" alt="同步 - 桌面端">
-  <img src="docs/screenshots/sync-mobile.png" width="20%" alt="同步 - 移动端">
+  <img src="assets/sync-desktop.png" width="60%" alt="同步 - 桌面端">
+  <img src="assets/sync-mobile.png" width="20%" alt="同步 - 移动端">
 </div>
 
 ---
@@ -310,8 +310,8 @@ pnpm tauri build
 </p>
 
 <p align="center">
-  <img src="docs/screenshots/小红书群.jpg" width="200" alt="小红书群">
-  <img src="docs/screenshots/微信群.jpg" width="200" alt="微信群">
+  <img src="assets/小红书群.jpg" width="200" alt="小红书群">
+  <img src="assets/微信群.jpg" width="200" alt="微信群">
 </p>
 
 ---
