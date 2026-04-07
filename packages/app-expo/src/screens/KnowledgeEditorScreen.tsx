@@ -3,7 +3,7 @@
  * Receives bookId and optional docId from route params.
  */
 import { ChevronLeftIcon, EditIcon, LanguagesIcon, LightbulbIcon, SparklesIcon } from "@/components/ui/Icon";
-import { RichTextEditor } from "@/components/ui/RichTextEditor";
+import { TiptapEditor, type TiptapEditorHandle } from "@/components/ui/TiptapEditor";
 import type { RootStackParamList } from "@/navigation/RootNavigator";
 import { useAnnotationStore } from "@/stores";
 import { useSettingsStore } from "@/stores/settings-store";
@@ -23,9 +23,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   ActivityIndicator,
-  KeyboardAvoidingView,
   Modal,
-  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -55,6 +53,7 @@ export function KnowledgeEditorScreen({ route, navigation }: Props) {
   const isNewRef = useRef(!docId);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hasSavedRef = useRef(false);
+  const tiptapEditorRef = useRef<TiptapEditorHandle>(null);
 
   // AI action state
   const [showAIPanel, setShowAIPanel] = useState(false);
@@ -63,6 +62,50 @@ export function KnowledgeEditorScreen({ route, navigation }: Props) {
   // Snapshot of content at the moment AI panel opens — prevents index drift if
   // the user or auto-save mutates `content` while AI is generating.
   const contentSnapshotRef = useRef<string>("");
+
+  // Auto-save debounced
+  const scheduleSave = useCallback(
+    (newTitle: string, newContent: string) => {
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = setTimeout(() => {
+        const now = Date.now();
+        if (isNewRef.current && !hasSavedRef.current) {
+          const note: KnowledgeNote = {
+            id: idRef.current,
+            bookId,
+            title: newTitle || t("knowledge.untitled", "无标题"),
+            content: newContent,
+            createdAt: now,
+            updatedAt: now,
+          };
+          addKnowledgeNote(note);
+          hasSavedRef.current = true;
+        } else {
+          updateKnowledgeNote(idRef.current, {
+            title: newTitle || t("knowledge.untitled", "无标题"),
+            content: newContent,
+          });
+        }
+      }, 800);
+    },
+    [bookId, addKnowledgeNote, updateKnowledgeNote, t],
+  );
+
+  const handleTitleChange = useCallback(
+    (text: string) => {
+      setTitle(text);
+      scheduleSave(text, content);
+    },
+    [content, scheduleSave],
+  );
+
+  const handleContentChange = useCallback(
+    (text: string) => {
+      setContent(text);
+      scheduleSave(title, text);
+    },
+    [title, scheduleSave],
+  );
 
   const handleAcceptAIResult = useCallback(() => {
     if (!result || !selectionForAI) return;
@@ -108,51 +151,6 @@ export function KnowledgeEditorScreen({ route, navigation }: Props) {
     [run, selectedText],
   );
 
-  // Auto-save debounced
-  const scheduleSave = useCallback(
-    (newTitle: string, newContent: string) => {
-      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-      saveTimerRef.current = setTimeout(() => {
-        const now = Date.now();
-        if (isNewRef.current && !hasSavedRef.current) {
-          const note: KnowledgeNote = {
-            id: idRef.current,
-            bookId,
-            title: newTitle || t("knowledge.untitled", "无标题"),
-            content: newContent,
-            createdAt: now,
-            updatedAt: now,
-          };
-          addKnowledgeNote(note);
-          hasSavedRef.current = true;
-        } else {
-          updateKnowledgeNote(idRef.current, {
-            title: newTitle || t("knowledge.untitled", "无标题"),
-            content: newContent,
-            updatedAt: now,
-          });
-        }
-      }, 800);
-    },
-    [bookId, addKnowledgeNote, updateKnowledgeNote, t],
-  );
-
-  const handleTitleChange = useCallback(
-    (text: string) => {
-      setTitle(text);
-      scheduleSave(text, content);
-    },
-    [content, scheduleSave],
-  );
-
-  const handleContentChange = useCallback(
-    (text: string) => {
-      setContent(text);
-      scheduleSave(title, text);
-    },
-    [title, scheduleSave],
-  );
-
   const handleBack = useCallback(() => {
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     const now = Date.now();
@@ -172,7 +170,6 @@ export function KnowledgeEditorScreen({ route, navigation }: Props) {
       updateKnowledgeNote(idRef.current, {
         title: title || t("knowledge.untitled", "无标题"),
         content,
-        updatedAt: now,
       });
     }
     navigation.goBack();
@@ -214,19 +211,15 @@ export function KnowledgeEditorScreen({ route, navigation }: Props) {
       </View>
 
       {/* ── Editor ── */}
-      <KeyboardAvoidingView
+      <TiptapEditor
+        ref={tiptapEditorRef}
+        initialContent={content}
+        onChange={handleContentChange}
+        placeholder={t("knowledge.editorPlaceholder", "开始记录知识...")}
+        bookId={bookId}
+        onAIAction={handleOpenAIPanel}
         style={s.editorWrap}
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        keyboardVerticalOffset={0}
-      >
-        <RichTextEditor
-          initialContent={content}
-          onChange={handleContentChange}
-          placeholder={t("knowledge.editorPlaceholder", "开始记录知识...")}
-          bookId={bookId}
-          onAIAction={handleOpenAIPanel}
-        />
-      </KeyboardAvoidingView>
+      />
 
       {/* ── AI Action Panel ── */}
       <Modal

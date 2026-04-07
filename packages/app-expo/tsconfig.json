@@ -7,5 +7,10 @@
       "@/*": ["./src/*"]
     }
   },
-  "include": ["**/*.ts", "**/*.tsx", "index.js"]
+  "include": ["**/*.ts", "**/*.tsx", "index.js"],
+  "exclude": [
+    "src/editor/web-editor.tsx",
+    "src/editor/highlight-ref-extension.ts",
+    "node_modules"
+  ]
 }
