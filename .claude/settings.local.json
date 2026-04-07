@@ -58,7 +58,9 @@
       "Bash(ln -sf ~/.agents/skills/ui-ux-pro-max ~/.claude/skills/ui-ux-pro-max)",
       "Bash(cat ~/.agents/skills/ui-ux-pro-max/scripts/*.js)",
       "Bash(awk -F',' 'NR==1 || /Productivity/' ~/.agents/skills/ui-ux-pro-max/data/colors.csv)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "WebFetch(domain:10play.github.io)",
+      "Bash(yarn add:*)"
     ]
   }
 }
