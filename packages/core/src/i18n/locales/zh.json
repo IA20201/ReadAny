@@ -353,6 +353,10 @@
     "remove": "移除书签",
     "added": "已添加书签",
     "removed": "已移除书签",
+    "pullToAdd": "下滑添加书签",
+    "releaseToAdd": "松手添加书签",
+    "pullToRemove": "下滑删除书签",
+    "releaseToRemove": "松手删除书签",
     "empty": "暂无书签",
     "emptyHint": "使用工具栏的书签按钮来标记页面"
   },

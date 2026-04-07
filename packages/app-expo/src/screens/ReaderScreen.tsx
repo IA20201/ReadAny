@@ -302,6 +302,7 @@ export function ReaderScreen({ route, navigation }: Props) {
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const TOOLBAR_HIDE_OFFSET = 200;
   const toolbarAnim = useRef(new Animated.Value(TOOLBAR_HIDE_OFFSET)).current;
+  const readerPullAnim = useRef(new Animated.Value(0)).current;
   const lastCfiRef = useRef<string>("");
   const progressRef = useRef(0);
   const locationHistoryRef = useRef<string[]>([]);
@@ -572,6 +573,18 @@ export function ReaderScreen({ route, navigation }: Props) {
     onToggleBookmark: () => {
       handleToggleBookmark();
     },
+    onBookmarkPull: ({ offset, active }) => {
+      if (active) {
+        readerPullAnim.setValue(offset);
+        return;
+      }
+
+      Animated.timing(readerPullAnim, {
+        toValue: 0,
+        duration: 180,
+        useNativeDriver: true,
+      }).start();
+    },
     onSearchResult: (index: number, count: number) => {
       setSearchIndex(index);
       setSearchResultCount(count);
@@ -650,6 +663,17 @@ export function ReaderScreen({ route, navigation }: Props) {
 
   bridgeRef.current = bridge;
   chapterTranslationBridgeRef.current = bridge;
+
+  useEffect(() => {
+    if (!webViewReady) return;
+    bridge.setBookmarkPullState({
+      bookmarked: isBookmarked,
+      pullToAdd: t("bookmarks.pullToAdd", "下滑添加书签"),
+      releaseToAdd: t("bookmarks.releaseToAdd", "松手添加书签"),
+      pullToRemove: t("bookmarks.pullToRemove", "下滑删除书签"),
+      releaseToRemove: t("bookmarks.releaseToRemove", "松手删除书签"),
+    });
+  }, [bridge, isBookmarked, t, webViewReady]);
 
   // Sync webViewRefForVisibility when WebView is ready
   useEffect(() => {
@@ -1047,43 +1071,64 @@ export function ReaderScreen({ route, navigation }: Props) {
     : null;
 
   return (
-    <View style={[s.container, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
-      {/* WebView with foliate-js */}
-      <View style={{ flex: 1 }}>
-        <WebView
-          ref={bridge.webViewRef}
-          source={{ uri: readerHtmlUri }}
-          style={[s.webview, { marginTop: 24 }]}
-          pointerEvents={isPanelOpen ? "none" : "auto"}
-          onMessage={bridge.handleMessage}
-          onError={(e) => {
-            console.error("[ReaderScreen] WebView error:", e.nativeEvent);
-          }}
-          onHttpError={(e) => {
-            console.error("[ReaderScreen] WebView HTTP error:", e.nativeEvent);
-          }}
-          onContentProcessDidTerminate={() => {
-            console.warn("[ReaderScreen] WebView content process terminated");
-          }}
-          javaScriptEnabled
-          domStorageEnabled
-          allowFileAccess
-          allowFileAccessFromFileURLs
-          allowUniversalAccessFromFileURLs
-          allowsInlineMediaPlayback
-          scrollEnabled={false}
-          showsVerticalScrollIndicator={false}
-          originWhitelist={["*"]}
-          mixedContentMode="always"
-        />
-      </View>
-
-      {/* Loading overlay */}
-      {loading && (
-        <View style={s.loadingOverlay}>
-          <ActivityIndicator size="large" color={colors.primary} />
+    <View style={[s.container, { paddingBottom: insets.bottom }]}>
+      <Animated.View
+        style={[s.readerStage, { transform: [{ translateY: readerPullAnim }] }]}
+        pointerEvents="box-none"
+      >
+        {/* WebView with foliate-js */}
+        <View style={{ flex: 1 }}>
+          <WebView
+            ref={bridge.webViewRef}
+            source={{ uri: readerHtmlUri }}
+            style={[s.webview, { marginTop: insets.top + 24 }]}
+            pointerEvents={isPanelOpen ? "none" : "auto"}
+            onMessage={bridge.handleMessage}
+            onError={(e) => {
+              console.error("[ReaderScreen] WebView error:", e.nativeEvent);
+            }}
+            onHttpError={(e) => {
+              console.error("[ReaderScreen] WebView HTTP error:", e.nativeEvent);
+            }}
+            onContentProcessDidTerminate={() => {
+              console.warn("[ReaderScreen] WebView content process terminated");
+            }}
+            javaScriptEnabled
+            domStorageEnabled
+            allowFileAccess
+            allowFileAccessFromFileURLs
+            allowUniversalAccessFromFileURLs
+            allowsInlineMediaPlayback
+            scrollEnabled={false}
+            showsVerticalScrollIndicator={false}
+            originWhitelist={["*"]}
+            mixedContentMode="always"
+          />
         </View>
-      )}
+
+        {/* Loading overlay */}
+        {loading && (
+          <View style={s.loadingOverlay}>
+            <ActivityIndicator size="large" color={colors.primary} />
+          </View>
+        )}
+
+        {/* ─── Top Info Bar (always visible) ─── */}
+        {!showSearch && (
+          <View style={[s.topInfoBar, { top: insets.top }]}>
+            <Text style={s.topInfoText} numberOfLines={1}>
+              {currentChapter || bookTitle}
+            </Text>
+            <Text style={s.topInfoPageText}>
+              {currentPage > 0 && totalPages > 0 ? `${currentPage}/${totalPages}` : ""}
+            </Text>
+          </View>
+        )}
+
+      </Animated.View>
+
+      {/* ─── Bookmark Ribbon (top-right) ─── */}
+      <BookmarkRibbon visible={isBookmarked} topOffset={0} />
 
       {/* Selection Popover */}
       {selection && (
@@ -1191,21 +1236,6 @@ export function ReaderScreen({ route, navigation }: Props) {
           </View>
         </TouchableOpacity>
       )}
-
-      {/* ─── Top Info Bar (always visible) ─── */}
-      {!showSearch && (
-        <View style={[s.topInfoBar, { top: insets.top }]}>
-          <Text style={s.topInfoText} numberOfLines={1}>
-            {currentChapter || bookTitle}
-          </Text>
-          <Text style={s.topInfoPageText}>
-            {currentPage > 0 && totalPages > 0 ? `${currentPage}/${totalPages}` : ""}
-          </Text>
-        </View>
-      )}
-
-      {/* ─── Bookmark Ribbon (top-right) ─── */}
-      <BookmarkRibbon visible={isBookmarked} />
 
       {/* ─── Bottom Toolbar (moved from top) ─── */}
       {!showSearch && (
@@ -1998,6 +2028,7 @@ const noteTooltipMdStyles = {
 const makeStyles = (colors: ThemeColors) =>
   StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
+    readerStage: { flex: 1 },
     webview: { flex: 1 },
     loadingWrap: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12 },
     loadingText: { fontSize: fontSize.sm, color: colors.mutedForeground },
