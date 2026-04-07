@@ -32,6 +32,39 @@
       width: 100%;
       height: 100%;
       position: relative;
+      overflow: hidden;
+    }
+
+    #pull-bookmark-indicator {
+      position: absolute;
+      left: 50%;
+      top: 0;
+      transform: translate(-50%, -12px) scale(0.96);
+      opacity: 0;
+      pointer-events: none;
+      z-index: 30;
+      transition: opacity 140ms ease, transform 180ms ease;
+    }
+
+    #pull-bookmark-indicator .pill {
+      min-width: 164px;
+      padding: 10px 14px;
+      border-radius: 999px;
+      background: rgba(28, 28, 30, 0.88);
+      color: #f5f5f7;
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 0.01em;
+      text-align: center;
+      box-shadow: 0 10px 24px rgba(0, 0, 0, 0.22);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+    }
+
+    #pull-bookmark-indicator[data-armed="true"] .pill {
+      background: rgba(59, 130, 246, 0.92);
+      color: white;
     }
 
     #loading {
@@ -89,6 +122,9 @@
 
 <body>
   <div id="reader-container">
+    <div id="pull-bookmark-indicator" aria-hidden="true" data-armed="false">
+      <div class="pill" id="pull-bookmark-indicator-text"></div>
+    </div>
     <div id="loading">
       <div class="spinner"></div>
       <div id="loading-text">Loading...</div>
@@ -116,10 +152,85 @@
     let totalSections = 0;
     let currentThemeColors = { bg: '#1c1c1e', fg: '#e8e8ed', muted: '#7c7c82', primary: '#3b82f6' };
     let lastRendererStyles = '';
+    let currentViewMode = 'paginated';
     let tapNavigationInFlight = false;
+    let tapNavigationResetTimer = null;
+    let readerElement = null;
+    let bookmarkPullGestureActive = false;
+    let pullBookmarkResetTimer = null;
+    let bookmarkPullStateMeta = {
+      bookmarked: false,
+      pullToAdd: '下滑添加书签',
+      releaseToAdd: '松手添加书签',
+      pullToRemove: '下滑删除书签',
+      releaseToRemove: '松手删除书签',
+    };
 
     // Store user annotations for re-rendering on page change
     const userAnnotations = new Map();
+
+    function clearTapNavigationLock() {
+      tapNavigationInFlight = false;
+      if (tapNavigationResetTimer) {
+        clearTimeout(tapNavigationResetTimer);
+        tapNavigationResetTimer = null;
+      }
+    }
+
+    function armTapNavigationLock() {
+      tapNavigationInFlight = true;
+      if (tapNavigationResetTimer) clearTimeout(tapNavigationResetTimer);
+      tapNavigationResetTimer = setTimeout(() => {
+        clearTapNavigationLock();
+      }, 220);
+    }
+
+    function getPullBookmarkElements() {
+      return {
+        indicator: document.getElementById('pull-bookmark-indicator'),
+        text: document.getElementById('pull-bookmark-indicator-text'),
+      };
+    }
+
+    function getPullBookmarkLabel(armed) {
+      if (bookmarkPullStateMeta.bookmarked) {
+        return armed ? bookmarkPullStateMeta.releaseToRemove : bookmarkPullStateMeta.pullToRemove;
+      }
+      return armed ? bookmarkPullStateMeta.releaseToAdd : bookmarkPullStateMeta.pullToAdd;
+    }
+
+    function setReaderTranslateY(offset, animated) {
+      return;
+    }
+
+    function updatePullBookmarkUI(offset, armed) {
+      const { indicator, text } = getPullBookmarkElements();
+      const pullOffset = Math.max(0, Math.min(offset, 72));
+      const easedOffset = Math.round(Math.min(58, pullOffset * 0.78));
+      bookmarkPullGestureActive = pullOffset > 0;
+      if (text) text.textContent = getPullBookmarkLabel(armed);
+      if (indicator) {
+        indicator.dataset.armed = armed ? 'true' : 'false';
+        indicator.style.opacity = String(Math.min(1, pullOffset / 18));
+        indicator.style.transform =
+          `translate(-50%, ${Math.min(24, -12 + easedOffset * 0.68)}px) scale(${0.96 + Math.min(0.08, pullOffset / 360)})`;
+      }
+      setReaderTranslateY(easedOffset, false);
+      postToRN('bookmarkPull', { offset: easedOffset, armed, active: pullOffset > 0 });
+    }
+
+    function resetPullBookmarkUI(animated) {
+      const { indicator, text } = getPullBookmarkElements();
+      bookmarkPullGestureActive = false;
+      if (text) text.textContent = getPullBookmarkLabel(false);
+      if (indicator) {
+        indicator.dataset.armed = 'false';
+        indicator.style.opacity = '0';
+        indicator.style.transform = 'translate(-50%, -12px) scale(0.96)';
+      }
+      setReaderTranslateY(0, animated !== false);
+      postToRN('bookmarkPull', { offset: 0, armed: false, active: false });
+    }
 
     // Note tooltip registry: per-doc WeakMap of cfi -> { range, note }
     const docNoteRegistries = new WeakMap();
@@ -328,14 +439,17 @@
         currentBook = book;
 
         const el = document.createElement('foliate-view');
+        readerElement = el;
         el.style.width = '100%';
         el.style.height = '100%';
+        resetPullBookmarkUI(false);
 
         el.addEventListener('load', (e) => {
           const { doc, index } = e.detail;
           loading.classList.add('hidden');
           applyDocStyles(doc);
           attachTapListener(doc);
+          attachPullBookmarkListener(doc);
           attachSelectionListener(doc);
           attachNoteLongPress(doc);
           attachContinuousScrollListener(doc);
@@ -354,7 +468,7 @@
           const detail = e.detail;
           if (tapNavigationInFlight) {
             setTimeout(() => {
-              tapNavigationInFlight = false;
+              clearTapNavigationLock();
             }, 80);
           }
           if (detail.section != null) {
@@ -593,6 +707,7 @@
       }
 
       if (settings.viewMode) {
+        currentViewMode = settings.viewMode;
         if (settings.viewMode === 'scroll') {
           renderer.setAttribute('flow', 'scrolled');
           renderer.setAttribute('max-inline-size', '9999px');
@@ -677,6 +792,10 @@ a { color: ${primary} !important; }
       let tapState = null;
 
       doc.addEventListener('touchstart', (e) => {
+        if (bookmarkPullGestureActive) {
+          tapState = null;
+          return;
+        }
         if (e.touches.length !== 1) {
           tapState = null;
           return;
@@ -693,6 +812,10 @@ a { color: ${primary} !important; }
 
       doc.addEventListener('touchmove', (e) => {
         if (!tapState || e.touches.length !== 1) return;
+        if (bookmarkPullGestureActive) {
+          tapState = null;
+          return;
+        }
         const touch = e.touches[0];
         if (
           Math.abs(touch.clientX - tapState.startX) > MOVE_THRESHOLD ||
@@ -707,7 +830,7 @@ a { color: ${primary} !important; }
       }, { passive: true });
 
       doc.addEventListener('touchend', (e) => {
-        if (tapNavigationInFlight) {
+        if (bookmarkPullGestureActive || tapNavigationInFlight) {
           tapState = null;
           return;
         }
@@ -743,7 +866,7 @@ a { color: ${primary} !important; }
           return;
         }
 
-        tapNavigationInFlight = true;
+        armTapNavigationLock();
         e.preventDefault();
         e.stopPropagation();
         const dir = currentBook && currentBook.dir === 'rtl' ? 'rtl' : 'ltr';
@@ -760,6 +883,119 @@ a { color: ${primary} !important; }
           }
         }
       }, { passive: false, capture: true });
+    }
+
+    function attachPullBookmarkListener(doc) {
+      if (doc.__readany_pullBookmark) return;
+      doc.__readany_pullBookmark = true;
+
+      const ACTIVATE_DISTANCE = 10;
+      const INTENT_THRESHOLD = 14;
+      const VERTICAL_INTENT_RATIO = 1.35;
+      const HORIZONTAL_CANCEL_RATIO = 1.05;
+      const PULL_THRESHOLD = 60;
+      const MAX_PULL_DISTANCE = 92;
+      const COOLDOWN_MS = 700;
+      let pullState = null;
+      let lastTriggeredAt = 0;
+
+      doc.addEventListener('touchstart', (e) => {
+        if (!view || e.touches.length !== 1 || currentViewMode === 'scroll') {
+          pullState = null;
+          return;
+        }
+
+        const target = e.target;
+        if (target && target.closest && target.closest('a[href], audio, video, button, input, select, textarea')) {
+          pullState = null;
+          return;
+        }
+
+        const sel = doc.getSelection();
+        if (sel && !sel.isCollapsed && sel.toString().trim().length > 0) {
+          pullState = null;
+          return;
+        }
+
+        const touch = e.touches[0];
+        pullState = {
+          startX: touch.clientX,
+          startY: touch.clientY,
+          active: false,
+          armed: false,
+          cancelled: false,
+        };
+      }, { passive: true, capture: true });
+
+      doc.addEventListener('touchmove', (e) => {
+        if (!pullState || e.touches.length !== 1) return;
+        const touch = e.touches[0];
+        const deltaX = touch.clientX - pullState.startX;
+        const deltaY = touch.clientY - pullState.startY;
+        const absX = Math.abs(deltaX);
+        const absY = Math.abs(deltaY);
+
+        if (pullState.cancelled) return;
+
+        if (!pullState.active) {
+          if (absX < INTENT_THRESHOLD && absY < INTENT_THRESHOLD) return;
+
+          if (
+            absX >= Math.max(INTENT_THRESHOLD, absY * HORIZONTAL_CANCEL_RATIO) ||
+            deltaY < -INTENT_THRESHOLD / 2
+          ) {
+            pullState.cancelled = true;
+            resetPullBookmarkUI(false);
+            return;
+          }
+
+          if (deltaY < ACTIVATE_DISTANCE) return;
+          if (absY < Math.max(INTENT_THRESHOLD, absX * VERTICAL_INTENT_RATIO)) return;
+
+          pullState.active = true;
+        }
+
+        if (deltaY <= 0) {
+          resetPullBookmarkUI(false);
+          return;
+        }
+
+        const armed = deltaY >= PULL_THRESHOLD;
+        pullState.armed = armed;
+        e.preventDefault();
+        e.stopPropagation();
+        updatePullBookmarkUI(Math.min(MAX_PULL_DISTANCE, deltaY), armed);
+      }, { passive: false, capture: true });
+
+      doc.addEventListener('touchend', (e) => {
+        const state = pullState;
+        pullState = null;
+        if (!state) return;
+
+        if (state.active) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+
+        const shouldToggle =
+          !!state.active &&
+          !!state.armed &&
+          !state.cancelled &&
+          e.changedTouches.length === 1 &&
+          Date.now() - lastTriggeredAt >= COOLDOWN_MS;
+
+        resetPullBookmarkUI(true);
+
+        if (shouldToggle) {
+          lastTriggeredAt = Date.now();
+          postToRN('toggleBookmark', {});
+        }
+      }, { passive: false, capture: true });
+
+      doc.addEventListener('touchcancel', () => {
+        pullState = null;
+        resetPullBookmarkUI(true);
+      }, { passive: true, capture: true });
     }
 
     // ─── Selection detection ───
@@ -1132,6 +1368,14 @@ a { color: ${primary} !important; }
     window.requestPageSnippet = function () {
       var snippet = getVisibleTextSnippet(80);
       postToRN('bookmarkSnippet', { textSnippet: snippet || '' });
+    };
+    window.setBookmarkPullState = function (params) {
+      bookmarkPullStateMeta = {
+        ...bookmarkPullStateMeta,
+        ...(params || {}),
+      };
+      const { text } = getPullBookmarkElements();
+      if (text) text.textContent = getPullBookmarkLabel(false);
     };
     window.getVisibleText = function () {
       var result = doGetVisibleText();

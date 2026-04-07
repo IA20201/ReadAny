@@ -28,6 +28,12 @@ export interface SelectionEvent {
   };
 }
 
+export interface BookmarkPullEvent {
+  offset: number;
+  armed: boolean;
+  active: boolean;
+}
+
 export interface ReaderBridgeCallbacks {
   onRelocate?: (detail: RelocateEvent) => void;
   onTocReady?: (items: TOCItem[]) => void;
@@ -52,6 +58,7 @@ export interface ReaderBridgeCallbacks {
   onPageSnippet?: (text: string) => void;
   onBookmarkSnippet?: (text: string) => void;
   onToggleBookmark?: () => void;
+  onBookmarkPull?: (detail: BookmarkPullEvent) => void;
 }
 
 export function useReaderBridge(callbacks: ReaderBridgeCallbacks) {
@@ -144,14 +151,16 @@ export function useReaderBridge(callbacks: ReaderBridgeCallbacks) {
 
   const addAnnotation = useCallback(
     (annotation: { value: string; type?: string; color?: string; note?: string }) => {
-      inject(`window.addAnnotation(${JSON.stringify(annotation)})`);
+      const msg = JSON.stringify({ type: "addAnnotation", annotation });
+      inject(`handleCommand(${msg})`);
     },
     [inject],
   );
 
   const removeAnnotation = useCallback(
     (annotation: { value: string }) => {
-      inject(`window.removeAnnotation(${JSON.stringify(annotation)})`);
+      const msg = JSON.stringify({ type: "removeAnnotation", annotation });
+      inject(`handleCommand(${msg})`);
     },
     [inject],
   );
@@ -192,6 +201,19 @@ export function useReaderBridge(callbacks: ReaderBridgeCallbacks) {
   const setNavigationLocked = useCallback(
     (locked: boolean) => {
       inject(`window.setNavigationLocked(${locked})`);
+    },
+    [inject],
+  );
+
+  const setBookmarkPullState = useCallback(
+    (params: {
+      bookmarked: boolean;
+      pullToAdd: string;
+      releaseToAdd: string;
+      pullToRemove: string;
+      releaseToRemove: string;
+    }) => {
+      inject(`window.setBookmarkPullState(${JSON.stringify(params)})`);
     },
     [inject],
   );
@@ -432,6 +454,13 @@ export function useReaderBridge(callbacks: ReaderBridgeCallbacks) {
         case "toggleBookmark":
           cb.onToggleBookmark?.();
           break;
+        case "bookmarkPull":
+          cb.onBookmarkPull?.({
+            offset: typeof msg.offset === "number" ? msg.offset : 0,
+            armed: !!msg.armed,
+            active: !!msg.active,
+          });
+          break;
         case "visibleText":
           console.log(
             "[ReaderBridge] received visibleText:",
@@ -497,6 +526,7 @@ export function useReaderBridge(callbacks: ReaderBridgeCallbacks) {
       applySettings,
       setThemeColors,
       setNavigationLocked,
+      setBookmarkPullState,
       requestPageSnippet,
       getVisibleText,
       flashHighlight,
@@ -523,6 +553,7 @@ export function useReaderBridge(callbacks: ReaderBridgeCallbacks) {
       applySettings,
       setThemeColors,
       setNavigationLocked,
+      setBookmarkPullState,
       requestPageSnippet,
       getVisibleText,
       getChapterParagraphs,

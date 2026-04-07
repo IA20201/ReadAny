@@ -15,12 +15,17 @@
     }
   },
   "scripts": {
+    "prestart": "pnpm run build:reader",
     "start": "expo start",
+    "preandroid": "pnpm run build:reader",
     "android": "expo run:android",
+    "preios": "pnpm run build:reader",
     "ios": "expo run:ios",
+    "preprebuild": "pnpm run build:reader",
     "prebuild": "expo prebuild",
     "build:reader": "node scripts/build-reader.js",
     "lint": "biome check .",
+    "eas-build-post-install": "pnpm run build:reader",
     "eas:build:android": "eas build --platform android",
     "eas:build:ios": "eas build --platform ios"
   },

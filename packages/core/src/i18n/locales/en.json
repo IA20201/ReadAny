@@ -355,6 +355,10 @@
     "remove": "Remove bookmark",
     "added": "Bookmark added",
     "removed": "Bookmark removed",
+    "pullToAdd": "Pull down to add bookmark",
+    "releaseToAdd": "Release to add bookmark",
+    "pullToRemove": "Pull down to remove bookmark",
+    "releaseToRemove": "Release to remove bookmark",
     "empty": "No bookmarks yet",
     "emptyHint": "Use the bookmark button in the toolbar to mark pages"
   },
