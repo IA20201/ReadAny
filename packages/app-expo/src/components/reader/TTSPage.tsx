@@ -805,8 +805,9 @@ export function TTSPage({
         transparent
         onRequestClose={() => setVoicePickerVisible(false)}
       >
+        <View style={s.voicePickerContainer}>
         <Pressable
-          style={s.voicePickerBackdrop}
+          style={StyleSheet.absoluteFillObject}
           onPress={() => setVoicePickerVisible(false)}
         />
         <View style={s.voicePickerSheet}>
@@ -951,6 +952,7 @@ export function TTSPage({
           >
             <Text style={s.voicePickerCancelTxt}>{t("common.cancel")}</Text>
           </TouchableOpacity>
+        </View>
         </View>
       </Modal>
     </Modal>
@@ -1350,8 +1352,9 @@ const makeStyles = (colors: ThemeColors) =>
     },
 
     // ── Engine + Voice picker bottom sheet ───────────────────────────────
-    voicePickerBackdrop: {
+    voicePickerContainer: {
       flex: 1,
+      justifyContent: "flex-end",
       backgroundColor: "rgba(0,0,0,0.45)",
     },
     voicePickerSheet: {
