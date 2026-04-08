@@ -84,6 +84,8 @@ export async function flushAllWrites(): Promise<void> {
 export function withPersist<T extends object>(
   key: string,
   creator: StateCreator<T>,
+  /** Keys to always reset to these values after hydration (transient state that should not be restored) */
+  resetAfterHydrate?: Partial<T>,
 ): StateCreator<T> {
   return (set, get, api) => {
     const wrappedSet = ((partial: unknown, replace?: boolean) => {
@@ -100,9 +102,9 @@ export function withPersist<T extends object>(
     // Load persisted state on creation
     loadFromFS<T>(key).then((persisted) => {
       if (persisted) {
-        set({ ...persisted, _hasHydrated: true } as unknown as Partial<T>);
+        set({ ...persisted, ...(resetAfterHydrate ?? {}), _hasHydrated: true } as unknown as Partial<T>);
       } else {
-        set({ _hasHydrated: true } as unknown as Partial<T>);
+        set({ ...(resetAfterHydrate ?? {}), _hasHydrated: true } as unknown as Partial<T>);
       }
     });
     return state;

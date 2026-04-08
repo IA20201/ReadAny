@@ -81,6 +81,8 @@ export async function flushAllWrites(): Promise<void> {
 export function withPersist<T extends object>(
   key: string,
   creator: StateCreator<T>,
+  /** Keys to always reset to these values after hydration (transient state that should not be restored) */
+  resetAfterHydrate?: Partial<T>,
 ): StateCreator<T> {
   return (set, get, api) => {
     let persistLoaded = false;
@@ -105,12 +107,12 @@ export function withPersist<T extends object>(
       if (persisted) {
         // Merge persisted data with current state (don't replace methods)
         const currentState = get();
-        const mergedState = { ...currentState, ...persisted, _hasHydrated: true };
+        const mergedState = { ...currentState, ...persisted, ...(resetAfterHydrate ?? {}), _hasHydrated: true };
         (set as (state: T, replace: true) => void)(mergedState as T, true);
       } else {
-        (set as (partial: T | Partial<T> | ((state: T) => T | Partial<T>)) => void)(
-          { _hasHydrated: true } as unknown as Partial<T>,
-        );
+        const currentState = get();
+        const mergedState = { ...currentState, ...(resetAfterHydrate ?? {}), _hasHydrated: true };
+        (set as (state: T, replace: true) => void)(mergedState as T, true);
       }
       persistLoaded = true;
 

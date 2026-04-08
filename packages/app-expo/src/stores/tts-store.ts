@@ -135,7 +135,12 @@ export const useTTSStore = create<TTSState>()(
     setCurrentBook: (title, chapter, bookId) => set({ currentBookTitle: title, currentChapterTitle: chapter, currentBookId: bookId ?? "" }),
 
     setChunkProgress: (index, total) => set({ currentChunkIndex: index, totalChunks: total }),
-  })),
+  }), {
+    playState: "stopped" as const,
+    currentText: "",
+    currentChunkIndex: 0,
+    totalChunks: 0,
+  }),
 );
 
 export function setTTSPlayerFactories(): void {
