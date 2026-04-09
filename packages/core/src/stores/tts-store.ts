@@ -59,6 +59,8 @@ export function setTTSPlayerFactories(factories: Partial<TTSPlayerFactories>): v
 let _browserTTS: ITTSPlayer | null = null;
 let _edgeTTS: ITTSPlayer | null = null;
 let _dashscopeTTS: ITTSPlayer | null = null;
+let _sessionSegments: string[] = [];
+let _sessionCurrentIndex = 0;
 
 function getBrowserTTS(): ITTSPlayer {
   if (!_browserTTS) _browserTTS = _factories.createBrowserTTS();
@@ -94,9 +96,11 @@ export interface TTSState {
   currentChapterTitle: string;
   /** Book ID currently being read (for navigation back to reader) */
   currentBookId: string;
+  /** Current reading CFI for jump-back from floating mini-player */
+  currentLocationCfi: string;
 
   // Actions
-  play: (text: string) => void;
+  play: (text: string | string[]) => void;
   pause: () => void;
   resume: () => void;
   stop: () => void;
@@ -105,11 +109,12 @@ export interface TTSState {
   setPlayState: (state: TTSPlayState) => void;
   setOnEnd: (cb: (() => void) | null) => void;
   setCurrentBook: (title: string, chapter: string, bookId?: string) => void;
+  setCurrentLocation: (cfi?: string | null) => void;
   setChunkProgress: (index: number, total: number) => void;
 }
 
 export const useTTSStore = create<TTSState>()(
-  withPersist("tts", (set, get) => ({
+  withPersist<TTSState>("tts", (set, get) => ({
     playState: "stopped",
     currentText: "",
     config: DEFAULT_TTS_CONFIG,
@@ -119,16 +124,27 @@ export const useTTSStore = create<TTSState>()(
     currentBookTitle: "",
     currentChapterTitle: "",
     currentBookId: "",
+    currentLocationCfi: "",
 
-    play: (text: string) => {
+    play: (text: string | string[]) => {
       const { config } = get();
-      set({ playState: "loading", currentText: text, currentChunkIndex: 0, totalChunks: 0 });
+      const segments = Array.isArray(text) ? text.map((item) => item.trim()).filter(Boolean) : [text.trim()].filter(Boolean);
+      const sessionSegments = segments.length > 0 ? segments : [Array.isArray(text) ? text.join(" ").trim() : text.trim()].filter(Boolean);
+      _sessionSegments = sessionSegments;
+      _sessionCurrentIndex = 0;
+      set({
+        playState: "loading",
+        currentText: sessionSegments.join(" "),
+        currentChunkIndex: 0,
+        totalChunks: sessionSegments.length,
+      });
 
       const onState = (state: "playing" | "paused" | "stopped") => {
         set({ playState: state });
       };
 
       const onChunk = (index: number, total: number) => {
+        _sessionCurrentIndex = index;
         set({ currentChunkIndex: index, totalChunks: total });
       };
 
@@ -142,42 +158,83 @@ export const useTTSStore = create<TTSState>()(
         player.onStateChange = onState;
         player.onChunkChange = onChunk;
         player.onEnd = handleEnd;
-        player.speak(text, config);
+        player.speak(sessionSegments, config);
       } else if (config.engine === "edge") {
         const player = getEdgeTTS();
         player.onStateChange = onState;
         player.onChunkChange = onChunk;
         player.onEnd = handleEnd;
-        player.speak(text, config);
+        player.speak(sessionSegments, config);
       } else {
         const player = getBrowserTTS();
         player.onStateChange = onState;
         player.onChunkChange = onChunk;
         player.onEnd = handleEnd;
-        player.speak(text, config);
+        player.speak(sessionSegments, config);
       }
     },
 
     pause: () => {
-      const { config } = get();
+      const { config, playState } = get();
+      if (playState !== "playing") return;
       if (config.engine === "dashscope" && config.dashscopeApiKey) {
         getDashScopeTTS().pause();
       } else if (config.engine === "edge") {
         getEdgeTTS().pause();
       } else {
-        getBrowserTTS().pause();
+        // expo-speech pause is unreliable on React Native; keep a stable store-level pause by stopping.
+        getBrowserTTS().stop();
       }
+      set({ playState: "paused" });
     },
 
     resume: () => {
-      const { config } = get();
-      if (config.engine === "dashscope" && config.dashscopeApiKey) {
-        getDashScopeTTS().resume();
-      } else if (config.engine === "edge") {
-        getEdgeTTS().resume();
-      } else {
-        getBrowserTTS().resume();
+      const { config, playState } = get();
+      if (playState !== "paused") return;
+      if (_sessionSegments.length > 0) {
+        const nextIndex = Math.max(0, Math.min(_sessionCurrentIndex, _sessionSegments.length - 1));
+        const remainingSegments = _sessionSegments.slice(nextIndex);
+        if (remainingSegments.length > 0) {
+          const onState = (state: "playing" | "paused" | "stopped") => {
+            set({ playState: state });
+          };
+          const onChunk = (index: number) => {
+            const absoluteIndex = nextIndex + index;
+            _sessionCurrentIndex = absoluteIndex;
+            set({ currentChunkIndex: absoluteIndex, totalChunks: _sessionSegments.length });
+          };
+          const handleEnd = () => {
+            const currentOnEnd = get().onEnd;
+            currentOnEnd?.();
+          };
+
+          if (config.engine === "dashscope" && config.dashscopeApiKey) {
+            const player = getDashScopeTTS();
+            player.onStateChange = onState;
+            player.onChunkChange = onChunk;
+            player.onEnd = handleEnd;
+            player.speak(remainingSegments, config);
+            return;
+          }
+
+          if (config.engine === "edge") {
+            const player = getEdgeTTS();
+            player.onStateChange = onState;
+            player.onChunkChange = onChunk;
+            player.onEnd = handleEnd;
+            player.speak(remainingSegments, config);
+            return;
+          }
+
+          const player = getBrowserTTS();
+          player.onStateChange = onState;
+          player.onChunkChange = onChunk;
+          player.onEnd = handleEnd;
+          player.speak(remainingSegments, config);
+          return;
+        }
       }
+      set({ playState: "stopped" });
     },
 
     stop: () => {
@@ -190,7 +247,15 @@ export const useTTSStore = create<TTSState>()(
       browser.stop();
       edge.stop();
       dashscope.stop();
-      set({ playState: "stopped", currentText: "", currentChunkIndex: 0, totalChunks: 0 });
+      _sessionSegments = [];
+      _sessionCurrentIndex = 0;
+      set({
+        playState: "stopped",
+        currentText: "",
+        currentChunkIndex: 0,
+        totalChunks: 0,
+        currentLocationCfi: "",
+      });
     },
 
     toggle: (text?: string) => {
@@ -218,11 +283,14 @@ export const useTTSStore = create<TTSState>()(
     setCurrentBook: (title, chapter, bookId) =>
       set({ currentBookTitle: title, currentChapterTitle: chapter, currentBookId: bookId ?? "" }),
 
+    setCurrentLocation: (cfi) => set({ currentLocationCfi: cfi ?? "" }),
+
     setChunkProgress: (index, total) => set({ currentChunkIndex: index, totalChunks: total }),
   }), {
     playState: "stopped" as const,
     currentText: "",
     currentChunkIndex: 0,
     totalChunks: 0,
-  }),
+    currentLocationCfi: "",
+  } as Partial<TTSState>),
 );

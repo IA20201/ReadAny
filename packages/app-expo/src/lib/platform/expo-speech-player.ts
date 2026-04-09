@@ -27,14 +27,14 @@ export class ExpoSpeechTTSPlayer implements ITTSPlayer {
     }
   };
 
-  async speak(text: string, config: TTSConfig): Promise<void> {
+  async speak(text: string | string[], config: TTSConfig): Promise<void> {
     // Register AppState listener to stop speech on background (prevents crash)
     this._appStateSubscription?.remove();
     this._appStateSubscription = AppState.addEventListener("change", this._handleAppStateChange);
     this._stopped = false;
 
     // Split long text into chunks (expo-speech works best with shorter segments)
-    this._chunks = splitIntoChunks(text, 200);
+    this._chunks = Array.isArray(text) ? text.filter(Boolean) : splitIntoChunks(text, 200);
     this._currentIndex = 0;
 
     this.onStateChange?.("playing");

@@ -4,6 +4,7 @@ import { SectionProgress, TOCProgress } from "./progress.js";
 import { textWalker } from "./text-walker.js";
 
 const SEARCH_PREFIX = "foliate-search:";
+const TTS_PREFIX = "foliate-tts:";
 
 const isZip = async (file) => {
   const arr = new Uint8Array(await file.slice(0, 4).arrayBuffer());
@@ -415,7 +416,8 @@ export class View extends HTMLElement {
       }
       return;
     }
-    const { index, anchor } = await this.resolveNavigation(value);
+    const navigationValue = value.startsWith(TTS_PREFIX) ? value.replace(TTS_PREFIX, "") : value;
+    const { index, anchor } = await this.resolveNavigation(navigationValue);
     const obj = this.#getOverlayer(index);
     if (obj) {
       const { overlayer, doc } = obj;
@@ -644,14 +646,22 @@ export class View extends HTMLElement {
   setSearchIndicator(type = "outline", options = {}) {
     this.#searchIndicatorConfig = { type, options };
   }
-  async initTTS(granularity = "word", highlight) {
-    const doc = this.renderer.getContents()[0].doc;
-    if (this.tts && this.tts.doc === doc) return;
+  async initTTS(granularity = "word", highlight, filterFunc) {
+    const current = this.renderer.getContents()[0];
+    const doc = current?.doc;
+    const index = current?.index ?? 0;
+    if (!doc) return;
+    if (this.tts && this.tts.doc === doc) {
+      if (highlight) this.tts.highlight = highlight;
+      return;
+    }
     const { TTS } = await import("./tts.js");
     this.tts = new TTS(
       doc,
       textWalker,
+      filterFunc || null,
       highlight || ((range) => this.renderer.scrollToAnchor(range, true)),
+      (range) => this.getCFI(index, range),
       granularity,
     );
   }

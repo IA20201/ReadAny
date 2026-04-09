@@ -30,13 +30,13 @@ export class BrowserTTSPlayer implements ITTSPlayer {
     return this._paused;
   }
 
-  speak(text: string, config: TTSConfig) {
+  speak(text: string | string[], config: TTSConfig) {
     if (typeof window === "undefined" || !window.speechSynthesis) {
       console.warn("[TTS] SpeechSynthesis not available on this platform");
       return;
     }
     this.stop();
-    this.chunks = splitIntoChunks(text);
+    this.chunks = Array.isArray(text) ? text.filter(Boolean) : splitIntoChunks(text);
     this.currentIndex = 0;
     this._speaking = true;
     this._paused = false;
@@ -68,9 +68,12 @@ export class BrowserTTSPlayer implements ITTSPlayer {
       if (voice) utt.voice = voice;
     }
 
+    utt.onstart = () => {
+      this.onChunkChange?.(this.currentIndex, this.chunks.length);
+    };
+
     utt.onend = () => {
       this.currentIndex++;
-      this.onChunkChange?.(this.currentIndex, this.chunks.length);
       if (this._speaking && !this._paused) {
         this.speakChunk(config);
       }
@@ -82,8 +85,6 @@ export class BrowserTTSPlayer implements ITTSPlayer {
       this.currentIndex++;
       if (this._speaking) this.speakChunk(config);
     };
-
-    this.onChunkChange?.(this.currentIndex, this.chunks.length);
     synth.speak(utt);
   }
 
@@ -141,7 +142,7 @@ export class DashScopeTTSPlayer implements ITTSPlayer {
     return this._paused;
   }
 
-  async speak(text: string, config: TTSConfig) {
+  async speak(text: string | string[], config: TTSConfig) {
     this.abortController?.abort();
     this.abortController = null;
     if (this.checkEndTimer) {
@@ -155,7 +156,7 @@ export class DashScopeTTSPlayer implements ITTSPlayer {
     this.cleanupAudio();
     this.pendingBytes = [];
 
-    const chunks = splitIntoChunks(text);
+    const chunks = Array.isArray(text) ? text.filter(Boolean) : splitIntoChunks(text);
     this._playing = true;
     this._paused = false;
     this.allChunksDone = false;
@@ -405,6 +406,7 @@ export class EdgeTTSPlayer implements ITTSPlayer {
   private fetchBuffer = new Map<number, Promise<ArrayBuffer>>();
   private producerIndex = 0;
   private producerWake: (() => void) | null = null;
+  private chunkStartTimers = new Set<ReturnType<typeof setTimeout>>();
   private static readonly BUFFER_SIZE = 3;
 
   onStateChange?: (state: "playing" | "paused" | "stopped") => void;
@@ -418,7 +420,7 @@ export class EdgeTTSPlayer implements ITTSPlayer {
     return this._paused;
   }
 
-  async speak(text: string, config: TTSConfig) {
+  async speak(text: string | string[], config: TTSConfig) {
     this.aborted = true;
     this.cleanupAudio();
     this.fetchBuffer.clear();
@@ -428,7 +430,7 @@ export class EdgeTTSPlayer implements ITTSPlayer {
       this.checkEndTimer = null;
     }
 
-    this.chunks = splitIntoChunks(text, 800);
+    this.chunks = Array.isArray(text) ? text.filter(Boolean) : splitIntoChunks(text, 800);
     this._playing = true;
     this._paused = false;
     this.aborted = false;
@@ -470,12 +472,10 @@ export class EdgeTTSPlayer implements ITTSPlayer {
 
     for (let i = 0; i < this.chunks.length; i++) {
       if (!this._playing || this.aborted) return;
-      this.onChunkChange?.(i, this.chunks.length);
-
       try {
         const audioData = await this.waitForChunk(i);
         if (!this._playing || this.aborted) return;
-        await this.decodeAndSchedule(audioData);
+        await this.decodeAndSchedule(audioData, i);
       } catch (err) {
         console.error("[Edge TTS] chunk error:", err);
       }
@@ -523,7 +523,7 @@ export class EdgeTTSPlayer implements ITTSPlayer {
     return this.fetchBuffer.get(index)!;
   }
 
-  private async decodeAndSchedule(mp3Data: ArrayBuffer): Promise<void> {
+  private async decodeAndSchedule(mp3Data: ArrayBuffer, index: number): Promise<void> {
     if (!this.audioCtx || !this.gainNode || !this._playing || this.aborted) return;
 
     const audioBuffer = await this.audioCtx.decodeAudioData(mp3Data.slice(0));
@@ -534,6 +534,20 @@ export class EdgeTTSPlayer implements ITTSPlayer {
     source.connect(this.gainNode);
 
     const startAt = Math.max(this.audioCtx.currentTime, this.scheduledEnd);
+    const notifyChunkStart = () => {
+      if (!this._playing || this.aborted) return;
+      this.onChunkChange?.(index, this.chunks.length);
+    };
+    const startDelayMs = Math.max(0, (startAt - this.audioCtx.currentTime) * 1000);
+    if (startDelayMs <= 16) {
+      notifyChunkStart();
+    } else {
+      const timer = setTimeout(() => {
+        this.chunkStartTimers.delete(timer);
+        notifyChunkStart();
+      }, startDelayMs);
+      this.chunkStartTimers.add(timer);
+    }
     source.start(startAt);
     this.scheduledEnd = startAt + audioBuffer.duration;
     this.hasAudioData = true;
@@ -590,6 +604,8 @@ export class EdgeTTSPlayer implements ITTSPlayer {
   }
 
   private cleanupAudio() {
+    for (const timer of this.chunkStartTimers) clearTimeout(timer);
+    this.chunkStartTimers.clear();
     if (this.audioCtx) {
       this.audioCtx.close().catch(() => {});
       this.audioCtx = null;

@@ -34,6 +34,11 @@ export interface BookmarkPullEvent {
   active: boolean;
 }
 
+export interface VisibleTTSSegment {
+  text: string;
+  cfi: string;
+}
+
 export interface ReaderBridgeCallbacks {
   onRelocate?: (detail: RelocateEvent) => void;
   onTocReady?: (items: TOCItem[]) => void;
@@ -66,6 +71,9 @@ export function useReaderBridge(callbacks: ReaderBridgeCallbacks) {
   const callbacksRef = useRef(callbacks);
   callbacksRef.current = callbacks;
   const pendingVisibleTextResolveRef = useRef<((text: string) => void) | null>(null);
+  const pendingVisibleTTSSegmentsResolveRef = useRef<((segments: VisibleTTSSegment[]) => void) | null>(
+    null,
+  );
   const pendingChapterParagraphsResolveRef = useRef<
     | ((
         paragraphs: Array<{ id: string; text: string; tagName: string }>,
@@ -158,7 +166,7 @@ export function useReaderBridge(callbacks: ReaderBridgeCallbacks) {
   );
 
   const removeAnnotation = useCallback(
-    (annotation: { value: string }) => {
+    (annotation: { value: string; type?: string }) => {
       const msg = JSON.stringify({ type: "removeAnnotation", annotation });
       inject(`handleCommand(${msg})`);
     },
@@ -257,6 +265,45 @@ export function useReaderBridge(callbacks: ReaderBridgeCallbacks) {
       }, 2000);
     });
   }, []);
+
+  const getVisibleTTSSegments = useCallback(() => {
+    return new Promise<VisibleTTSSegment[]>((resolve) => {
+      pendingVisibleTTSSegmentsResolveRef.current = resolve;
+
+      webViewRef.current?.injectJavaScript(`
+        (function() {
+          try {
+            if (window.doGetVisibleTTSSegments) {
+              window.doGetVisibleTTSSegments();
+            } else {
+              window.ReactNativeWebView.postMessage(JSON.stringify({type:'visibleTTSSegments',segments:[],error:'doGetVisibleTTSSegments not defined'}));
+            }
+          } catch(e) {
+            window.ReactNativeWebView.postMessage(JSON.stringify({type:'visibleTTSSegments',segments:[],error:String(e)}));
+          }
+        })();
+        true;
+      `);
+
+      setTimeout(() => {
+        if (pendingVisibleTTSSegmentsResolveRef.current === resolve) {
+          pendingVisibleTTSSegmentsResolveRef.current = null;
+          resolve([]);
+        }
+      }, 2000);
+    });
+  }, []);
+
+  const setTTSHighlight = useCallback(
+    (cfi: string | null, color?: string) => {
+      if (!cfi) {
+        inject("window.clearTTSHighlight()");
+        return;
+      }
+      inject(`window.setTTSHighlight(${JSON.stringify(cfi)}, ${JSON.stringify(color || null)})`);
+    },
+    [inject],
+  );
 
   const flashHighlight = useCallback(
     (cfi: string, color?: string, duration?: number) => {
@@ -475,6 +522,15 @@ export function useReaderBridge(callbacks: ReaderBridgeCallbacks) {
             pendingVisibleTextResolveRef.current = null;
           }
           break;
+        case "visibleTTSSegments":
+          if (pendingVisibleTTSSegmentsResolveRef.current) {
+            if (msg.error) {
+              console.warn("[ReaderBridge] visibleTTSSegments error:", msg.error);
+            }
+            pendingVisibleTTSSegmentsResolveRef.current(msg.segments || []);
+            pendingVisibleTTSSegmentsResolveRef.current = null;
+          }
+          break;
         case "chapterParagraphs":
           console.log("[ChapterTranslation] Received chapterParagraphs:", JSON.stringify({
             count: msg.paragraphs?.length || 0,
@@ -529,6 +585,8 @@ export function useReaderBridge(callbacks: ReaderBridgeCallbacks) {
       setBookmarkPullState,
       requestPageSnippet,
       getVisibleText,
+      getVisibleTTSSegments,
+      setTTSHighlight,
       flashHighlight,
       getChapterParagraphs,
       injectChapterTranslations,
@@ -556,6 +614,8 @@ export function useReaderBridge(callbacks: ReaderBridgeCallbacks) {
       setBookmarkPullState,
       requestPageSnippet,
       getVisibleText,
+      getVisibleTTSSegments,
+      setTTSHighlight,
       getChapterParagraphs,
       injectChapterTranslations,
       removeChapterTranslations,

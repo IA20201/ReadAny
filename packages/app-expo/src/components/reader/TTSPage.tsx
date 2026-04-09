@@ -19,6 +19,7 @@ import {
   ActivityIndicator,
   Animated,
   Dimensions,
+  FlatList,
   Image,
   Modal,
   Pressable,
@@ -323,6 +324,7 @@ interface TTSPageProps {
   totalPages: number;
   sourceLabel: string;
   continuousEnabled: boolean;
+  narrationSegments?: string[];
   currentChunkIndex?: number;
   totalChunks?: number;
   onClose: () => void;
@@ -332,6 +334,7 @@ interface TTSPageProps {
   onAdjustRate: (delta: number) => void;
   onAdjustPitch: (delta: number) => void;
   onToggleContinuous: () => void;
+  onJumpToSegment?: (index: number) => void;
   onUpdateConfig?: (updates: Partial<TTSConfig>) => void;
   onPrevChapter?: () => void | Promise<void>;
   onNextChapter?: () => void | Promise<void>;
@@ -355,6 +358,7 @@ export function TTSPage({
   currentPage,
   totalPages,
   continuousEnabled,
+  narrationSegments,
   currentChunkIndex = 0,
   totalChunks = 0,
   onClose,
@@ -364,6 +368,7 @@ export function TTSPage({
   onAdjustRate,
   onAdjustPitch,
   onToggleContinuous,
+  onJumpToSegment,
   onUpdateConfig,
   onPrevChapter,
   onNextChapter,
@@ -371,6 +376,7 @@ export function TTSPage({
   const colors = useColors();
   const { t } = useTranslation();
   const [voicePickerVisible, setVoicePickerVisible] = useState(false);
+  const lyricListRef = useRef<FlatList<string>>(null);
 
   // Native horizontal paging ScrollView ref — no JS animation needed
   const scrollRef = useRef<ScrollView>(null);
@@ -380,10 +386,21 @@ export function TTSPage({
   // Tracks horizontal scroll offset — drives animated page-indicator pill
   const scrollX = useRef(new Animated.Value(0)).current;
 
-  const { currentExcerpt, nextExcerpt, supportingExcerpt } = useMemo(
-    () => buildNarrationPreview(currentText, currentChunkIndex),
-    [currentText, currentChunkIndex],
-  );
+  const fallbackPreview = useMemo(() => buildNarrationPreview(currentText), [currentText]);
+  const lyricSegments = useMemo(() => {
+    if (narrationSegments && narrationSegments.length > 0) {
+      return narrationSegments.filter(Boolean);
+    }
+    return currentText ? [currentText] : [];
+  }, [currentText, narrationSegments]);
+  const safeChunkIndex = lyricSegments.length
+    ? Math.max(0, Math.min(currentChunkIndex, lyricSegments.length - 1))
+    : 0;
+  const currentExcerpt = lyricSegments[safeChunkIndex] || fallbackPreview.currentExcerpt;
+  const nextExcerpt =
+    lyricSegments[safeChunkIndex + 1] || fallbackPreview.nextExcerpt;
+  const supportingExcerpt =
+    lyricSegments[safeChunkIndex - 1] || fallbackPreview.supportingExcerpt;
 
   const pct = clampPct(readingProgress);
   const voiceLabel = getTTSVoiceLabel(config);
@@ -420,6 +437,19 @@ export function TTSPage({
       useNativeDriver: true,
     }).start();
   }, [isPlaying, playScaleAnim]);
+
+  useEffect(() => {
+    if (!visible || lyricSegments.length <= 1) return;
+    const targetIndex = Math.max(0, Math.min(safeChunkIndex, lyricSegments.length - 1));
+    const timer = setTimeout(() => {
+      lyricListRef.current?.scrollToIndex({
+        index: targetIndex,
+        animated: true,
+        viewPosition: 0.5,
+      });
+    }, 80);
+    return () => clearTimeout(timer);
+  }, [lyricSegments.length, safeChunkIndex, visible]);
 
   // ── PanResponder listener removed — replaced by native ScrollView paging ──
 
@@ -565,16 +595,25 @@ export function TTSPage({
 
   const bottomStripJSX = (
     <View style={s.bottomStrip}>
-      {/* Continuous toggle — left side */}
-      <TouchableOpacity
-        style={[s.contBtn, continuousEnabled && s.contBtnOn]}
-        onPress={onToggleContinuous}
-        activeOpacity={0.8}
-      >
-        <Text style={[s.contBtnTxt, continuousEnabled && s.contBtnTxtOn]}>
-          {continuousEnabled ? t("tts.autoContinuePage") : t("tts.keepPageAligned")}
-        </Text>
-      </TouchableOpacity>
+      <View style={s.bottomStripLeft}>
+        <TouchableOpacity
+          style={s.returnBtn}
+          onPress={() => onJumpToSegment?.(safeChunkIndex)}
+          activeOpacity={0.8}
+        >
+          <Text style={s.returnBtnTxt}>{t("tts.returnToReading")}</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[s.contBtn, continuousEnabled && s.contBtnOn]}
+          onPress={onToggleContinuous}
+          activeOpacity={0.8}
+        >
+          <Text style={[s.contBtnTxt, continuousEnabled && s.contBtnTxtOn]}>
+            {continuousEnabled ? t("tts.autoContinuePage") : t("tts.keepPageAligned")}
+          </Text>
+        </TouchableOpacity>
+      </View>
 
       {/* Engine + voice chips — right side */}
       {chipsJSX}
@@ -756,32 +795,57 @@ export function TTSPage({
               </View>
             </View>
 
-            {/* 3-tier text display — active line scrolls if long */}
+            {/* Sentence-aligned lyric list */}
             <View style={s.lyricArea}>
-              {supportingExcerpt ? (
-                <Text style={s.lyricFar} numberOfLines={2}>
-                  {supportingExcerpt}
-                </Text>
+              {lyricSegments.length > 0 ? (
+                <FlatList
+                  ref={lyricListRef}
+                  data={lyricSegments}
+                  keyExtractor={(_, index) => `tts-line-${index}`}
+                  style={s.lyricList}
+                  contentContainerStyle={s.lyricListContent}
+                  showsVerticalScrollIndicator={false}
+                  onScrollToIndexFailed={(info) => {
+                    setTimeout(() => {
+                      lyricListRef.current?.scrollToOffset({
+                        offset: Math.max(0, info.averageItemLength * info.index),
+                        animated: true,
+                      });
+                    }, 120);
+                  }}
+                  renderItem={({ item, index }) => {
+                    const active = index === safeChunkIndex;
+                    const past = index < safeChunkIndex;
+                    return (
+                      <Pressable
+                        style={s.lyricLinePressable}
+                        onPress={() => onJumpToSegment?.(index)}
+                      >
+                        <Text
+                          style={[
+                            s.lyricLine,
+                            active && s.lyricLineActive,
+                            past && s.lyricLinePast,
+                          ]}
+                        >
+                          {item}
+                        </Text>
+                      </Pressable>
+                    );
+                  }}
+                  ListHeaderComponent={
+                    supportingExcerpt ? (
+                      <Text style={s.lyricContextLabel}>{t("tts.justRead")}</Text>
+                    ) : null
+                  }
+                  ListFooterComponent={
+                    nextExcerpt ? (
+                      <Text style={s.lyricHintLabel}>{t("tts.upNext")}</Text>
+                    ) : null
+                  }
+                />
               ) : (
-                <View style={{ height: 24 }} />
-              )}
-
-              <ScrollView
-                style={s.lyricActiveScroll}
-                showsVerticalScrollIndicator={false}
-                contentContainerStyle={s.lyricActiveScrollContent}
-              >
-                <Text style={s.lyricActive}>
-                  {currentExcerpt || t("tts.waitingText")}
-                </Text>
-              </ScrollView>
-
-              {nextExcerpt ? (
-                <Text style={s.lyricNear} numberOfLines={2}>
-                  {nextExcerpt}
-                </Text>
-              ) : (
-                <View style={{ height: 24 }} />
+                <Text style={s.lyricActive}>{currentExcerpt || t("tts.waitingText")}</Text>
               )}
             </View>
 
@@ -1224,6 +1288,25 @@ const makeStyles = (colors: ThemeColors) =>
       width: "100%" as unknown as number,
       gap: 8,
     },
+    bottomStripLeft: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+      flexShrink: 1,
+    },
+    returnBtn: {
+      borderRadius: 999,
+      paddingHorizontal: 10,
+      paddingVertical: 4,
+      backgroundColor: withOpacity(colors.primary, 0.1),
+      borderWidth: 1,
+      borderColor: withOpacity(colors.primary, 0.22),
+    },
+    returnBtnTxt: {
+      fontSize: 10,
+      fontWeight: fontWeight.semibold,
+      color: colors.primary,
+    },
     /** Animated page indicator — inner container */
     pageIndicator: {
       // PILL_W(18) + GAP(5) + DOT(6) = 29 — all children are absolutely positioned
@@ -1304,51 +1387,56 @@ const makeStyles = (colors: ThemeColors) =>
     /** Karaoke text area — centered, fills remaining space */
     lyricArea: {
       flex: 1,
-      paddingHorizontal: 28,
-      justifyContent: "center",
-      alignItems: "center",
-      gap: 20,
-    },
-
-    /** ScrollView wrapper for the active lyric so long text can scroll */
-    lyricActiveScroll: {
-      maxHeight: 200,
-      flexShrink: 1,
+      paddingHorizontal: 24,
+      paddingTop: 8,
+      paddingBottom: 16,
       alignSelf: "stretch",
     },
-
-    lyricActiveScrollContent: {
-      justifyContent: "center",
-      alignItems: "center",
-      paddingVertical: 4,
+    lyricList: {
+      flex: 1,
+      alignSelf: "stretch",
     },
-
-    /** Active / hero line — 100% opacity, largest */
-    lyricActive: {
-      fontSize: 22,
-      fontWeight: fontWeight.bold,
-      color: colors.foreground,
-      textAlign: "center",
-      lineHeight: 33,
+    lyricListContent: {
+      paddingVertical: 60,
     },
-
-    /** Next line — 58% opacity, medium size */
-    lyricNear: {
+    lyricLinePressable: {
+      paddingVertical: 8,
+    },
+    lyricLine: {
       fontSize: 15,
       fontWeight: fontWeight.medium,
       color: colors.foreground,
-      opacity: 0.58,
       textAlign: "center",
-      lineHeight: 23,
+      lineHeight: 25,
+      opacity: 0.34,
     },
-
-    /** Previous / context line — 33% opacity, smallest */
-    lyricFar: {
-      fontSize: 13,
-      color: colors.foreground,
-      opacity: 0.33,
+    lyricLineActive: {
+      fontSize: 18,
+      fontWeight: fontWeight.bold,
+      lineHeight: 28,
+      opacity: 1,
+    },
+    lyricLinePast: {
+      opacity: 0.56,
+    },
+    lyricContextLabel: {
+      fontSize: 11,
+      color: colors.mutedForeground,
       textAlign: "center",
-      lineHeight: 20,
+      marginBottom: 8,
+    },
+    lyricHintLabel: {
+      fontSize: 11,
+      color: colors.mutedForeground,
+      textAlign: "center",
+      marginTop: 8,
+    },
+    lyricActive: {
+      fontSize: 18,
+      fontWeight: fontWeight.bold,
+      color: colors.foreground,
+      textAlign: "center",
+      lineHeight: 28,
     },
 
     // ── Engine + Voice picker bottom sheet ───────────────────────────────

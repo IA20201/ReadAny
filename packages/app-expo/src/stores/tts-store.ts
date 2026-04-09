@@ -1,4 +1,4 @@
-import type { TTSConfig } from "@readany/core/tts";
+import { splitNarrationText, type TTSConfig } from "@readany/core/tts";
 import * as Speech from "expo-speech";
 /**
  * TTS Store for React Native
@@ -17,10 +17,11 @@ export interface TTSState {
   currentBookTitle: string;
   currentChapterTitle: string;
   currentBookId: string;
+  currentLocationCfi: string;
   currentChunkIndex: number;
   totalChunks: number;
 
-  play: (text: string) => void;
+  play: (text: string | string[]) => void;
   pause: () => void;
   resume: () => void;
   stop: () => void;
@@ -29,6 +30,7 @@ export interface TTSState {
   setPlayState: (state: TTSPlayState) => void;
   setOnEnd: (cb: (() => void) | null) => void;
   setCurrentBook: (title: string, chapter: string, bookId?: string) => void;
+  setCurrentLocation: (cfi?: string | null) => void;
   setChunkProgress: (index: number, total: number) => void;
 }
 
@@ -42,8 +44,79 @@ const DEFAULT_TTS_CONFIG: TTSConfig = {
   dashscopeVoice: "Cherry",
 };
 
+let _sessionSegments: string[] = [];
+let _sessionIndex = 0;
+let _sessionStopped = false;
+let _sessionLanguage = "zh-CN";
+
+function normalizeSegments(text: string | string[]): string[] {
+  if (Array.isArray(text)) {
+    return text.map((segment) => segment.trim()).filter(Boolean);
+  }
+  return splitNarrationText(text).map((segment) => segment.trim()).filter(Boolean);
+}
+
+function stopSpeechSilently() {
+  try {
+    Speech.stop();
+  } catch {}
+}
+
+function detectLanguage(text: string): string {
+  const cjk = text.match(/[\u4e00-\u9fff\u3400-\u4dbf]/g);
+  return cjk && cjk.length > text.length * 0.1 ? "zh-CN" : "en-US";
+}
+
+function speakSegmentQueue(
+  set: (partial: Partial<TTSState>) => void,
+  get: () => TTSState,
+  language: string,
+) {
+  if (_sessionStopped || _sessionIndex >= _sessionSegments.length) {
+    console.log("[TTSStore] Session finished");
+    set({ playState: "stopped" });
+    get().onEnd?.();
+    return;
+  }
+
+  const segment = _sessionSegments[_sessionIndex];
+  set({
+    playState: "loading",
+    currentChunkIndex: _sessionIndex,
+    totalChunks: _sessionSegments.length,
+  });
+
+  Speech.speak(segment, {
+    rate: get().config.rate || 1.0,
+    pitch: get().config.pitch || 1.0,
+    language,
+    onDone: () => {
+      if (_sessionStopped) return;
+      _sessionIndex += 1;
+      speakSegmentQueue(set, get, language);
+    },
+    onStopped: () => {
+      console.log("[TTSStore] Speech.onStopped");
+    },
+    onError: (e) => {
+      console.log("[TTSStore] Speech.onError:", e);
+      if (_sessionStopped) return;
+      _sessionIndex += 1;
+      speakSegmentQueue(set, get, language);
+    },
+    onStart: () => {
+      console.log("[TTSStore] Speech.onStart");
+      set({
+        playState: "playing",
+        currentChunkIndex: _sessionIndex,
+        totalChunks: _sessionSegments.length,
+      });
+    },
+  });
+}
+
 export const useTTSStore = create<TTSState>()(
-  withPersist("tts", (set, get) => ({
+  withPersist<TTSState>("tts", (set, get) => ({
     playState: "stopped",
     currentText: "",
     config: DEFAULT_TTS_CONFIG,
@@ -51,74 +124,72 @@ export const useTTSStore = create<TTSState>()(
     currentBookTitle: "",
     currentChapterTitle: "",
     currentBookId: "",
+    currentLocationCfi: "",
     currentChunkIndex: 0,
     totalChunks: 0,
 
-    play: (text: string) => {
-      console.log("[TTSStore] play called with text length:", text?.length);
-      if (!text || !text.trim()) {
+    play: (text: string | string[]) => {
+      const segments = normalizeSegments(text);
+      const joinedText = segments.join(" ").trim();
+      console.log("[TTSStore] play called with segments:", segments.length);
+      if (!joinedText) {
         console.log("[TTSStore] No text to speak");
         return;
       }
-      set({ playState: "loading", currentText: text });
-
-      // Detect language from text
-      const cjk = text.match(/[\u4e00-\u9fff\u3400-\u4dbf]/g);
-      const language = cjk && cjk.length > text.length * 0.1 ? "zh-CN" : "en-US";
-      console.log("[TTSStore] detected language:", language);
-
-      Speech.speak(text, {
-        rate: get().config.rate || 1.0,
-        pitch: get().config.pitch || 1.0,
-        language: language,
-        onDone: () => {
-          console.log("[TTSStore] Speech.onDone");
-          set({ playState: "stopped" });
-          get().onEnd?.();
-        },
-        onStopped: () => {
-          console.log("[TTSStore] Speech.onStopped");
-          set({ playState: "stopped" });
-        },
-        onError: (e) => {
-          console.log("[TTSStore] Speech.onError:", e);
-          set({ playState: "stopped" });
-          get().onEnd?.();
-        },
-        onStart: () => {
-          console.log("[TTSStore] Speech.onStart");
-          set({ playState: "playing" });
-        },
+      stopSpeechSilently();
+      _sessionSegments = segments;
+      _sessionIndex = 0;
+      _sessionStopped = false;
+      _sessionLanguage = detectLanguage(joinedText);
+      set({
+        playState: "loading",
+        currentText: joinedText,
+        currentChunkIndex: 0,
+        totalChunks: segments.length,
       });
+      console.log("[TTSStore] detected language:", _sessionLanguage);
+      speakSegmentQueue(set, get, _sessionLanguage);
     },
 
     pause: () => {
       console.log("[TTSStore] pause called");
-      Speech.pause();
+      _sessionStopped = true;
+      stopSpeechSilently();
       set({ playState: "paused" });
     },
 
     resume: () => {
       console.log("[TTSStore] resume called");
-      Speech.resume();
-      set({ playState: "playing" });
+      if (_sessionSegments.length === 0 || _sessionIndex >= _sessionSegments.length) {
+        set({ playState: "stopped" });
+        return;
+      }
+      _sessionStopped = false;
+      speakSegmentQueue(set, get, _sessionLanguage);
     },
 
     stop: () => {
       console.log("[TTSStore] stop called");
-      Speech.stop();
-      set({ playState: "stopped", currentText: "" });
+      _sessionStopped = true;
+      _sessionSegments = [];
+      _sessionIndex = 0;
+      stopSpeechSilently();
+      set({
+        playState: "stopped",
+        currentText: "",
+        currentChunkIndex: 0,
+        totalChunks: 0,
+        currentLocationCfi: "",
+      });
     },
 
     toggle: (text?: string) => {
       console.log("[TTSStore] toggle called, playState:", get().playState);
       const { playState, currentText, play } = get();
       if (playState === "playing") {
-        Speech.pause();
-        set({ playState: "paused" });
+        get().pause();
       } else if (playState === "paused") {
-        Speech.resume();
-        set({ playState: "playing" });
+        get().resume();
       } else if (text) {
         play(text);
       } else if (currentText) {
@@ -132,7 +203,10 @@ export const useTTSStore = create<TTSState>()(
 
     setOnEnd: (cb) => set({ onEnd: cb }),
 
-    setCurrentBook: (title, chapter, bookId) => set({ currentBookTitle: title, currentChapterTitle: chapter, currentBookId: bookId ?? "" }),
+    setCurrentBook: (title, chapter, bookId) =>
+      set({ currentBookTitle: title, currentChapterTitle: chapter, currentBookId: bookId ?? "" }),
+
+    setCurrentLocation: (cfi) => set({ currentLocationCfi: cfi ?? "" }),
 
     setChunkProgress: (index, total) => set({ currentChunkIndex: index, totalChunks: total }),
   }), {
@@ -140,7 +214,8 @@ export const useTTSStore = create<TTSState>()(
     currentText: "",
     currentChunkIndex: 0,
     totalChunks: 0,
-  }),
+    currentLocationCfi: "",
+  } as Partial<TTSState>),
 );
 
 export function setTTSPlayerFactories(): void {

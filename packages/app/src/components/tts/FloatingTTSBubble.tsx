@@ -14,6 +14,8 @@
 import { useTTSStore } from "@/stores/tts-store";
 import { useAppStore } from "@/stores/app-store";
 import { useLibraryStore } from "@/stores/library-store";
+import { useReaderStore } from "@/stores/reader-store";
+import { eventBus } from "@readany/core/utils/event-bus";
 import { Headphones, Pause, Play, Square, BookOpen, Loader2 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -24,16 +26,17 @@ export function FloatingTTSBubble() {
   const currentBookTitle = useTTSStore((s) => s.currentBookTitle);
   const currentChapterTitle = useTTSStore((s) => s.currentChapterTitle);
   const currentBookId = useTTSStore((s) => s.currentBookId);
+  const currentLocationCfi = useTTSStore((s) => s.currentLocationCfi);
   const config = useTTSStore((s) => s.config);
   const pause = useTTSStore((s) => s.pause);
   const resume = useTTSStore((s) => s.resume);
   const stop = useTTSStore((s) => s.stop);
   const updateConfig = useTTSStore((s) => s.updateConfig);
 
-  const tabs = useAppStore((s) => s.tabs);
   const addTab = useAppStore((s) => s.addTab);
   const setActiveTab = useAppStore((s) => s.setActiveTab);
   const books = useLibraryStore((s) => s.books);
+  const goToCfiFn = useReaderStore((s) => s.goToCfiFn);
 
   const isActive = playState === "playing" || playState === "paused" || playState === "loading";
   const [showPlayer, setShowPlayer] = useState(false);
@@ -45,6 +48,8 @@ export function FloatingTTSBubble() {
 
   // Draggable position
   const [pos, setPos] = useState({ x: 20, y: 120 }); // bottom-right origin
+  const [playerPos, setPlayerPos] = useState({ left: 16, top: 16 });
+  const bubbleRef = useRef<HTMLDivElement | null>(null);
   const dragRef = useRef<{ dragging: boolean; startX: number; startY: number; initX: number; initY: number }>({
     dragging: false,
     startX: 0,
@@ -114,21 +119,33 @@ export function FloatingTTSBubble() {
     (e: React.MouseEvent) => {
       e.stopPropagation();
       if (!currentBookId) return;
-      const existingTab = tabs.find((t) => t.type === "reader" && t.bookId === currentBookId);
-      if (existingTab) {
-        setActiveTab(existingTab.id);
-      } else {
-        const book = books.find((b) => b.id === currentBookId);
-        addTab({
-          id: `reader-${currentBookId}`,
-          type: "reader",
-          title: book?.meta.title ?? "Book",
+      let handled = false;
+      if (currentLocationCfi) {
+        eventBus.emit("tts:jump-to-current", {
           bookId: currentBookId,
+          cfi: currentLocationCfi,
+          respond: () => {
+            handled = true;
+          },
         });
       }
+      if (!handled && currentLocationCfi && goToCfiFn) {
+        goToCfiFn(currentLocationCfi);
+        setShowPlayer(false);
+        return;
+      }
+      const book = books.find((b) => b.id === currentBookId);
+      addTab({
+        id: `reader-${currentBookId}`,
+        type: "reader",
+        title: book?.meta.title ?? "Book",
+        bookId: currentBookId,
+        initialCfi: currentLocationCfi || undefined,
+      });
+      setActiveTab(`reader-${currentBookId}`);
       setShowPlayer(false);
     },
-    [currentBookId, tabs, addTab, setActiveTab, books],
+    [currentBookId, currentLocationCfi, addTab, goToCfiFn, setActiveTab, books],
   );
 
   const adjustRate = useCallback(
@@ -149,6 +166,40 @@ export function FloatingTTSBubble() {
           ? "已暂停"
           : "已停止";
 
+  const updatePlayerPosition = useCallback(() => {
+    const bubbleEl = bubbleRef.current;
+    if (!bubbleEl) return;
+    const rect = bubbleEl.getBoundingClientRect();
+    const panelWidth = 288;
+    const panelHeight = 146;
+    const gap = 12;
+    const viewportPadding = 16;
+    const clamp = (value: number, min: number, max: number) =>
+      Math.min(Math.max(value, min), max);
+
+    const left = clamp(
+      rect.left + rect.width / 2 - panelWidth / 2,
+      viewportPadding,
+      window.innerWidth - panelWidth - viewportPadding,
+    );
+    const preferAbove = rect.top >= panelHeight + gap + viewportPadding;
+    const top = clamp(
+      preferAbove ? rect.top - panelHeight - gap : rect.bottom + gap,
+      viewportPadding,
+      window.innerHeight - panelHeight - viewportPadding,
+    );
+
+    setPlayerPos({ left, top });
+  }, []);
+
+  useEffect(() => {
+    if (!showPlayer) return;
+    updatePlayerPosition();
+    const handleResize = () => updatePlayerPosition();
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, [showPlayer, pos, updatePlayerPosition]);
+
   if (!isActive) return null;
 
   return (
@@ -161,6 +212,7 @@ export function FloatingTTSBubble() {
         className="pointer-events-auto absolute"
         style={{ right: pos.x, bottom: pos.y }}
         onMouseDown={handleMouseDown}
+        ref={bubbleRef}
       >
         {/* Ripple rings — playing only */}
         {playState === "playing" && (
@@ -184,98 +236,92 @@ export function FloatingTTSBubble() {
           )}
         </button>
 
-        {/* ── Mini player popover ── */}
-        {showPlayer && (
-          <div
-            className="pointer-events-auto absolute bottom-16 right-0 w-72 overflow-hidden rounded-2xl border bg-card shadow-2xl"
-            onMouseDown={(e) => e.stopPropagation()}
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Header */}
-            <div className="flex items-center gap-2.5 px-4 py-3.5">
-              <Headphones className="h-4 w-4 shrink-0 text-primary" />
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-semibold text-foreground">
-                  {currentBookTitle || "正在听书"}
-                </p>
-                {!!currentChapterTitle && (
-                  <p className="truncate text-xs text-muted-foreground">{currentChapterTitle}</p>
-                )}
-              </div>
-              <span className="shrink-0 text-xs text-muted-foreground">{statusText}</span>
-            </div>
+      </div>
 
-            {/* Divider */}
-            <div className="mx-4 border-t" />
-
-            {/* Controls */}
-            <div className="flex items-center gap-2 px-4 py-3">
-              {/* Rate − */}
-              <button
-                type="button"
-                onClick={(e) => adjustRate(e, -0.1)}
-                className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted text-foreground transition-colors hover:bg-muted/80 text-lg font-medium leading-none"
-              >
-                −
-              </button>
-              <span className="w-9 text-center text-xs tabular-nums text-muted-foreground">
-                {config.rate.toFixed(1)}x
-              </span>
-              {/* Rate + */}
-              <button
-                type="button"
-                onClick={(e) => adjustRate(e, 0.1)}
-                className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted text-foreground transition-colors hover:bg-muted/80 text-lg font-medium leading-none"
-              >
-                +
-              </button>
-
-              <div className="mx-1 h-6 w-px bg-border" />
-
-              {/* Play / Pause */}
-              <button
-                type="button"
-                onClick={handlePlayPause}
-                disabled={playState === "loading" || playState === "stopped"}
-                className="flex h-11 w-11 items-center justify-center rounded-full bg-primary text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
-              >
-                {playState === "loading" ? (
-                  <Loader2 className="h-5 w-5 animate-spin" />
-                ) : playState === "playing" ? (
-                  <Pause className="h-5 w-5" />
-                ) : (
-                  <Play className="h-5 w-5" />
-                )}
-              </button>
-
-              {/* Stop */}
-              <button
-                type="button"
-                onClick={handleStop}
-                className="flex h-9 w-9 items-center justify-center rounded-lg bg-muted text-foreground transition-colors hover:bg-muted/80"
-                title="停止"
-              >
-                <Square className="h-4 w-4" />
-              </button>
-
-              {/* Go to reader */}
-              {!!currentBookId && (
-                <>
-                  <div className="mx-1 h-6 w-px bg-border" />
-                  <button
-                    type="button"
-                    onClick={handleGoToReader}
-                    className="flex h-9 w-9 items-center justify-center rounded-lg bg-muted text-foreground transition-colors hover:bg-muted/80"
-                    title="跳回阅读器"
-                  >
-                    <BookOpen className="h-4 w-4" />
-                  </button>
-                </>
+      {/* ── Mini player popover ── */}
+      {showPlayer && (
+        <div
+          className="pointer-events-auto fixed z-[10000] w-72 overflow-hidden rounded-2xl border bg-card shadow-2xl"
+          style={{ left: playerPos.left, top: playerPos.top }}
+          onMouseDown={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="flex items-center gap-2.5 px-4 py-3.5">
+            <Headphones className="h-4 w-4 shrink-0 text-primary" />
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-semibold text-foreground">
+                {currentBookTitle || "正在听书"}
+              </p>
+              {!!currentChapterTitle && (
+                <p className="truncate text-xs text-muted-foreground">{currentChapterTitle}</p>
               )}
             </div>
+            <span className="shrink-0 text-xs text-muted-foreground">{statusText}</span>
           </div>
-        )}
-      </div>
+
+          <div className="mx-4 border-t" />
+
+          <div className="flex items-center gap-2 px-4 py-3">
+            <button
+              type="button"
+              onClick={(e) => adjustRate(e, -0.1)}
+              className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted text-foreground transition-colors hover:bg-muted/80 text-lg font-medium leading-none"
+            >
+              −
+            </button>
+            <span className="w-9 text-center text-xs tabular-nums text-muted-foreground">
+              {config.rate.toFixed(1)}x
+            </span>
+            <button
+              type="button"
+              onClick={(e) => adjustRate(e, 0.1)}
+              className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted text-foreground transition-colors hover:bg-muted/80 text-lg font-medium leading-none"
+            >
+              +
+            </button>
+
+            <div className="mx-1 h-6 w-px bg-border" />
+
+            <button
+              type="button"
+              onClick={handlePlayPause}
+              disabled={playState === "loading"}
+              className="flex h-11 w-11 items-center justify-center rounded-full bg-primary text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
+            >
+              {playState === "loading" ? (
+                <Loader2 className="h-5 w-5 animate-spin" />
+              ) : playState === "playing" ? (
+                <Pause className="h-5 w-5" />
+              ) : (
+                <Play className="h-5 w-5" />
+              )}
+            </button>
+
+            <button
+              type="button"
+              onClick={handleStop}
+              className="flex h-9 w-9 items-center justify-center rounded-lg bg-muted text-foreground transition-colors hover:bg-muted/80"
+              title="停止"
+            >
+              <Square className="h-4 w-4" />
+            </button>
+
+            {!!currentBookId && (
+              <>
+                <div className="mx-1 h-6 w-px bg-border" />
+                <button
+                  type="button"
+                  onClick={handleGoToReader}
+                  className="flex h-9 w-9 items-center justify-center rounded-lg bg-muted text-foreground transition-colors hover:bg-muted/80"
+                  title="跳回阅读器"
+                >
+                  <BookOpen className="h-4 w-4" />
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
       <style>{`
         @keyframes bubbleRing {

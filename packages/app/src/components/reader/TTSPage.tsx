@@ -19,7 +19,7 @@ import {
   SkipForward,
   Square,
 } from "lucide-react";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 interface TTSPageProps {
@@ -35,6 +35,7 @@ interface TTSPageProps {
   totalPages: number;
   sourceLabel: string;
   continuousEnabled: boolean;
+  narrationSegments?: string[];
   currentChunkIndex?: number;
   totalChunks?: number;
   onClose: () => void;
@@ -44,6 +45,7 @@ interface TTSPageProps {
   onAdjustRate: (delta: number) => void;
   onAdjustPitch: (delta: number) => void;
   onToggleContinuous: () => void;
+  onJumpToSegment?: (index: number) => void;
   onUpdateConfig?: (updates: Partial<TTSConfig>) => void;
   onPrevChapter?: () => void | Promise<void>;
   onNextChapter?: () => void | Promise<void>;
@@ -66,6 +68,7 @@ export function TTSPage({
   totalPages,
   sourceLabel,
   continuousEnabled,
+  narrationSegments,
   currentChunkIndex = 0,
   totalChunks = 0,
   onClose,
@@ -75,6 +78,7 @@ export function TTSPage({
   onAdjustRate,
   onAdjustPitch,
   onToggleContinuous,
+  onJumpToSegment,
   onUpdateConfig,
   onPrevChapter,
   onNextChapter,
@@ -82,11 +86,28 @@ export function TTSPage({
   const { t } = useTranslation();
   const [voicePickerOpen, setVoicePickerOpen] = useState(false);
   const voiceAnchorRef = useRef<HTMLButtonElement>(null);
+  const activeLyricRef = useRef<HTMLButtonElement | null>(null);
 
-  const { currentExcerpt, nextExcerpt, supportingExcerpt } = useMemo(
-    () => buildNarrationPreview(currentText, currentChunkIndex),
-    [currentText, currentChunkIndex],
-  );
+  const fallbackPreview = useMemo(() => buildNarrationPreview(currentText), [currentText]);
+  const lyricSegments = useMemo(() => {
+    if (narrationSegments && narrationSegments.length > 0) {
+      return narrationSegments.filter(Boolean);
+    }
+    return currentText ? [currentText] : [];
+  }, [currentText, narrationSegments]);
+  const safeChunkIndex = lyricSegments.length
+    ? Math.max(0, Math.min(currentChunkIndex, lyricSegments.length - 1))
+    : 0;
+  const currentExcerpt = lyricSegments[safeChunkIndex] || fallbackPreview.currentExcerpt;
+  const nextExcerpt = lyricSegments[safeChunkIndex + 1] || fallbackPreview.nextExcerpt;
+  const supportingExcerpt = lyricSegments[safeChunkIndex - 1] || fallbackPreview.supportingExcerpt;
+
+  useEffect(() => {
+    activeLyricRef.current?.scrollIntoView({
+      block: "center",
+      behavior: "smooth",
+    });
+  }, [safeChunkIndex, visible]);
 
   const progressPct = clampProgress(readingProgress);
   const voiceLabel = getTTSVoiceLabel(config);
@@ -319,7 +340,10 @@ export function TTSPage({
           <button
             type="button"
             className="inline-flex h-8 items-center gap-1.5 rounded-full border border-border/60 bg-background px-3 text-xs font-medium text-foreground transition-colors hover:bg-muted"
-            onClick={onClose}
+            onClick={() => {
+              if (onJumpToSegment) onJumpToSegment(safeChunkIndex);
+              else onClose();
+            }}
           >
             <ChevronLeft className="h-3.5 w-3.5" />
             {t("tts.returnToReading")}
@@ -338,33 +362,53 @@ export function TTSPage({
           </span>
         </header>
 
-        {/* ── Lyrics — Apple Music karaoke style ── */}
-        <div className="flex flex-1 flex-col items-center justify-center gap-3 overflow-hidden px-10">
-
-          {/* Previous line — dimmed */}
-          {supportingExcerpt ? (
-            <p className="line-clamp-2 shrink-0 text-center text-sm font-medium leading-6 text-foreground/40">
-              {supportingExcerpt}
-            </p>
-          ) : (
-            <div className="h-6 shrink-0" />
-          )}
-
-          {/* Active line — hero, large, bold; scrollable when text overflows */}
+        {/* ── Lyrics — sentence-aligned, like mobile/readest style ── */}
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-10 pb-2">
           <div className="min-h-0 flex-1 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            <p className="text-center text-2xl font-bold leading-relaxed text-foreground">
-              {currentExcerpt || t("tts.waitingText")}
-            </p>
-          </div>
+            <div className="flex min-h-full flex-col justify-center py-16">
+              {supportingExcerpt ? (
+                <p className="mb-3 shrink-0 text-center text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground/65">
+                  {t("tts.justRead")}
+                </p>
+              ) : null}
 
-          {/* Next line — dimmed */}
-          {nextExcerpt ? (
-            <p className="line-clamp-2 shrink-0 text-center text-sm font-medium leading-6 text-foreground/40">
-              {nextExcerpt}
-            </p>
-          ) : (
-            <div className="h-6 shrink-0" />
-          )}
+              {lyricSegments.length > 0 ? (
+                <div className="space-y-2">
+                  {lyricSegments.map((segment, index) => {
+                    const active = index === safeChunkIndex;
+                    const past = index < safeChunkIndex;
+                    return (
+                      <button
+                        key={`tts-line-${index}`}
+                        ref={active ? activeLyricRef : undefined}
+                        type="button"
+                        onClick={() => onJumpToSegment?.(index)}
+                        className={`block w-full rounded-xl px-4 py-2 text-center transition-colors ${
+                          active
+                            ? "bg-foreground/5 text-2xl font-bold leading-relaxed text-foreground"
+                            : past
+                              ? "text-base font-medium leading-7 text-foreground/60"
+                              : "text-base font-medium leading-7 text-foreground/35"
+                        }`}
+                      >
+                        {segment}
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="text-center text-xl font-bold leading-relaxed text-foreground">
+                  {currentExcerpt || t("tts.waitingText")}
+                </p>
+              )}
+
+              {nextExcerpt ? (
+                <p className="mt-4 shrink-0 text-center text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground/65">
+                  {t("tts.upNext")}
+                </p>
+              ) : null}
+            </div>
+          </div>
         </div>
 
         {/* ── Progress bar ── */}

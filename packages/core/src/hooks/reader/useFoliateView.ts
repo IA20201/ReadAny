@@ -29,6 +29,8 @@ export interface FoliateView extends HTMLElement {
 
   // CFI
   getCFI(index: number, range?: Range): string;
+  // biome-ignore lint: foliate-js uses loosely typed objects
+  resolveCFI(cfi: string): any;
 
   // Annotations
   // biome-ignore lint: foliate-js annotation format
@@ -42,7 +44,11 @@ export interface FoliateView extends HTMLElement {
   clearSearch(): void;
 
   // TTS
-  initTTS(granularity?: string, highlight?: (range: Range) => void): Promise<void>;
+  initTTS(
+    granularity?: string,
+    highlight?: (range: Range) => void,
+    filterFunc?: (node: Node) => number,
+  ): Promise<void>;
   // biome-ignore lint: foliate-js TTS object
   tts: any;
 }

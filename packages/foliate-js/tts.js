@@ -121,7 +121,7 @@ const fragmentToSSML = (fragment, inherited) => {
   return ssml;
 };
 
-const getFragmentWithMarks = (range, textWalker, granularity) => {
+const getFragmentWithMarks = (range, textWalker, granularity, filterFunc) => {
   const lang = getLang(range.commonAncestorContainer);
   const alphabet = getAlphabet(range.commonAncestorContainer);
 
@@ -131,8 +131,8 @@ const getFragmentWithMarks = (range, textWalker, granularity) => {
   // we need ranges on both the original document (for highlighting)
   // and the document fragment (for inserting marks)
   // so unfortunately need to do it twice, as you can't copy the ranges
-  const entries = [...textWalker(range, segmenter)];
-  const fragmentEntries = [...textWalker(fragment, segmenter)];
+  const entries = [...textWalker(range, segmenter, filterFunc)];
+  const fragmentEntries = [...textWalker(fragment, segmenter, filterFunc)];
 
   for (const [name, range] of fragmentEntries) {
     const mark = document.createElement("foliate-mark");
@@ -144,6 +144,16 @@ const getFragmentWithMarks = (range, textWalker, granularity) => {
 };
 
 const rangeIsEmpty = (range) => !range.toString().trim();
+const normalizeRangeText = (range) => range.toString().replace(/\s+/g, " ").trim();
+
+function* getDetailRanges(doc, textWalker, filterFunc) {
+  for (const blockRange of getBlocks(doc)) {
+    const { entries } = getFragmentWithMarks(blockRange, textWalker, "sentence", filterFunc);
+    for (const [, range] of entries) {
+      if (!rangeIsEmpty(range)) yield range;
+    }
+  }
+}
 
 function* getBlocks(doc) {
   let last;
@@ -185,6 +195,15 @@ class ListIterator {
       this.#index = newIndex;
       return this.#f(this.#arr[newIndex]);
     }
+    return this.next();
+  }
+  last() {
+    for (const value of this.#iter) this.#arr.push(value);
+    const newIndex = this.#arr.length - 1;
+    if (this.#arr[newIndex]) {
+      this.#index = newIndex;
+      return this.#f(this.#arr[newIndex]);
+    }
   }
   prev() {
     const newIndex = this.#index - 1;
@@ -209,6 +228,37 @@ class ListIterator {
       }
     }
   }
+  #ensure(index) {
+    while (this.#arr[index] == null) {
+      const { done, value } = this.#iter.next();
+      if (done) break;
+      this.#arr.push(value);
+      if (this.#arr.length - 1 >= index) break;
+    }
+    return this.#arr[index];
+  }
+  prepare() {
+    const newIndex = this.#index + 1;
+    if (this.#arr[newIndex]) return this.#f(this.#arr[newIndex]);
+    while (true) {
+      const { done, value } = this.#iter.next();
+      if (done) break;
+      this.#arr.push(value);
+      if (this.#arr[newIndex]) return this.#f(this.#arr[newIndex]);
+    }
+  }
+  peek(count = 1, offset = 1) {
+    if (count <= 0) return [];
+    const startIndex = Math.max(this.#index + offset, 0);
+    const results = [];
+    const endIndex = startIndex + count;
+    for (let idx = startIndex; idx < endIndex; idx++) {
+      const value = this.#arr[idx] ?? this.#ensure(idx);
+      if (!value) break;
+      results.push(this.#f(value));
+    }
+    return results;
+  }
   find(f) {
     const index = this.#arr.findIndex((x) => f(x));
     if (index > -1) {
@@ -229,21 +279,96 @@ class ListIterator {
 
 export class TTS {
   #list;
+  #detailList;
   #ranges;
   #lastMark;
+  #lastRange;
+  #getCfi;
   #serializer = new XMLSerializer();
-  constructor(doc, textWalker, highlight, granularity) {
+  constructor(
+    doc,
+    textWalker,
+    maybeFilterOrHighlight,
+    maybeHighlightOrGetCfi,
+    maybeGetCfiOrGranularity,
+    maybeGranularity,
+  ) {
     this.doc = doc;
-    this.highlight = highlight;
+    let filterFunc = null;
+    let highlight = null;
+    let granularity = "word";
+
+    if (typeof maybeFilterOrHighlight === "function") {
+      highlight = maybeFilterOrHighlight;
+      if (typeof maybeHighlightOrGetCfi === "function") {
+        this.#getCfi = maybeHighlightOrGetCfi;
+        granularity = typeof maybeGetCfiOrGranularity === "string" ? maybeGetCfiOrGranularity : "word";
+      } else {
+        granularity = typeof maybeHighlightOrGetCfi === "string" ? maybeHighlightOrGetCfi : "word";
+      }
+    } else {
+      filterFunc = maybeFilterOrHighlight ?? null;
+      highlight =
+        typeof maybeHighlightOrGetCfi === "function" ? maybeHighlightOrGetCfi : null;
+      if (typeof maybeGetCfiOrGranularity === "function") {
+        this.#getCfi = maybeGetCfiOrGranularity;
+      }
+      granularity = typeof maybeGranularity === "string" ? maybeGranularity : "word";
+    }
+
+    this.highlight = highlight || (() => null);
     this.#list = new ListIterator(getBlocks(doc), (range) => {
-      const { entries, ssml } = getFragmentWithMarks(range, textWalker, granularity);
+      const { entries, ssml } = getFragmentWithMarks(range, textWalker, granularity, filterFunc);
       this.#ranges = new Map(entries);
       return [ssml, range];
     });
+    this.#detailList = new ListIterator(getDetailRanges(doc, textWalker, filterFunc), (range) => [
+      normalizeRangeText(range),
+      range,
+    ]);
   }
   #getMarkElement(doc, mark) {
     if (!mark) return null;
-    return doc.querySelector(`mark[name="${CSS.escape(mark)}"`);
+    return doc.querySelector(`mark[name="${CSS.escape(mark)}"]`);
+  }
+  #syncDetailByRange(range) {
+    if (!range) return;
+    if (this.#getCfi) {
+      const targetCfi = this.#getCfi(range.cloneRange());
+      if (targetCfi) {
+        this.#detailList.find((candidate) => {
+          const candidateCfi = this.#getCfi(candidate.cloneRange());
+          return candidateCfi === targetCfi;
+        });
+        return;
+      }
+    }
+    this.#detailList.find(
+      (candidate) =>
+        candidate.compareBoundaryPoints(Range.START_TO_START, range) === 0 &&
+        candidate.compareBoundaryPoints(Range.END_TO_END, range) === 0,
+    );
+  }
+  #ensureCurrentDetailEntry() {
+    return this.#detailList.current() ?? this.#detailList.first() ?? this.#detailList.next();
+  }
+  #detailResultFrom(entry, { highlight = false } = {}) {
+    if (!entry) return null;
+    const [text, range] = entry;
+    if (!text || !range) return null;
+    let cfi = null;
+    if (highlight && range.cloneRange) {
+      const clonedRange = range.cloneRange();
+      cfi = this.highlight(clonedRange) ?? null;
+      this.#lastRange = clonedRange.cloneRange ? clonedRange.cloneRange() : clonedRange;
+    }
+    if (!cfi && this.#getCfi && range.cloneRange) {
+      cfi = this.#getCfi(range.cloneRange());
+    }
+    if (!this.#lastRange && range.cloneRange) {
+      this.#lastRange = range.cloneRange();
+    }
+    return { text, cfi };
   }
   #speak(doc, getNode) {
     if (!doc) return;
@@ -260,7 +385,8 @@ export class TTS {
   }
   start() {
     this.#lastMark = null;
-    const [doc] = this.#list.first() ?? [];
+    const [doc, range] = this.#list.first() ?? [];
+    this.#syncDetailByRange(range);
     if (!doc) return this.next();
     return this.#speak(doc, (ssml) => this.#getMarkElement(ssml, this.#lastMark));
   }
@@ -272,13 +398,26 @@ export class TTS {
   prev(paused) {
     this.#lastMark = null;
     const [doc, range] = this.#list.prev() ?? [];
+    this.#syncDetailByRange(range);
     if (paused && range) this.highlight(range.cloneRange());
     return this.#speak(doc);
   }
   next(paused) {
     this.#lastMark = null;
     const [doc, range] = this.#list.next() ?? [];
+    this.#syncDetailByRange(range);
     if (paused && range) this.highlight(range.cloneRange());
+    return this.#speak(doc);
+  }
+  end() {
+    this.#lastMark = null;
+    const [doc, range] = this.#list.last() ?? [];
+    this.#syncDetailByRange(range);
+    if (!doc) return this.next();
+    return this.#speak(doc);
+  }
+  prepare() {
+    const [doc] = this.#list.prepare() ?? [];
     return this.#speak(doc);
   }
   from(range) {
@@ -286,6 +425,7 @@ export class TTS {
     const [doc] = this.#list.find(
       (range_) => range.compareBoundaryPoints(Range.END_TO_START, range_) <= 0,
     );
+    this.#detailList.find((detailRange) => range.compareBoundaryPoints(Range.END_TO_START, detailRange) <= 0);
     let mark;
     for (const [name, range_] of this.#ranges.entries())
       if (range.compareBoundaryPoints(Range.START_TO_START, range_) <= 0) {
@@ -298,7 +438,45 @@ export class TTS {
     const range = this.#ranges.get(mark);
     if (range) {
       this.#lastMark = mark;
+      this.#lastRange = range.cloneRange();
+      this.#syncDetailByRange(range);
       this.highlight(range.cloneRange());
     }
+  }
+  currentDetail() {
+    return this.#detailResultFrom(this.#ensureCurrentDetailEntry());
+  }
+  collectDetails(count = 1, { includeCurrent = false, offset = 1 } = {}) {
+    if (!Number.isFinite(count) || count <= 0) return [];
+    const details = [];
+    if (includeCurrent) {
+      const detail = this.#detailResultFrom(this.#ensureCurrentDetailEntry());
+      if (detail) details.push(detail);
+    }
+    const needed = count - details.length;
+    if (needed <= 0) return details;
+    const entries = this.#detailList.peek(needed, offset);
+    for (const entry of entries) {
+      const detail = this.#detailResultFrom(entry);
+      if (detail) details.push(detail);
+    }
+    return details;
+  }
+  #detailFromCfi(cfi, { highlight = false } = {}) {
+    if (!cfi || !this.#getCfi) return null;
+    const entry = this.#detailList.find((range) => {
+      const candidate = this.#getCfi(range.cloneRange());
+      return candidate === cfi;
+    });
+    return this.#detailResultFrom(entry, { highlight });
+  }
+  alignCfi(cfi) {
+    return this.#detailFromCfi(cfi, { highlight: false });
+  }
+  highlightCfi(cfi) {
+    return this.#detailFromCfi(cfi, { highlight: true });
+  }
+  getLastRange() {
+    return this.#lastRange?.cloneRange?.() ?? null;
   }
 }

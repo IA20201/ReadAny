@@ -12,13 +12,17 @@
  * - Long press bubble → stop TTS
  */
 import { useTTSStore } from "@/stores";
+import { useReaderStore } from "@/stores/reader-store";
 import { fontSize, radius, useColors } from "@/styles/theme";
-import { navigate } from "@/lib/navigationRef";
+import { pushRoute } from "@/lib/navigationRef";
+import { eventBus } from "@readany/core/utils/event-bus";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Animated,
+  Dimensions,
   Easing,
+  LayoutChangeEvent,
   Modal,
   PanResponder,
   Pressable,
@@ -97,9 +101,11 @@ function BookOpenIcon({ size = 16, color = "#fff" }: { size?: number; color?: st
 function TTSMiniPlayer({
   visible,
   onClose,
+  anchorLayout,
 }: {
   visible: boolean;
   onClose: () => void;
+  anchorLayout: { left: number; top: number; size: number; screenWidth: number; screenHeight: number } | null;
 }) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
@@ -108,6 +114,8 @@ function TTSMiniPlayer({
   const currentBookTitle = useTTSStore((s) => s.currentBookTitle);
   const currentChapterTitle = useTTSStore((s) => s.currentChapterTitle);
   const currentBookId = useTTSStore((s) => s.currentBookId);
+  const currentLocationCfi = useTTSStore((s) => s.currentLocationCfi);
+  const goToCfiFn = useReaderStore((s) => s.goToCfiFn);
   const config = useTTSStore((s) => s.config);
   const pause = useTTSStore((s) => s.pause);
   const resume = useTTSStore((s) => s.resume);
@@ -120,11 +128,23 @@ function TTSMiniPlayer({
   }, [stop, onClose]);
 
   const handleGoToReader = useCallback(() => {
-    if (currentBookId) {
-      navigate("Reader", { bookId: currentBookId });
+    let handled = false;
+    if (currentBookId && currentLocationCfi) {
+      eventBus.emit("tts:jump-to-current", {
+        bookId: currentBookId,
+        cfi: currentLocationCfi,
+        respond: () => {
+          handled = true;
+        },
+      });
+    }
+    if (!handled && currentLocationCfi && goToCfiFn) {
+      goToCfiFn(currentLocationCfi);
+    } else if (!handled && currentBookId) {
+      pushRoute("Reader", { bookId: currentBookId, cfi: currentLocationCfi || undefined });
     }
     onClose();
-  }, [currentBookId, onClose]);
+  }, [currentBookId, currentLocationCfi, goToCfiFn, onClose]);
 
   const handlePlayPause = useCallback(() => {
     if (playState === "playing") {
@@ -178,6 +198,48 @@ function TTSMiniPlayer({
           ? "已暂停"
           : "已停止";
 
+  const panelWidth = Math.min(388, Math.max(320, (anchorLayout?.screenWidth || 360) - 16));
+  const [panelHeight, setPanelHeight] = useState(144);
+  const [panelMeasured, setPanelMeasured] = useState(false);
+  const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
+  const anchor = anchorLayout ?? {
+    left: 16,
+    top: 120,
+    size: BUBBLE_SIZE,
+    screenWidth: Dimensions.get("window").width,
+    screenHeight: Dimensions.get("window").height,
+  };
+  const left = clamp(
+    anchor.left + anchor.size / 2 - panelWidth / 2,
+    10,
+    anchor.screenWidth - panelWidth - 10,
+  );
+  const aboveGap = 10;
+  const belowGap = 10;
+  const safeTop = (insets.top || 12) + 8;
+  const safeBottom = anchor.screenHeight - panelHeight - Math.max(insets.bottom, 16) - 8;
+  const aboveTop = anchor.top - panelHeight - aboveGap;
+  const belowTop = anchor.top + anchor.size + belowGap;
+  const canPlaceAbove = aboveTop >= safeTop;
+  const canPlaceBelow = belowTop <= safeBottom;
+  const top = canPlaceAbove
+    ? aboveTop
+    : canPlaceBelow
+      ? belowTop
+      : clamp(belowTop, safeTop, safeBottom);
+
+  const handlePanelLayout = useCallback((event: LayoutChangeEvent) => {
+    const nextHeight = Math.ceil(event.nativeEvent.layout.height || 0);
+    if (nextHeight > 0) {
+      if (nextHeight !== panelHeight) {
+        setPanelHeight(nextHeight);
+      }
+      if (!panelMeasured) {
+        setPanelMeasured(true);
+      }
+    }
+  }, [panelHeight, panelMeasured]);
+
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <Pressable
@@ -191,10 +253,14 @@ function TTSMiniPlayer({
           {
             backgroundColor: colors.card,
             borderColor: colors.border,
-            bottom: (insets.bottom || 20) + 80,
+            left,
+            top,
+            width: panelWidth,
+            opacity: panelMeasured || !visible ? 1 : 0,
           },
         ]}
         pointerEvents="box-none"
+        onLayout={handlePanelLayout}
       >
         {/* Header row */}
         <View style={styles.miniPlayerHeader}>
@@ -291,10 +357,19 @@ function TTSMiniPlayer({
 export function FloatingTTSBubble() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
+  const { width: screenWidth, height: screenHeight } = Dimensions.get("window");
 
   const playState = useTTSStore((s) => s.playState);
 
   const [showPlayer, setShowPlayer] = useState(false);
+  const [bubbleOffset, setBubbleOffset] = useState({ x: 0, y: 0 });
+  const [anchorLayout, setAnchorLayout] = useState<{
+    left: number;
+    top: number;
+    size: number;
+    screenWidth: number;
+    screenHeight: number;
+  } | null>(null);
 
   // Only show when TTS is active (playing or paused)
   const isActive = playState === "playing" || playState === "paused" || playState === "loading";
@@ -310,6 +385,7 @@ export function FloatingTTSBubble() {
   const pan = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
   const bubbleRight = useRef(20);
   const bubbleBottom = useRef(120);
+  const bubbleRef = useRef<View>(null);
 
   const panResponder = useRef(
     PanResponder.create({
@@ -328,6 +404,15 @@ export function FloatingTTSBubble() {
       },
     }),
   ).current;
+
+  useEffect(() => {
+    const id = pan.addListener((value) => {
+      setBubbleOffset({ x: value.x, y: value.y });
+    });
+    return () => {
+      pan.removeListener(id);
+    };
+  }, [pan]);
 
   // Ripple pulse rings — only when playing
   const ring1 = useRef(new Animated.Value(0)).current;
@@ -371,11 +456,37 @@ export function FloatingTTSBubble() {
     setShowPlayer((v) => !v);
   }, []);
 
+  const measureBubble = useCallback(() => {
+    requestAnimationFrame(() => {
+      bubbleRef.current?.measureInWindow((left, top, width, height) => {
+        if (width > 0 && height > 0) {
+          setAnchorLayout({
+            left,
+            top,
+            size: Math.max(width, height),
+            screenWidth,
+            screenHeight,
+          });
+        }
+      });
+    });
+  }, [screenHeight, screenWidth]);
+
+  useEffect(() => {
+    if (!isActive) {
+      setAnchorLayout(null);
+      return;
+    }
+    measureBubble();
+  }, [bubbleOffset.x, bubbleOffset.y, isActive, measureBubble, showPlayer]);
+
   return (
     <>
       {/* Draggable bubble — only rendered when active */}
       {isActive && (
         <Animated.View
+          ref={bubbleRef}
+          collapsable={false}
           style={[
             styles.bubbleWrapper,
             {
@@ -416,6 +527,7 @@ export function FloatingTTSBubble() {
       <TTSMiniPlayer
         visible={showPlayer && isActive}
         onClose={() => setShowPlayer(false)}
+        anchorLayout={anchorLayout}
       />
     </>
   );
@@ -455,8 +567,6 @@ const styles = StyleSheet.create({
   // Mini player
   miniPlayerContainer: {
     position: "absolute",
-    left: 16,
-    right: 16,
     borderRadius: radius.xl,
     borderWidth: 1,
     shadowColor: "#000",
@@ -494,9 +604,9 @@ const styles = StyleSheet.create({
   miniPlayerControls: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 16,
+    paddingHorizontal: 14,
     paddingVertical: 12,
-    gap: 8,
+    gap: 6,
   },
   miniPlayerRateBtn: {
     width: 32,
@@ -512,13 +622,13 @@ const styles = StyleSheet.create({
   },
   miniPlayerRateValue: {
     fontSize: fontSize.xs,
-    width: 36,
+    width: 40,
     textAlign: "center",
   },
   miniPlayerDividerV: {
     width: StyleSheet.hairlineWidth,
     height: 24,
-    marginHorizontal: 4,
+    marginHorizontal: 2,
   },
   miniPlayerPlayBtn: {
     width: 44,

@@ -28,12 +28,12 @@ export class ExpoAVEdgeTTSPlayer implements ITTSPlayer {
   private _config: TTSConfig | null = null;
   private _tempFiles: string[] = [];
 
-  async speak(text: string, config: TTSConfig): Promise<void> {
+  async speak(text: string | string[], config: TTSConfig): Promise<void> {
     await this._cleanup();
     this._stopped = false;
     this._paused = false;
     this._config = config;
-    this._chunks = splitIntoChunks(text, CHUNK_MAX_CHARS);
+    this._chunks = Array.isArray(text) ? text.filter(Boolean) : splitIntoChunks(text, CHUNK_MAX_CHARS);
     this._currentIndex = 0;
     this._tempFiles = [];
 

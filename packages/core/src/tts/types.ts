@@ -50,7 +50,7 @@ export const DASHSCOPE_VOICES = [
  * Eliminates engine-specific if/else branching in store code.
  */
 export interface ITTSPlayer {
-  speak(text: string, config: TTSConfig): void | Promise<void>;
+  speak(text: string | string[], config: TTSConfig): void | Promise<void>;
   pause(): void;
   resume(): void;
   stop(): void;
