@@ -59,6 +59,7 @@ export interface ViewSettings {
 export interface ReadSettings extends ViewSettings {
   showTopTitleProgress: boolean;
   showBottomTimeBattery: boolean;
+  volumeButtonsPageTurn: boolean;
 }
 
 export type SortField = "title" | "author" | "addedAt" | "lastOpenedAt" | "progress";

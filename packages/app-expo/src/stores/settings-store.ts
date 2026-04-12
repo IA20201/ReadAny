@@ -47,6 +47,7 @@ const defaultReadSettings: ReadSettings = {
   paragraphSpacing: 16,
   showTopTitleProgress: true,
   showBottomTimeBattery: true,
+  volumeButtonsPageTurn: false,
 };
 
 const defaultTranslationConfig: TranslationConfig = {

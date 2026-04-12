@@ -73,6 +73,8 @@ import {
   Easing,
   KeyboardAvoidingView,
   Modal,
+  NativeEventEmitter,
+  NativeModules,
   Platform,
   Pressable,
   ScrollView,
@@ -95,6 +97,58 @@ type TTSDebuggableSegment = { text: string; cfi?: string | null };
 const SCREEN_WIDTH = Dimensions.get("window").width;
 const SCREEN_HEIGHT = Dimensions.get("window").height;
 const CONTROLS_TIMEOUT = 4000;
+
+type VolumeManagerNativeModule = {
+  showNativeVolumeUI?: (config: { enabled: boolean }) => Promise<void>;
+  getVolume?: () => Promise<{ volume?: number }>;
+  setVolume?: (
+    value: number,
+    config?: { showUI?: boolean; playSound?: boolean; type?: string },
+  ) => Promise<void>;
+};
+
+type VolumeManagerLike = {
+  showNativeVolumeUI: (config: { enabled: boolean }) => Promise<void>;
+  getVolume: () => Promise<{ volume?: number }>;
+  setVolume: (
+    value: number,
+    config?: { showUI?: boolean; playSound?: boolean; type?: string },
+  ) => Promise<void>;
+  addVolumeListener: (callback: (result: { volume?: number }) => void) => { remove: () => void };
+};
+
+let cachedVolumeManager: VolumeManagerLike | null | undefined;
+
+function getVolumeManager(): VolumeManagerLike | null {
+  if (cachedVolumeManager !== undefined) {
+    return cachedVolumeManager;
+  }
+
+  const nativeModule = NativeModules.VolumeManager as VolumeManagerNativeModule | undefined;
+  if (
+    !nativeModule ||
+    typeof nativeModule.getVolume !== "function" ||
+    typeof nativeModule.setVolume !== "function" ||
+    typeof nativeModule.showNativeVolumeUI !== "function"
+  ) {
+    cachedVolumeManager = null;
+    return cachedVolumeManager;
+  }
+
+  const eventEmitter = new NativeEventEmitter(NativeModules.VolumeManager);
+  cachedVolumeManager = {
+    showNativeVolumeUI: (config) => nativeModule.showNativeVolumeUI!(config),
+    getVolume: () => nativeModule.getVolume!(),
+    setVolume: (value, config) => nativeModule.setVolume!(value, config),
+    addVolumeListener: (callback) => {
+      const subscription = eventEmitter.addListener("RNVMEventVolume", callback);
+      return {
+        remove: () => subscription.remove(),
+      };
+    },
+  };
+  return cachedVolumeManager;
+}
 
 function formatReaderClock(date: Date) {
   return date.toLocaleTimeString([], {
@@ -239,11 +293,13 @@ function BatteryIcon({
   height = 12,
   color = "#e8e8ed",
   level,
+  charging = false,
 }: {
   width?: number;
   height?: number;
   color?: string;
   level?: number | null;
+  charging?: boolean;
 }) {
   const normalizedLevel =
     typeof level === "number" && Number.isFinite(level) ? Math.max(0, Math.min(1, level)) : null;
@@ -253,6 +309,14 @@ function BatteryIcon({
   const fillWidth =
     normalizedLevel == null ? innerWidth * 0.42 : Math.max(2, innerWidth * normalizedLevel);
   const fillColor = normalizedLevel != null && normalizedLevel <= 0.2 ? "#ef4444" : color;
+  const boltPath = [
+    `M ${1 + bodyWidth * 0.52} ${height * 0.18}`,
+    `L ${1 + bodyWidth * 0.4} ${height * 0.5}`,
+    `H ${1 + bodyWidth * 0.56}`,
+    `L ${1 + bodyWidth * 0.42} ${height * 0.82}`,
+    `L ${1 + bodyWidth * 0.66} ${height * 0.42}`,
+    `H ${1 + bodyWidth * 0.5}`,
+  ].join(" ");
 
   return (
     <Svg
@@ -284,6 +348,16 @@ function BatteryIcon({
         fill={color}
         stroke="none"
       />
+      {charging ? (
+        <Path
+          d={boltPath}
+          fill="none"
+          stroke="#fffaf0"
+          strokeWidth={1.15}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      ) : null}
     </Svg>
   );
 }
@@ -424,6 +498,7 @@ export function ReaderScreen({ route, navigation }: Props) {
   const [pageSnippet, setPageSnippet] = useState("");
   const [readerClock, setReaderClock] = useState(() => formatReaderClock(new Date()));
   const [batteryLevel, setBatteryLevel] = useState<number | null>(null);
+  const [batteryState, setBatteryState] = useState<Battery.BatteryState>(Battery.BatteryState.UNKNOWN);
   const [selection, setSelection] = useState<SelectionEvent | null>(null);
   const [stableTopInset, setStableTopInset] = useState(() =>
     Math.max(insets.top, isIPadLayout ? 24 : baseTopInset),
@@ -494,6 +569,7 @@ export function ReaderScreen({ route, navigation }: Props) {
   const settingViewMode = readSettings.viewMode;
   const showTopTitleProgress = readSettings.showTopTitleProgress !== false;
   const showBottomTimeBattery = readSettings.showBottomTimeBattery !== false;
+  const volumeButtonsPageTurn = readSettings.volumeButtonsPageTurn === true;
 
   const controlsTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -516,6 +592,9 @@ export function ReaderScreen({ route, navigation }: Props) {
   const ttsLyricPrimeRequestIdRef = useRef(0);
   const lastFollowedTTSCfiRef = useRef<string | null>(null);
   const ttsRecoveringLyricsRef = useRef<string | null>(null);
+  const lastKnownHardwareVolumeRef = useRef<number | null>(null);
+  const pendingVolumeRestoreRef = useRef<number | null>(null);
+  const lastVolumeButtonHandledAtRef = useRef(0);
   const ttsContextCacheRef = useRef<Map<string, { before: TTSSegment[]; after: TTSSegment[] }>>(
     new Map(),
   );
@@ -824,25 +903,34 @@ export function ReaderScreen({ route, navigation }: Props) {
 
     const syncBattery = async () => {
       try {
-        const nextLevel = await Battery.getBatteryLevelAsync();
+        const [nextLevel, nextState] = await Promise.all([
+          Battery.getBatteryLevelAsync(),
+          Battery.getBatteryStateAsync(),
+        ]);
         if (mounted) {
           setBatteryLevel(typeof nextLevel === "number" && nextLevel >= 0 ? nextLevel : null);
+          setBatteryState(nextState);
         }
       } catch {
         if (mounted) {
           setBatteryLevel(null);
+          setBatteryState(Battery.BatteryState.UNKNOWN);
         }
       }
     };
 
     syncBattery();
-    const subscription = Battery.addBatteryLevelListener(({ batteryLevel: nextLevel }) => {
+    const levelSubscription = Battery.addBatteryLevelListener(({ batteryLevel: nextLevel }) => {
       setBatteryLevel(typeof nextLevel === "number" && nextLevel >= 0 ? nextLevel : null);
+    });
+    const stateSubscription = Battery.addBatteryStateListener(({ batteryState: nextState }) => {
+      setBatteryState(nextState);
     });
 
     return () => {
       mounted = false;
-      subscription.remove();
+      levelSubscription.remove();
+      stateSubscription.remove();
     };
   }, []);
 
@@ -1079,6 +1167,162 @@ export function ReaderScreen({ route, navigation }: Props) {
       }
     },
   });
+
+  const volumeManager = getVolumeManager();
+  const hasVolumeButtonPagingSupport =
+    Platform.OS !== "web" && Platform.OS !== "windows" && !!NativeModules.VolumeManager && !!volumeManager;
+  const volumeButtonPagingActive =
+    hasVolumeButtonPagingSupport &&
+    volumeButtonsPageTurn &&
+    webViewReady &&
+    !showSearch &&
+    !showTOC &&
+    !showSettings &&
+    !showNotebook &&
+    !showTTS &&
+    ttsPlayState === "stopped";
+  const isBatteryCharging =
+    batteryState === Battery.BatteryState.CHARGING || batteryState === Battery.BatteryState.FULL;
+
+  useEffect(() => {
+    if (__DEV__ && volumeButtonsPageTurn) {
+      console.log("[ReaderScreen][VolumeNav] config", {
+        hasNativeModule: !!NativeModules.VolumeManager,
+        hasVolumeManagerBridge: !!volumeManager,
+        volumeButtonPagingActive,
+        webViewReady,
+        showSearch,
+        showTOC,
+        showSettings,
+        showNotebook,
+        showTTS,
+        ttsPlayState,
+      });
+    }
+  }, [
+    showNotebook,
+    showSearch,
+    showSettings,
+    showTOC,
+    showTTS,
+    ttsPlayState,
+    volumeButtonPagingActive,
+    volumeButtonsPageTurn,
+    volumeManager,
+    webViewReady,
+  ]);
+
+  useEffect(() => {
+    if (!volumeButtonPagingActive) {
+      pendingVolumeRestoreRef.current = null;
+      return;
+    }
+
+    let cancelled = false;
+    let volumeListener: { remove: () => void } | null = null;
+
+    const restoreSystemVolume = async (targetVolume: number) => {
+      if (!volumeManager) return;
+      pendingVolumeRestoreRef.current = targetVolume;
+      try {
+        await volumeManager.setVolume(targetVolume, {
+          showUI: false,
+          playSound: false,
+          type: "music",
+        });
+      } catch (error) {
+        pendingVolumeRestoreRef.current = null;
+        console.warn("[ReaderScreen][VolumeNav] restore-volume failed", error);
+      }
+    };
+
+    const enableVolumeButtonPaging = async () => {
+      if (!volumeManager) {
+        return;
+      }
+      try {
+        await volumeManager.showNativeVolumeUI({ enabled: false });
+        const initialVolume = await volumeManager.getVolume();
+        if (cancelled) return;
+
+        lastKnownHardwareVolumeRef.current =
+          typeof initialVolume.volume === "number" ? initialVolume.volume : null;
+
+        if (__DEV__) {
+          console.log("[ReaderScreen][VolumeNav] enabled", {
+            initialVolume: lastKnownHardwareVolumeRef.current,
+            viewMode: settingViewMode,
+          });
+        }
+
+        volumeListener = volumeManager.addVolumeListener((result) => {
+          const nextVolume =
+            typeof result.volume === "number" && Number.isFinite(result.volume)
+              ? result.volume
+              : null;
+          if (cancelled || nextVolume == null) return;
+
+          const pendingRestore = pendingVolumeRestoreRef.current;
+          if (pendingRestore != null && Math.abs(nextVolume - pendingRestore) < 0.0001) {
+            pendingVolumeRestoreRef.current = null;
+            lastKnownHardwareVolumeRef.current = nextVolume;
+            if (__DEV__) {
+              console.log("[ReaderScreen][VolumeNav] restore-event", {
+                volume: nextVolume,
+              });
+            }
+            return;
+          }
+
+          const previousVolume = lastKnownHardwareVolumeRef.current;
+          lastKnownHardwareVolumeRef.current = nextVolume;
+          if (previousVolume == null) return;
+
+          const delta = nextVolume - previousVolume;
+          if (Math.abs(delta) < 0.0001) return;
+
+          const now = Date.now();
+          if (now - lastVolumeButtonHandledAtRef.current < 120) {
+            return;
+          }
+          lastVolumeButtonHandledAtRef.current = now;
+
+          const direction = delta > 0 ? "prev" : "next";
+          if (__DEV__) {
+            console.log("[ReaderScreen][VolumeNav] hardware-press", {
+              direction,
+              previousVolume,
+              nextVolume,
+              delta,
+            });
+          }
+
+          if (direction === "prev") {
+            bridge.goPrev();
+          } else {
+            bridge.goNext();
+          }
+
+          void restoreSystemVolume(previousVolume);
+        });
+      } catch (error) {
+        console.warn("[ReaderScreen][VolumeNav] unavailable", error);
+      }
+    };
+
+    void enableVolumeButtonPaging();
+
+    return () => {
+      cancelled = true;
+      volumeListener?.remove();
+      pendingVolumeRestoreRef.current = null;
+      if (volumeManager) {
+        void volumeManager.showNativeVolumeUI({ enabled: true }).catch((error) => {
+          console.warn("[ReaderScreen][VolumeNav] restore-native-ui failed", error);
+        });
+      }
+    };
+  }, [bridge, settingViewMode, ttsPlayState, volumeButtonPagingActive, volumeManager]);
 
   bridgeRef.current = bridge;
   chapterTranslationBridgeRef.current = bridge;
@@ -3454,6 +3698,7 @@ export function ReaderScreen({ route, navigation }: Props) {
               height={11}
               color={colors.mutedForeground}
               level={batteryLevel}
+              charging={isBatteryCharging}
             />
             <Text style={s.bottomInfoText}>{batteryLabel}</Text>
           </View>
@@ -3963,6 +4208,21 @@ export function ReaderScreen({ route, navigation }: Props) {
                   style={[s.settingToggleText, showBottomTimeBattery && s.settingToggleTextActive]}
                 >
                   {showBottomTimeBattery ? t("settings.enabled") : t("settings.disabled")}
+                </Text>
+              </TouchableOpacity>
+            </View>
+            <View style={[s.settingRow, s.settingRowMultiline]}>
+              <View style={s.settingLabelBlock}>
+                <Text style={s.settingLabel}>{t("settings.volumeButtonsPageTurn")}</Text>
+              </View>
+              <TouchableOpacity
+                style={[s.settingToggleBtn, volumeButtonsPageTurn && s.settingToggleBtnActive]}
+                onPress={() => updateSetting("volumeButtonsPageTurn", !volumeButtonsPageTurn)}
+              >
+                <Text
+                  style={[s.settingToggleText, volumeButtonsPageTurn && s.settingToggleTextActive]}
+                >
+                  {volumeButtonsPageTurn ? t("settings.enabled") : t("settings.disabled")}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -4691,7 +4951,22 @@ const makeStyles = (colors: ThemeColors) =>
       borderBottomWidth: 0.5,
       borderBottomColor: colors.border,
     },
+    settingRowMultiline: {
+      alignItems: "flex-start",
+      gap: 12,
+    },
+    settingLabelBlock: {
+      flex: 1,
+      minWidth: 0,
+      paddingRight: 12,
+      gap: 4,
+    },
     settingLabel: { fontSize: fontSize.sm, color: colors.mutedForeground },
+    settingHint: {
+      fontSize: fontSize.xs,
+      lineHeight: 16,
+      color: withOpacity(colors.mutedForeground, 0.82),
+    },
     settingControl: { flexDirection: "row", alignItems: "center", gap: 12 },
     stepBtn: {
       width: 32,

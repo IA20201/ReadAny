@@ -400,6 +400,9 @@ importers:
       react-native-tcp-socket:
         specifier: ^6.4.1
         version: 6.4.1(react-native@0.81.6(@babel/core@7.29.0)(@types/react@19.1.17)(react@19.1.4))
+      react-native-volume-manager:
+        specifier: ^2.0.8
+        version: 2.0.8(react-native@0.81.6(@babel/core@7.29.0)(@types/react@19.1.17)(react@19.1.4))(react@19.1.4)
       react-native-webview:
         specifier: ~13.15.0
         version: 13.15.0(react-native@0.81.6(@babel/core@7.29.0)(@types/react@19.1.17)(react@19.1.4))(react@19.1.4)
@@ -6884,6 +6887,12 @@ packages:
     resolution: {integrity: sha512-2+zya9ielB8nWfMYVULB64ZqLzQD32qIzTnDef7NM1BChaJiA1btkJTBL+8WnyBrujjlCBVxBC3gAkXtG5hmvQ==}
     peerDependencies:
       react-native: '>=0.60.0'
+
+  react-native-volume-manager@2.0.8:
+    resolution: {integrity: sha512-aZM47/mYkdQ4CbXpKYO6Ajiczv7fxbQXZ9c0H8gRuQUaS3OCz/MZABer6o9aDWq0KMNsQ7q7GVFLRPnSSeeMmw==}
+    peerDependencies:
+      react: 19.1.4
+      react-native: '*'
 
   react-native-webview@13.15.0:
     resolution: {integrity: sha512-Vzjgy8mmxa/JO6l5KZrsTC7YemSdq+qB01diA0FqjUTaWGAGwuykpJ73MDj3+mzBSlaDxAEugHzTtkUQkQEQeQ==}
@@ -16025,6 +16034,11 @@ snapshots:
     dependencies:
       buffer: 5.7.1
       eventemitter3: 4.0.7
+      react-native: 0.81.6(@babel/core@7.29.0)(@types/react@19.1.17)(react@19.1.4)
+
+  react-native-volume-manager@2.0.8(react-native@0.81.6(@babel/core@7.29.0)(@types/react@19.1.17)(react@19.1.4))(react@19.1.4):
+    dependencies:
+      react: 19.1.4
       react-native: 0.81.6(@babel/core@7.29.0)(@types/react@19.1.17)(react@19.1.4)
 
   react-native-webview@13.15.0(react-native@0.81.6(@babel/core@7.29.0)(@types/react@19.1.17)(react@19.1.4))(react@19.1.4):
