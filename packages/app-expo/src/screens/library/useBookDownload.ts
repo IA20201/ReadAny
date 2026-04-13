@@ -1,0 +1,80 @@
+import { getPlatformService } from "@readany/core/services";
+import type { Book } from "@readany/core/types";
+import { useCallback, useState } from "react";
+import { useTranslation } from "react-i18next";
+import { Alert } from "react-native";
+
+interface UseBookDownloadOptions {
+  loadBooks: () => Promise<void>;
+  onSuccess: (bookId: string) => void;
+}
+
+export function useBookDownload({ loadBooks, onSuccess }: UseBookDownloadOptions) {
+  const { t } = useTranslation();
+  const [downloadingBookId, setDownloadingBookId] = useState<string | null>(null);
+  const [downloadingBookTitle, setDownloadingBookTitle] = useState("");
+
+  const downloadBook = useCallback(
+    async (book: Book) => {
+      const bookTitle = book.meta.title || "未知书籍";
+      setDownloadingBookId(book.id);
+      setDownloadingBookTitle(bookTitle);
+
+      try {
+        const { useSyncStore } = await import("@readany/core/stores/sync-store");
+        const { downloadBookFile } = await import("@readany/core/sync");
+        const { updateBook } = await import("@readany/core/db/database");
+
+        const syncStore = useSyncStore.getState();
+        if (!syncStore.config) {
+          setDownloadingBookId(null);
+          setDownloadingBookTitle("");
+          Alert.alert(t("common.error", "错误"), t("library.syncNotConfigured", "请先配置同步"));
+          return false;
+        }
+
+        const platform = getPlatformService();
+        const secretKey =
+          syncStore.config.type === "webdav" ? "sync_webdav_password" : "sync_s3_secret_key";
+        const password = await platform.kvGetItem(secretKey);
+        if (!password) {
+          setDownloadingBookId(null);
+          setDownloadingBookTitle("");
+          Alert.alert(
+            t("common.error", "错误"),
+            t("library.passwordNotFound", "未找到同步密码，请重新配置"),
+          );
+          return false;
+        }
+
+        await updateBook(book.id, { syncStatus: "downloading" });
+        await loadBooks();
+
+        const { createSyncBackend } = await import("@readany/core/sync/sync-backend-factory");
+        const backend = createSyncBackend(syncStore.config, password);
+
+        const success = await downloadBookFile(backend, book.id, book.filePath);
+        await loadBooks();
+
+        if (!success) {
+          Alert.alert(t("common.error", "错误"), t("library.downloadFailed", "下载失败，请重试"));
+          return false;
+        }
+
+        console.log(`[useBookDownload] Book ${book.id} downloaded successfully`);
+        onSuccess(book.id);
+        return true;
+      } catch (err) {
+        console.error("Download failed:", err);
+        Alert.alert(t("common.error", "错误"), t("library.downloadFailed", "下载失败，请重试"));
+        return false;
+      } finally {
+        setDownloadingBookId(null);
+        setDownloadingBookTitle("");
+      }
+    },
+    [loadBooks, onSuccess, t],
+  );
+
+  return { downloadingBookId, downloadingBookTitle, downloadBook };
+}
