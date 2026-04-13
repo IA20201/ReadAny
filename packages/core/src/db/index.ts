@@ -9,11 +9,25 @@ export {
   resetLocalDBCache,
   getActiveDataRoot,
   getDatabaseFilePath,
+  cleanupOrphanedSyncRows,
+  ensureNoTransaction,
+  getDeviceId,
+  // Sync tracking utilities
+  nextSyncVersion,
+  nextUpdatedAt,
+  insertTombstone,
+  // Shared utilities
+  parseJSON,
+  serializeEmbedding,
+  deserializeEmbedding,
+  // Book queries
   getBooks,
   getBook,
   insertBook,
   updateBook,
+  setBookSyncStatus,
   deleteBook,
+  // Highlight queries
   getHighlights,
   getAllHighlights,
   getAllHighlightsWithBooks,
@@ -21,29 +35,37 @@ export {
   insertHighlight,
   updateHighlight,
   deleteHighlight,
+  // Note queries
   getNotes,
   getAllNotes,
   insertNote,
   updateNote,
   deleteNote,
+  // Bookmark queries
   getBookmarks,
   insertBookmark,
   deleteBookmark,
+  // Thread queries
   getThreads,
   getThread,
   insertThread,
   updateThreadTitle,
   deleteThread,
   deleteThreadsByBookId,
+  // Message queries
   getMessages,
   insertMessage,
+  // Reading session queries
   getReadingSessions,
   getReadingSessionsByDateRange,
   insertReadingSession,
   updateReadingSession,
+  // Chunk queries
   getChunks,
   insertChunks,
   deleteChunks,
+  clearVectorizationFlagsWithoutLocalChunks,
+  // Skill queries
   getSkills,
   insertSkill,
   updateSkill,

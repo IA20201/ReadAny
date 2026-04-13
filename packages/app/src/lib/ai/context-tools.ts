@@ -1,4 +1,4 @@
 /**
  * Proxy re-export — actual implementation lives in @readany/core/ai
  */
-export { getContextTools } from "@readany/core/ai/context-tools";
+export { getContextTools } from "@readany/core/ai/tools/context-tools";

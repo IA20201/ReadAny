@@ -6,7 +6,7 @@
 import type { AIConfig, Book, SemanticContext, Skill, Thread } from "../types";
 import { streamReadingAgent } from "./agents/reading-agent";
 import { processMessages } from "./message-pipeline";
-import type { ToolDefinition } from "./tool-types";
+import type { ToolDefinition } from "./tools/tool-types";
 
 export interface StreamingOptions {
   thread: Thread;

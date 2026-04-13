@@ -15,7 +15,7 @@ import { z } from "zod";
 import type { AIConfig, Book, SemanticContext, Skill } from "../../types";
 import { createChatModel } from "../llm-provider";
 import { buildSystemPrompt } from "../system-prompt";
-import type { ToolDefinition, ToolParameter } from "../tool-types";
+import type { ToolDefinition, ToolParameter } from "../tools/tool-types";
 
 // --- Stream Event Types ---
 

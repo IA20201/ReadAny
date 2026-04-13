@@ -7,8 +7,8 @@
  * - getReadingProgress: Get reading progress
  * - getRecentHighlights: Get recent highlights
  */
-import { getBook, getHighlights } from "../db/database";
-import { readingContextService } from "./reading-context-service";
+import { getBook, getHighlights } from "../../db/database";
+import { readingContextService } from "../reading-context-service";
 import type { ToolDefinition } from "./tool-types";
 
 export function createGetCurrentChapterTool(bookId: string): ToolDefinition {

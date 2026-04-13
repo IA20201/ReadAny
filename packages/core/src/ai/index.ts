@@ -1,4 +1,4 @@
-export type { ToolDefinition, ToolParameter } from "./tool-types";
+export type { ToolDefinition, ToolParameter } from "./tools";
 
 export {
   createChatModel,
@@ -33,6 +33,6 @@ export {
 
 export { getAvailableTools } from "./tools";
 
-export { getContextTools } from "./context-tools";
+export { getContextTools } from "./tools";
 
 export { readingContextService, getReadingContextSnapshot } from "./reading-context-service";
