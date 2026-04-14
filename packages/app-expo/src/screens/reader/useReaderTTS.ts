@@ -183,8 +183,18 @@ export function useReaderTTS({
   const ttsLastStopHandledSignatureRef = useRef<string | null>(null);
   const ttsStartChapterRef = useRef<string>("");
   const previousReaderBookIdRef = useRef<string | null>(null);
+  // Mirrors of frequently-changing store values — used inside handleTTSPageEnd
+  // so the callback doesn't need to be re-created on every chunk advance.
+  const ttsCurrentChunkIndexRef = useRef(0);
+  const ttsCurrentLocationCfiRef = useRef<string | null>(null);
+  const ttsTotalChunksRef = useRef(0);
 
   const ttsHighlightColor = "rgba(96, 165, 250, 0.35)";
+
+  // Keep mirrors in sync every render (no useEffect needed — render is synchronous).
+  ttsCurrentChunkIndexRef.current = ttsCurrentChunkIndex;
+  ttsCurrentLocationCfiRef.current = ttsCurrentLocationCfi;
+  ttsTotalChunksRef.current = ttsTotalChunks;
 
   // ─── Cover URI resolution ───────────────────────────────────────────────────
   useEffect(() => {
@@ -836,9 +846,9 @@ export function useReaderTTS({
       continuousRef: ttsContinuousRef.current,
       continuousEnabled: ttsContinuousEnabled,
       sourceKind: ttsSourceKind,
-      currentChunkIndex: ttsCurrentChunkIndex,
-      totalChunks: ttsTotalChunks,
-      currentLocationCfi: ttsCurrentLocationCfi,
+      currentChunkIndex: ttsCurrentChunkIndexRef.current,
+      totalChunks: ttsTotalChunksRef.current,
+      currentLocationCfi: ttsCurrentLocationCfiRef.current,
       currentSegmentCfi: (currentTTSSegment as TTSSegment | null)?.cfi || null,
       activeSegmentsLength: ttsSegmentsRef.current.length,
       hasRestartFromCfi: !!startPageTTSFromCfiRef.current,
@@ -915,12 +925,9 @@ export function useReaderTTS({
     getCachedTTSSegmentContext,
     mergeUniqueTTSSegments,
     ttsContinuousEnabled,
-    ttsCurrentChunkIndex,
-    ttsCurrentLocationCfi,
     ttsSetOnEnd,
     ttsSourceKind,
     ttsStop,
-    ttsTotalChunks,
   ]);
 
   // ─── startPageTTSFromCfi ──────────────────────────────────────────────────
@@ -1887,6 +1894,32 @@ export function useReaderTTS({
     ttsPlayState,
     ttsSetOnEnd,
     ttsSourceKind,
+  ]);
+
+  // ─── Prefetch next-page context when nearing end of current segments ───────
+  // Fire when the active chunk is within 3 sentences of the end of the current
+  // segment list and continuous mode is on.  The result lands in the LRU cache
+  // so handleTTSPageEnd can pick it up instantly with zero bridge latency.
+  useEffect(() => {
+    if (!ttsContinuousRef.current) return;
+    if (ttsSourceKind !== "page") return;
+    if (ttsPlayState !== "playing") return;
+    const segments = ttsSegmentsRef.current;
+    if (segments.length === 0) return;
+    const localIndex = Math.max(0, ttsCurrentChunkIndexRef.current - ttsChunkOffset);
+    const remaining = segments.length - 1 - localIndex;
+    if (remaining > 3) return;                // not near the end yet
+    const lastCfi = segments[segments.length - 1]?.cfi;
+    if (!lastCfi) return;
+    // Fire-and-forget: result goes into LRU cache
+    void getCachedTTSSegmentContext(lastCfi, 0, TTS_CONTEXT_WINDOW * 2);
+  }, [
+    getCachedTTSSegmentContext,
+    ttsChunkOffset,
+    ttsCurrentChunkIndex,   // intentional: re-check on every chunk advance
+    ttsPlayState,
+    ttsSourceKind,
+    ttsSegments.length,
   ]);
 
   useEffect(() => {

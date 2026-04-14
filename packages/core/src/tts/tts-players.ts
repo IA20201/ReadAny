@@ -409,6 +409,7 @@ export class EdgeTTSPlayer implements ITTSPlayer {
   private producerIndex = 0;
   private producerWake: (() => void) | null = null;
   private chunkStartTimers = new Set<ReturnType<typeof setTimeout>>();
+  private pausedAt = 0; // Date.now() when suspended (wall-clock ms)
   private static readonly BUFFER_SIZE = 4;
 
   onStateChange?: (state: "playing" | "paused" | "stopped") => void;
@@ -439,6 +440,7 @@ export class EdgeTTSPlayer implements ITTSPlayer {
     this.allChunksDone = false;
     this.hasAudioData = false;
     this.playingNotified = false;
+    this.pausedAt = 0;
 
     this.audioCtx = new AudioContext();
     this.gainNode = this.audioCtx.createGain();
@@ -451,6 +453,9 @@ export class EdgeTTSPlayer implements ITTSPlayer {
 
     this.checkEndTimer = setInterval(() => {
       if (!this._playing || this._paused) return;
+      // Also guard against the AudioContext being auto-suspended by the OS
+      // (e.g. iOS background / lock-screen) without us explicitly pausing.
+      if (this.audioCtx?.state === "suspended") return;
       if (this.allChunksDone && this.audioCtx) {
         if (!this.hasAudioData) {
           this.finishPlayback();
@@ -584,6 +589,7 @@ export class EdgeTTSPlayer implements ITTSPlayer {
 
   pause() {
     if (!this._playing || this._paused) return;
+    this.pausedAt = Date.now();
     this.audioCtx?.suspend();
     for (const timer of this.chunkStartTimers) clearTimeout(timer);
     this.chunkStartTimers.clear();
@@ -593,6 +599,13 @@ export class EdgeTTSPlayer implements ITTSPlayer {
 
   resume() {
     if (!this._playing || !this._paused) return;
+    // audioCtx.currentTime is frozen while suspended; shift scheduledEnd forward
+    // by however long we were paused (wall-clock) so checkEndTimer doesn't fire early.
+    if (this.pausedAt > 0) {
+      const pausedSeconds = (Date.now() - this.pausedAt) / 1000;
+      this.scheduledEnd += pausedSeconds;
+    }
+    this.pausedAt = 0;
     this.audioCtx?.resume();
     this._paused = false;
     this.onStateChange?.("playing");

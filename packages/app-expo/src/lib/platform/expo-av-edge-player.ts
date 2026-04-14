@@ -40,12 +40,18 @@ export class ExpoAVEdgeTTSPlayer implements ITTSPlayer {
   private _prefetchBuffer = new Map<number, Promise<string>>();
   private _producerIndex = 0;
   private _producerWake: (() => void) | null = null;
-
   private _nextSoundPromise: Promise<PrefetchedSound> | null = null;
   private _nextSoundIndex = -1;
+  /** Incremented on every speak() call; lets _playChunk detect preemption. */
+  private _speakGen = 0;
 
   async speak(text: string | string[], config: TTSConfig): Promise<void> {
+    // Bump generation BEFORE cleanup so any in-flight _playChunk sees the new gen
+    // immediately after their current await returns, and bails out.
+    const gen = ++this._speakGen;
     await this._cleanup();
+    // If another speak() arrived while we were cleaning up, abort this one.
+    if (gen !== this._speakGen) return;
     this._stopped = false;
     this._paused = false;
     this._config = config;
@@ -69,13 +75,14 @@ export class ExpoAVEdgeTTSPlayer implements ITTSPlayer {
     }
 
     this.onStateChange?.("playing");
-    await this._playChunk();
+    await this._playChunk(gen);
   }
 
-  private async _playChunk(): Promise<void> {
-    if (this._stopped || this._currentIndex >= this._chunks.length) {
-      if (!this._stopped) {
+  private async _playChunk(gen: number): Promise<void> {
+    if (gen !== this._speakGen || this._stopped || this._currentIndex >= this._chunks.length) {
+      if (gen === this._speakGen && !this._stopped) {
         this._stopped = true;
+        console.log("[ExpoAVEdgeTTSPlayer] all chunks done, firing onEnd");
         this.onStateChange?.("stopped");
         this.onEnd?.();
       }
@@ -83,39 +90,48 @@ export class ExpoAVEdgeTTSPlayer implements ITTSPlayer {
     }
 
     const idx = this._currentIndex;
+    console.log(`[ExpoAVEdgeTTSPlayer] _playChunk start idx=${idx}/${this._chunks.length}`);
     this.onChunkChange?.(idx, this._chunks.length);
 
     let audioUri: string | null = null;
     let usedPrefetched = false;
     try {
-
-      const nextIdx = idx + 1;
       const hasNextPrefetched =
-        this._nextSoundPromise !== null && this._nextSoundIndex === idx && idx < this._chunks.length;
+        this._nextSoundPromise !== null &&
+        this._nextSoundIndex === idx &&
+        idx < this._chunks.length;
+
+      console.log(`[ExpoAVEdgeTTSPlayer] idx=${idx} hasNextPrefetched=${hasNextPrefetched}`);
 
       if (hasNextPrefetched) {
+        console.log(`[ExpoAVEdgeTTSPlayer] idx=${idx} awaiting prefetched sound`);
+        this._prefetchBuffer.delete(idx);
+        this._producerWake?.();
         const prefetched = await this._nextSoundPromise!;
         this._nextSoundPromise = null;
         this._nextSoundIndex = -1;
-        if (!this._stopped) {
-          this._currentSound = prefetched.sound;
-          audioUri = prefetched.uri;
-          usedPrefetched = true;
-          if (!this._paused) {
-            await prefetched.sound.playAsync();
-          }
-        } else {
+        if (gen !== this._speakGen || this._stopped) {
           await prefetched.sound.unloadAsync().catch(() => {});
           return;
         }
+        this._currentSound = prefetched.sound;
+        audioUri = prefetched.uri;
+        usedPrefetched = true;
       } else {
+        console.log(`[ExpoAVEdgeTTSPlayer] idx=${idx} fetching file`);
         audioUri = await this._getChunkFile(idx);
-        if (this._stopped) return;
+        if (gen !== this._speakGen || this._stopped) return;
+        console.log(`[ExpoAVEdgeTTSPlayer] idx=${idx} creating Sound`);
         const { sound } = await Audio.Sound.createAsync(
           { uri: audioUri },
-          { shouldPlay: !this._paused, rate: 1.0, shouldCorrectPitch: false },
+          { shouldPlay: false, rate: 1.0, shouldCorrectPitch: false },
         );
+        if (gen !== this._speakGen || this._stopped) {
+          await sound.unloadAsync().catch(() => {});
+          return;
+        }
         this._currentSound = sound;
+        console.log(`[ExpoAVEdgeTTSPlayer] idx=${idx} Sound created`);
       }
 
       const sound = this._currentSound!;
@@ -125,7 +141,7 @@ export class ExpoAVEdgeTTSPlayer implements ITTSPlayer {
       if (this._paused) {
         await new Promise<void>((resolve) => {
           const checkInterval = setInterval(() => {
-            if (this._stopped) {
+            if (gen !== this._speakGen || this._stopped) {
               clearInterval(checkInterval);
               resolve();
             } else if (!this._paused) {
@@ -134,46 +150,79 @@ export class ExpoAVEdgeTTSPlayer implements ITTSPlayer {
             }
           }, 100);
         });
-        if (this._stopped) {
+        if (gen !== this._speakGen || this._stopped) {
           await sound.unloadAsync().catch(() => {});
           this._currentSound = null;
           return;
         }
       }
 
+      console.log(`[ExpoAVEdgeTTSPlayer] idx=${idx} registering status listener`);
       await new Promise<void>((resolve, reject) => {
+        let settled = false;
+        const settle = (fn: () => void) => {
+          if (settled) return;
+          settled = true;
+          fn();
+        };
+
+        const timeoutId = setTimeout(() => {
+          console.warn(`[ExpoAVEdgeTTSPlayer] idx=${idx} playback timeout, advancing`);
+          settle(resolve);
+        }, 120_000);
+
         sound.setOnPlaybackStatusUpdate((status) => {
+          // If preempted by a new speak(), resolve immediately so we can exit cleanly.
+          if (gen !== this._speakGen) {
+            clearTimeout(timeoutId);
+            settle(resolve);
+            return;
+          }
           if (!status.isLoaded) {
+            clearTimeout(timeoutId);
             if ((status as any).error) {
-              reject(new Error((status as any).error));
+              console.error(`[ExpoAVEdgeTTSPlayer] idx=${idx} playback error:`, (status as any).error);
+              settle(() => reject(new Error((status as any).error)));
+            } else {
+              console.log(`[ExpoAVEdgeTTSPlayer] idx=${idx} isLoaded=false (natural end)`);
+              settle(resolve);
             }
             return;
           }
           if (status.didJustFinish) {
-            resolve();
+            clearTimeout(timeoutId);
+            console.log(`[ExpoAVEdgeTTSPlayer] idx=${idx} didJustFinish`);
+            settle(resolve);
           }
         });
+
+        if (!this._paused && !this._stopped && gen === this._speakGen) {
+          console.log(`[ExpoAVEdgeTTSPlayer] idx=${idx} calling playAsync`);
+          sound.playAsync().catch((err) => {
+            console.error(`[ExpoAVEdgeTTSPlayer] idx=${idx} playAsync error:`, err);
+            settle(() => reject(err));
+          });
+        }
       });
 
+      console.log(`[ExpoAVEdgeTTSPlayer] idx=${idx} playback promise resolved, unloading`);
       await sound.unloadAsync().catch(() => {});
       this._currentSound = null;
 
+      if (gen !== this._speakGen || this._stopped) return;
       this._currentIndex++;
-      if (!this._stopped) {
-        await this._playChunk();
-      }
+      await this._playChunk(gen);
     } catch (err) {
       if (!this._stopped && (err as Error)?.message !== "aborted") {
-        console.error("[ExpoAVEdgeTTSPlayer] chunk error:", err);
+        console.error(`[ExpoAVEdgeTTSPlayer] chunk ${idx} error:`, err);
       }
       if (this._currentSound) {
         await this._currentSound.unloadAsync().catch(() => {});
         this._currentSound = null;
       }
+      if (gen !== this._speakGen || this._stopped) return;
       this._currentIndex++;
-      if (!this._stopped) {
-        await this._playChunk();
-      }
+      await this._playChunk(gen);
     } finally {
       this._prefetchBuffer.delete(idx);
       this._producerWake?.();

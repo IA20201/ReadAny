@@ -296,7 +296,10 @@ export function TTSPage({
   const voiceLabel = getTTSVoiceLabel(config);
   const isPlaying = playState === "playing";
   const isLoading = playState === "loading";
-  const shouldAutoCenterLyrics = isPlaying || isLoading;
+  const isPaused = playState === "paused";
+  // Center lyrics when playing/loading (continuous follow) OR when paused (one-shot
+  // on open — deduped by lastCenteredSignatureRef so it only fires once per position).
+  const shouldAutoCenterLyrics = isPlaying || isLoading || isPaused;
   const chromeTopInset = Platform.OS === "android" ? Math.max(insets.top, 6) : Math.max(insets.top, 10);
   const chromeBottomInset =
     Platform.OS === "android" ? Math.max(insets.bottom, 6) : Math.max(insets.bottom, 10);
