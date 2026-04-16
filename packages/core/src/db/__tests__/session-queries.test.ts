@@ -15,6 +15,7 @@ const coreMocks = vi.hoisted(() => ({
 vi.mock("../db-core", () => coreMocks);
 
 const {
+  getAllReadingSessions,
   getReadingSessions,
   getReadingSessionsByDateRange,
   insertReadingSession,
@@ -89,6 +90,38 @@ describe("session-queries", () => {
       const sessions = await getReadingSessions("book-1");
       expect(sessions[0].endedAt).toBeUndefined();
       expect(sessions[0].state).toBe("active");
+    });
+  });
+
+  describe("getAllReadingSessions", () => {
+    it("returns mapped sessions ordered by started_at desc", async () => {
+      mockSelect.mockResolvedValue([
+        {
+          id: "session-2",
+          book_id: "book-2",
+          started_at: 2000,
+          ended_at: 2600,
+          total_active_time: 600,
+          pages_read: 6,
+          state: "STOPPED",
+        },
+      ]);
+
+      const sessions = await getAllReadingSessions();
+      expect(sessions).toEqual([
+        expect.objectContaining({
+          id: "session-2",
+          bookId: "book-2",
+          startedAt: 2000,
+          endedAt: 2600,
+          totalActiveTime: 600,
+          pagesRead: 6,
+          state: "STOPPED",
+        }),
+      ]);
+      expect(mockSelect).toHaveBeenCalledWith(
+        "SELECT * FROM reading_sessions ORDER BY started_at DESC",
+      );
     });
   });
 

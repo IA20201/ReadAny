@@ -1,621 +1,1253 @@
+import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { readingStatsService } from "@/lib/stats/reading-stats";
-import {
-  mergeCurrentSessionIntoDailyStats,
-  mergeCurrentSessionIntoOverallStats,
-} from "@readany/core/stats";
-import type {
-  DailyStats,
-  OverallStats,
-  PeriodBookStats,
-  TrendPoint,
-} from "@/lib/stats/reading-stats";
+import { useResolvedSrc } from "@/hooks/use-resolved-src";
 import { useAppStore } from "@/stores/app-store";
 import { useReadingSessionStore } from "@/stores/reading-session-store";
+import {
+  fromLocalDateKey,
+  getWeekStartDate,
+  readingReportsService,
+  type DailyReadingFact,
+  type MonthReport,
+  type StatsCalendarCell,
+  type StatsChartBlock,
+  type StatsDimension,
+  type StatsInsight,
+  type StatsReport,
+  type TopBookEntry,
+} from "@readany/core/stats";
+import { cn } from "@readany/core/utils";
 import { eventBus } from "@readany/core/utils/event-bus";
-import { BookOpen, ChevronLeft, ChevronRight, Clock, Flame, TrendingUp } from "lucide-react";
-/**
- * ReadingStatsPanel — displays reading statistics with charts, heatmap and book list
- */
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  BookOpenText,
+  CalendarDays,
+  ChevronLeft,
+  ChevronRight,
+  Clock3,
+  Flame,
+  Layers3,
+  LibraryBig,
+  ScanSearch,
+  Share2,
+  Sparkles,
+  TrendingUp,
+} from "lucide-react";
+import type { TFunction } from "i18next";
+import { useCallback, useEffect, useMemo, useState, type ChangeEvent, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { BarChart } from "./BarChart";
-import { PeriodBookList } from "./PeriodBookList";
-import { TrendChart } from "./TrendChart";
 
-type ChartMode = "week" | "month";
-type ChartView = "heatmap" | "bar";
+type MetricTileData = {
+  id: string;
+  label: string;
+  value: string;
+  sublabel?: string;
+  icon: ReactNode;
+};
 
-/** Get the Monday of the week containing `date` */
-function getWeekStart(date: Date): Date {
-  const d = new Date(date);
-  const day = d.getDay();
-  const diff = day === 0 ? -6 : 1 - day; // Monday = 1
-  d.setDate(d.getDate() + diff);
-  d.setHours(0, 0, 0, 0);
-  return d;
+type StatsCopy = ReturnType<typeof getStatsCopy>;
+
+const DIMENSIONS: StatsDimension[] = ["day", "week", "month", "year", "lifetime"];
+
+function getStatsCopy(t: TFunction) {
+  return {
+    pageTitle: t("stats.desktop.pageTitle"),
+    pageSubtitle: t("stats.desktop.pageSubtitle"),
+    dimensions: {
+      day: t("stats.desktop.dimensions.day"),
+      week: t("stats.desktop.dimensions.week"),
+      month: t("stats.desktop.dimensions.month"),
+      year: t("stats.desktop.dimensions.year"),
+      lifetime: t("stats.desktop.dimensions.lifetime"),
+    } satisfies Record<StatsDimension, string>,
+    dimensionTitles: {
+      day: t("stats.desktop.dimensionTitles.day"),
+      week: t("stats.desktop.dimensionTitles.week"),
+      month: t("stats.desktop.dimensionTitles.month"),
+      year: t("stats.desktop.dimensionTitles.year"),
+      lifetime: t("stats.desktop.dimensionTitles.lifetime"),
+    } satisfies Record<StatsDimension, string>,
+    readingTime: t("stats.desktop.readingTime"),
+    activeDays: t("stats.desktop.activeDays"),
+    sessions: t("stats.desktop.sessions"),
+    books: t("stats.desktop.books"),
+    pages: t("stats.desktop.pages"),
+    streak: t("stats.desktop.streak"),
+    avgActiveDay: t("stats.desktop.avgActiveDay"),
+    longestSession: t("stats.desktop.longestSession"),
+    daysTogether: t("stats.desktop.daysTogether"),
+    periodNavigationHint: t("stats.desktop.periodNavigationHint"),
+    today: t("stats.desktop.today"),
+    thisWeek: t("stats.desktop.thisWeek"),
+    thisMonth: t("stats.desktop.thisMonth"),
+    thisYear: t("stats.desktop.thisYear"),
+    journey: t("stats.desktop.journey"),
+    journeySubtitle: t("stats.desktop.journeySubtitle"),
+    readingCalendar: t("stats.desktop.readingCalendar"),
+    readingCalendarDesc: t("stats.desktop.readingCalendarDesc"),
+    primaryChart: t("stats.desktop.primaryChart"),
+    primaryChartDesc: t("stats.desktop.primaryChartDesc"),
+    singlePointLabel: t("stats.desktop.singlePointLabel"),
+    singlePointDesc: t("stats.desktop.singlePointDesc"),
+    topBooks: t("stats.desktop.topBooks"),
+    topBooksDesc: t("stats.desktop.topBooksDesc"),
+    insights: t("stats.desktop.insights"),
+    insightsDesc: t("stats.desktop.insightsDesc"),
+    milestones: t("stats.desktop.milestones"),
+    milestonesDesc: t("stats.desktop.milestonesDesc"),
+    sharePreview: t("stats.desktop.sharePreview"),
+    sharePreviewDesc: t("stats.desktop.sharePreviewDesc"),
+    noDataTitle: t("stats.desktop.noDataTitle"),
+    noDataDesc: t("stats.desktop.noDataDesc"),
+    noTopBooks: t("stats.desktop.noTopBooks"),
+    noInsights: t("stats.desktop.noInsights"),
+    noTimeline: t("stats.desktop.noTimeline"),
+    noDayTopBook: t("stats.desktop.noDayTopBook"),
+    daySummary: t("stats.desktop.daySummary"),
+    daySummaryDesc: t("stats.desktop.daySummaryDesc"),
+    firstSession: t("stats.desktop.firstSession"),
+    lastSession: t("stats.desktop.lastSession"),
+    peakHour: t("stats.desktop.peakHour"),
+    longestRead: t("stats.desktop.longestRead"),
+    topFocus: t("stats.desktop.topFocus"),
+    activeNow: t("stats.desktop.activeNow"),
+    startedOn: t("stats.desktop.startedOn"),
+    activeReadingDays: t("stats.desktop.activeReadingDays"),
+    inactiveReadingDays: t("stats.desktop.inactiveReadingDays"),
+    companionMessage: t("stats.desktop.companionMessage"),
+    exportSoon: t("stats.desktop.exportSoon"),
+    pagesReadSuffix: t("stats.desktop.pagesReadSuffix"),
+    sessionsSuffix: t("stats.desktop.sessionsSuffix"),
+    daysSuffix: t("stats.desktop.daysSuffix"),
+    weekPrefix: t("stats.desktop.weekPrefix"),
+    weekSuffix: t("stats.desktop.weekSuffix"),
+    unknownAuthor: t("stats.desktop.unknownAuthor"),
+    journeyNarrative: (days: number) => t("stats.desktop.journeyNarrative", { days }),
+    insightTitleNoReading: t("stats.desktop.insightTitleNoReading"),
+    insightBodyNoReading: t("stats.desktop.insightBodyNoReading"),
+    insightTitleStreak: t("stats.desktop.insightTitleStreak"),
+    insightBodyStreak: (days: number) => t("stats.desktop.insightBodyStreak", { days }),
+    insightTitleFocus: t("stats.desktop.insightTitleFocus"),
+    insightBodyFocus: (minutes: number) => t("stats.desktop.insightBodyFocus", { minutes }),
+    insightTitleTopBook: t("stats.desktop.insightTitleTopBook"),
+    insightBodyTopBook: (title: string) => t("stats.desktop.insightBodyTopBook", { title }),
+    milestoneTitleJoined: t("stats.desktop.milestoneTitleJoined"),
+    milestoneBodyJoined: (date: string) => t("stats.desktop.milestoneBodyJoined", { date }),
+    loadFailed: t("stats.loadFailed", "Failed to load reading stats."),
+    loading: t("stats.loading", "Preparing your reading story…"),
+    daySessions: (count: number) => t("stats.desktop.daySessions", { count }),
+  };
 }
 
-/** Get the Sunday of the week starting on `weekStart` */
-function getWeekEnd(weekStart: Date): Date {
-  const d = new Date(weekStart);
-  d.setDate(d.getDate() + 6);
-  d.setHours(23, 59, 59, 999);
-  return d;
+function formatMinutes(minutes: number, isZh: boolean): string {
+  if (minutes <= 0) return isZh ? "0 分钟" : "0m";
+  if (minutes < 60) return isZh ? `${Math.round(minutes)} 分钟` : `${Math.round(minutes)}m`;
+  const hours = Math.floor(minutes / 60);
+  const mins = Math.round(minutes % 60);
+  if (mins <= 0) return isZh ? `${hours} 小时` : `${hours}h`;
+  return isZh ? `${hours} 小时 ${mins} 分钟` : `${hours}h ${mins}m`;
 }
 
-/** Get first day of month */
-function getMonthStart(year: number, month: number): Date {
-  return new Date(year, month, 1);
+function formatCompactMinutes(minutes: number, isZh = false): string {
+  if (minutes <= 0) return isZh ? "0分" : "0m";
+  if (minutes < 60) return isZh ? `${Math.round(minutes)}分` : `${Math.round(minutes)}m`;
+  const hours = Math.floor(minutes / 60);
+  const mins = Math.round(minutes % 60);
+  if (isZh) {
+    return mins > 0 ? `${hours}时${mins}分` : `${hours}时`;
+  }
+  return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
 }
 
-/** Get last day of month */
-function getMonthEnd(year: number, month: number): Date {
-  return new Date(year, month + 1, 0, 23, 59, 59, 999);
+function formatChartMinutes(minutes: number, isZh: boolean): string {
+  if (minutes <= 0) return isZh ? "0分" : "0m";
+  if (minutes < 60) return isZh ? `${Math.round(minutes)}分` : `${Math.round(minutes)}m`;
+  const hours = Math.floor(minutes / 60);
+  const mins = Math.round(minutes % 60);
+  return isZh ? (mins > 0 ? `${hours}时${mins}分` : `${hours}时`) : mins > 0 ? `${hours}h${mins}m` : `${hours}h`;
+}
+
+function formatClock(timestamp: number | undefined, isZh: boolean): string {
+  if (!timestamp) return "—";
+  return new Intl.DateTimeFormat(isZh ? "zh-CN" : "en-US", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: !isZh,
+  }).format(new Date(timestamp));
+}
+
+function formatDateLabel(dateKey: string | undefined, isZh: boolean): string {
+  if (!dateKey) return "—";
+  const date = fromLocalDateKey(dateKey);
+  return new Intl.DateTimeFormat(isZh ? "zh-CN" : "en-US", {
+    year: "numeric",
+    month: isZh ? "long" : "short",
+    day: "numeric",
+  }).format(date);
+}
+
+function formatPeriodLabel(report: StatsReport, isZh: boolean, copy: StatsCopy): string {
+  if (report.dimension === "day") {
+    return formatDateLabel(report.period.startDate, isZh);
+  }
+
+  if (report.dimension === "week") {
+    const start = formatDateLabel(report.period.startDate, isZh);
+    const end = formatDateLabel(report.period.endDate, isZh);
+    const weekKey = report.period.key.split("W")[1] ?? "";
+    return isZh
+      ? `${start} - ${end} · ${copy.weekPrefix}${weekKey}${copy.weekSuffix}`
+      : `${copy.weekPrefix}${weekKey}${copy.weekSuffix} · ${start} - ${end}`;
+  }
+
+  if (report.dimension === "month") {
+    const date = fromLocalDateKey(report.period.startDate);
+    return new Intl.DateTimeFormat(isZh ? "zh-CN" : "en-US", {
+      year: "numeric",
+      month: isZh ? "long" : "long",
+    }).format(date);
+  }
+
+  if (report.dimension === "year") {
+    return report.period.key;
+  }
+
+  return `${copy.companionMessage} ${(report.context.daysSinceJoined || 0).toLocaleString()} ${copy.daysSuffix}`;
+}
+
+function toDateInputValue(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function toMonthInputValue(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  return `${year}-${month}`;
+}
+
+function shiftAnchorDate(date: Date, dimension: StatsDimension, delta: -1 | 1): Date {
+  const next = new Date(date);
+  if (dimension === "day") {
+    next.setDate(next.getDate() + delta);
+    return next;
+  }
+  if (dimension === "week") {
+    next.setDate(next.getDate() + delta * 7);
+    return next;
+  }
+  if (dimension === "month") {
+    next.setMonth(next.getMonth() + delta);
+    return next;
+  }
+  if (dimension === "year") {
+    next.setFullYear(next.getFullYear() + delta);
+  }
+  return next;
+}
+
+function intensityClass(level: StatsCalendarCell["intensity"], inCurrentMonth: boolean): string {
+  if (!inCurrentMonth && level === 0) {
+    return "border-border/40 bg-muted/30 text-muted-foreground";
+  }
+
+  const palette = [
+    "border-border bg-card/80 text-foreground",
+    "border-primary/10 bg-primary/5 text-foreground",
+    "border-primary/15 bg-primary/10 text-foreground",
+    "border-primary/20 bg-primary/15 text-foreground",
+    "border-primary/30 bg-primary/20 text-foreground",
+  ] as const;
+
+  return cn(palette[level], !inCurrentMonth && "opacity-70");
+}
+
+function buildHeroMetrics(report: StatsReport, copy: StatsCopy, isZh: boolean): MetricTileData[] {
+  const metrics: MetricTileData[] = [];
+
+  if (report.dimension === "lifetime") {
+    metrics.push({
+      id: "days-together",
+      label: copy.daysTogether,
+      value: `${report.context.daysSinceJoined.toLocaleString()} ${copy.daysSuffix}`,
+      sublabel: `${copy.startedOn} ${formatDateLabel(report.context.joinedSince, isZh)}`,
+      icon: <CalendarDays className="h-4 w-4" />,
+    });
+  } else {
+    metrics.push({
+      id: "reading-time",
+      label: copy.readingTime,
+      value: formatMinutes(report.summary.totalReadingTime, isZh),
+      sublabel: copy.dimensionTitles[report.dimension],
+      icon: <Clock3 className="h-4 w-4" />,
+    });
+  }
+
+  metrics.push(
+    {
+      id: "active-days",
+      label: copy.activeDays,
+      value: `${report.summary.activeDays.toLocaleString()} ${copy.daysSuffix}`,
+      sublabel: copy.avgActiveDay,
+      icon: <TrendingUp className="h-4 w-4" />,
+    },
+    {
+      id: "sessions",
+      label: copy.sessions,
+      value: `${report.summary.totalSessions.toLocaleString()} ${copy.sessionsSuffix}`,
+      sublabel: formatMinutes(report.summary.avgSessionTime, isZh),
+      icon: <Layers3 className="h-4 w-4" />,
+    },
+    {
+      id: "books",
+      label: copy.books,
+      value: report.summary.booksTouched.toLocaleString(),
+      sublabel: `${report.summary.totalPagesRead.toLocaleString()} ${copy.pagesReadSuffix}`,
+      icon: <LibraryBig className="h-4 w-4" />,
+    },
+    {
+      id: "streak",
+      label: copy.streak,
+      value: `${
+        report.dimension === "lifetime"
+          ? report.summary.longestStreak.toLocaleString()
+          : report.summary.currentStreak.toLocaleString()
+      } ${copy.daysSuffix}`,
+      sublabel:
+        report.dimension === "lifetime"
+          ? `${copy.longestSession} ${formatMinutes(report.summary.longestSessionTime, isZh)}`
+          : `${copy.longestSession} ${formatMinutes(report.summary.longestSessionTime, isZh)}`,
+      icon: <Flame className="h-4 w-4" />,
+    },
+    {
+      id: "avg-day",
+      label: copy.avgActiveDay,
+      value: formatMinutes(report.summary.avgActiveDayTime, isZh),
+      sublabel: copy.readingTime,
+      icon: <BookOpenText className="h-4 w-4" />,
+    },
+  );
+
+  return metrics;
+}
+
+function localizeInsight(
+  insight: StatsInsight,
+  report: StatsReport,
+  copy: StatsCopy,
+  isZh: boolean,
+): StatsInsight {
+  if (insight.id === "no-reading") {
+    return { ...insight, title: copy.insightTitleNoReading, body: copy.insightBodyNoReading };
+  }
+  if (insight.id === "streak") {
+    return {
+      ...insight,
+      title: copy.insightTitleStreak,
+      body: copy.insightBodyStreak(report.summary.currentStreak),
+    };
+  }
+  if (insight.id === "focus") {
+    return {
+      ...insight,
+      title: copy.insightTitleFocus,
+      body: copy.insightBodyFocus(Math.round(report.summary.longestSessionTime)),
+    };
+  }
+  if (insight.id === "top-book") {
+    return {
+      ...insight,
+      title: copy.insightTitleTopBook,
+      body: copy.insightBodyTopBook(report.topBooks[0]?.title ?? copy.noDayTopBook),
+    };
+  }
+  if (insight.id === "joined" && report.dimension === "lifetime") {
+    return {
+      ...insight,
+      title: copy.milestoneTitleJoined,
+      body: copy.milestoneBodyJoined(formatDateLabel(report.context.joinedSince, isZh)),
+    };
+  }
+  return insight;
 }
 
 export function ReadingStatsPanel() {
   const { t, i18n } = useTranslation();
+  const isZh = i18n.language.startsWith("zh");
+  const copy = useMemo(() => getStatsCopy(t), [t, i18n.language]);
   const activeTabId = useAppStore((s) => s.activeTabId);
   const saveCurrentSession = useReadingSessionStore((s) => s.saveCurrentSession);
   const currentSession = useReadingSessionStore((s) => s.currentSession);
-  const [dailyStats, setDailyStats] = useState<DailyStats[]>([]);
-  const [overall, setOverall] = useState<OverallStats | null>(null);
+
+  const [dimension, setDimension] = useState<StatsDimension>("month");
+  const [anchorDate, setAnchorDate] = useState<Date>(() => new Date());
+  const [report, setReport] = useState<StatsReport | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  // Chart state
-  const [chartView, setChartView] = useState<ChartView>("heatmap");
-  const [chartMode, setChartMode] = useState<ChartMode>("week");
-  const [chartDate, setChartDate] = useState<Date>(() => getWeekStart(new Date()));
-  const [chartData, setChartData] = useState<DailyStats[]>([]);
-  const [periodBooks, setPeriodBooks] = useState<PeriodBookStats[]>([]);
-  const [trendData, setTrendData] = useState<TrendPoint[]>([]);
+  const loadReport = useCallback(async () => {
+    if (activeTabId !== "stats") return;
+    setLoading(true);
+    setError(null);
 
-  const lang = i18n.language;
-
-  const loadChartData = useCallback(async () => {
     try {
-      let barData: DailyStats[];
-      let periodStart: Date;
-      let periodEnd: Date;
-
-      if (chartMode === "week") {
-        barData = await readingStatsService.getWeeklyStats(chartDate);
-        periodStart = chartDate;
-        periodEnd = getWeekEnd(chartDate);
+      let nextReport: StatsReport;
+      if (dimension === "day") {
+        nextReport = await readingReportsService.getDayReport(anchorDate, currentSession);
+      } else if (dimension === "week") {
+        nextReport = await readingReportsService.getWeekReport(anchorDate, currentSession);
+      } else if (dimension === "month") {
+        nextReport = await readingReportsService.getMonthReport(anchorDate, currentSession);
+      } else if (dimension === "year") {
+        nextReport = await readingReportsService.getYearReport(anchorDate, currentSession);
       } else {
-        const year = chartDate.getFullYear();
-        const month = chartDate.getMonth();
-        barData = await readingStatsService.getMonthlyStats(year, month);
-        periodStart = getMonthStart(year, month);
-        periodEnd = getMonthEnd(year, month);
+        nextReport = await readingReportsService.getLifetimeReport(currentSession);
       }
 
-      setChartData(barData);
-
-      const books = await readingStatsService.getBookStatsForPeriod(periodStart, periodEnd);
-      setPeriodBooks(books);
-    } catch {
-      // ignore
+      setReport(nextReport);
+    } catch (statsError) {
+      console.error("[ReadingStatsPanel] Failed to load report", statsError);
+      setError(copy.loadFailed);
+    } finally {
+      setLoading(false);
     }
-  }, [chartDate, chartMode]);
-
-  const loadStats = useCallback(async () => {
-    setLoading(true);
-    try {
-      const endDate = new Date();
-      const startDate = new Date();
-      startDate.setDate(startDate.getDate() - 365);
-
-      const [daily, overallStats, trend] = await Promise.all([
-        readingStatsService.getDailyStats(startDate, endDate),
-        readingStatsService.getOverallStats(),
-        readingStatsService.getRecentTrend(30),
-      ]);
-
-      setDailyStats(daily);
-      setOverall(overallStats);
-      setTrendData(trend);
-    } catch {
-      // Stats may fail if DB isn't initialized
-    }
-    setLoading(false);
-    // Load chart data after base stats are ready
-    void loadChartData();
-  }, [loadChartData]);
+  }, [activeTabId, anchorDate, currentSession, dimension, copy.loadFailed]);
 
   useEffect(() => {
     if (activeTabId === "stats") {
-      void saveCurrentSession().then(() => loadStats());
+      void saveCurrentSession().finally(() => {
+        void loadReport();
+      });
     }
-  }, [activeTabId, saveCurrentSession, loadStats]);
-
-  // Load chart data when mode or date changes
-  useEffect(() => {
-    if (activeTabId === "stats" && !loading) {
-      void loadChartData();
-    }
-  }, [chartMode, chartDate, activeTabId, loading, loadChartData]);
+  }, [activeTabId, saveCurrentSession, loadReport]);
 
   useEffect(() => {
     return eventBus.on("sync:completed", () => {
       if (activeTabId !== "stats") return;
-      void loadStats();
+      void loadReport();
     });
-  }, [activeTabId, loadStats]);
+  }, [activeTabId, loadReport]);
 
-  // Chart date navigation
-  const navigatePeriod = (direction: -1 | 1) => {
-    setChartDate((prev) => {
-      const d = new Date(prev);
-      if (chartMode === "week") {
-        d.setDate(d.getDate() + direction * 7);
-      } else {
-        d.setMonth(d.getMonth() + direction);
+  const heroMetrics = useMemo(
+    () => (report ? buildHeroMetrics(report, copy, isZh) : []),
+    [report, copy, isZh],
+  );
+
+  const periodLabel = useMemo(
+    () => (report ? formatPeriodLabel(report, isZh, copy) : ""),
+    [report, isZh, copy],
+  );
+
+  const primaryChart = report?.charts[0] ?? null;
+  const monthlyReport = report?.dimension === "month" ? report : null;
+  const localizedInsights = useMemo(
+    () => (report ? report.insights.map((item) => localizeInsight(item, report, copy, isZh)) : []),
+    [report, copy, isZh],
+  );
+  const localizedMilestones = useMemo(
+    () =>
+      report?.dimension === "lifetime"
+        ? report.milestones.map((item) => localizeInsight(item, report, copy, isZh))
+        : [],
+    [report, copy, isZh],
+  );
+
+  const onPickPeriod = (event: ChangeEvent<HTMLInputElement>) => {
+    const value = event.target.value;
+    if (!value) return;
+
+    if (dimension === "day" || dimension === "week") {
+      setAnchorDate(getWeekStartDate(value) && dimension === "week" ? getWeekStartDate(value) : new Date(value));
+      if (dimension === "day") {
+        setAnchorDate(new Date(value));
       }
-      return d;
-    });
+      return;
+    }
+
+    if (dimension === "month") {
+      const [year, month] = value.split("-").map(Number);
+      setAnchorDate(new Date(year, (month || 1) - 1, 1));
+      return;
+    }
+
+    if (dimension === "year") {
+      const nextYear = Number(value);
+      if (!Number.isNaN(nextYear)) {
+        setAnchorDate(new Date(nextYear, 0, 1));
+      }
+    }
   };
 
-  const switchChartMode = (mode: ChartMode) => {
-    setChartMode(mode);
-    if (mode === "week") {
-      setChartDate(getWeekStart(new Date()));
-    } else {
-      const now = new Date();
-      setChartDate(new Date(now.getFullYear(), now.getMonth(), 1));
-    }
+  const resetToCurrentPeriod = () => {
+    setAnchorDate(new Date());
   };
 
-  // Format the current period label
-  const periodLabel = useMemo(() => {
-    if (chartMode === "week") {
-      const end = getWeekEnd(chartDate);
-      const fmt = (d: Date) =>
-        d.toLocaleDateString(lang === "zh" ? "zh-CN" : "en", { month: "short", day: "numeric" });
-      return `${fmt(chartDate)} – ${fmt(end)}`;
-    }
-    return chartDate.toLocaleDateString(lang === "zh" ? "zh-CN" : "en", {
-      year: "numeric",
-      month: "long",
-    });
-  }, [chartDate, chartMode, lang]);
-
-  // Transform DailyStats → BarChart data
-  const barChartData = useMemo(() => {
-    if (chartMode === "week") {
-      const isChinese = i18n.language.startsWith("zh");
-      const dayNames = isChinese
-        ? ["一", "二", "三", "四", "五", "六", "日"]
-        : ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-      return chartData.map((d, i) => ({
-        label: dayNames[i] || d.date.slice(5),
-        value: d.totalTime,
-      }));
-    }
-    // Month mode: show day numbers
-    return chartData.map((d) => ({
-      label: String(new Date(d.date).getDate()),
-      value: d.totalTime,
-    }));
-  }, [chartData, chartMode, i18n.language]);
-
-  // Transform TrendPoint → TrendChart data
-  const trendChartData = useMemo(
-    () => trendData.map((p) => ({ date: p.date, value: p.dailyTime })),
-    [trendData],
-  );
-  const liveDailyStats = useMemo(
-    () => mergeCurrentSessionIntoDailyStats(dailyStats, currentSession),
-    [dailyStats, currentSession],
-  );
-  const liveOverall = useMemo(
-    () => mergeCurrentSessionIntoOverallStats(overall, dailyStats, currentSession),
-    [overall, dailyStats, currentSession],
-  );
-
-  if (loading) {
-    return (
-      <div className="flex h-[60vh] items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-primary" />
-      </div>
-    );
-  }
+  const currentPickerValue =
+    dimension === "month"
+      ? toMonthInputValue(anchorDate)
+      : dimension === "year"
+        ? String(anchorDate.getFullYear())
+        : toDateInputValue(anchorDate);
 
   return (
-    <div className="h-full space-y-6 overflow-auto p-6">
-      {/* Page Header */}
-      <div className="space-y-1">
-        <h1 className="text-2xl font-bold text-foreground">{t("stats.title")}</h1>
-        <p className="text-sm text-muted-foreground">{t("stats.subtitle")}</p>
-      </div>
-
-      {/* Stat Cards Grid */}
-      {liveOverall && (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          <StatCard
-            icon={<BookOpen className="h-4 w-4" />}
-            title={t("stats.booksRead")}
-            value={String(liveOverall.totalBooks)}
-            description={t("stats.booksReadDesc")}
-          />
-          <StatCard
-            icon={<Clock className="h-4 w-4" />}
-            title={t("stats.totalTime")}
-            value={formatTime(liveOverall.totalReadingTime)}
-            description={t("stats.totalTimeDesc")}
-          />
-          <StatCard
-            icon={<Flame className="h-4 w-4" />}
-            title={t("stats.currentStreak")}
-            value={`${liveOverall.currentStreak}d`}
-            description={t("stats.currentStreakDesc")}
-          />
-          <StatCard
-            icon={<TrendingUp className="h-4 w-4" />}
-            title={t("stats.avgDaily")}
-            value={formatTime(liveOverall.avgDailyTime)}
-            description={t("stats.avgDailyDesc")}
-          />
-        </div>
-      )}
-
-      {/* Heatmap / Bar Chart Section (switchable) */}
-      <div className="rounded-xl border border-border p-5">
-        <div className="mb-4 flex items-center justify-between">
-          <div className="space-y-1">
-            <h3 className="text-base font-semibold text-foreground">{t("stats.heatmapTitle")}</h3>
-            <p className="text-xs text-muted-foreground">
-              {chartView === "heatmap"
-                ? t("stats.heatmapDesc")
-                : t("stats.barChartDesc", "查看指定时间段的阅读统计")}
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            {/* Week/Month toggle + date navigation (only for bar view) */}
-            {chartView === "bar" && (
-              <>
-                <div className="flex items-center gap-1">
-                  <button
-                    className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                    onClick={() => navigatePeriod(-1)}
-                    title={t("stats.prevPeriod")}
-                  >
-                    <ChevronLeft className="h-4 w-4" />
-                  </button>
-                  <span className="min-w-[120px] text-center text-xs font-medium text-muted-foreground">
-                    {periodLabel}
-                  </span>
-                  <button
-                    className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                    onClick={() => navigatePeriod(1)}
-                    title={t("stats.nextPeriod")}
-                  >
-                    <ChevronRight className="h-4 w-4" />
-                  </button>
-                </div>
-                <div className="flex rounded-lg border border-border bg-muted p-0.5">
-                  <button
-                    className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
-                      chartMode === "week"
-                        ? "bg-background text-foreground shadow-sm"
-                        : "text-muted-foreground hover:text-foreground"
-                    }`}
-                    onClick={() => switchChartMode("week")}
-                  >
-                    {t("stats.periodWeek")}
-                  </button>
-                  <button
-                    className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
-                      chartMode === "month"
-                        ? "bg-background text-foreground shadow-sm"
-                        : "text-muted-foreground hover:text-foreground"
-                    }`}
-                    onClick={() => switchChartMode("month")}
-                  >
-                    {t("stats.periodMonth")}
-                  </button>
-                </div>
-              </>
-            )}
-
-            {/* Heatmap / Bar toggle - fixed position */}
-            <div className="flex rounded-lg border border-border bg-muted p-0.5">
-              <button
-                className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
-                  chartView === "heatmap"
-                    ? "bg-background text-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-                onClick={() => setChartView("heatmap")}
-              >
-                {t("stats.viewHeatmap")}
-              </button>
-              <button
-                className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
-                  chartView === "bar"
-                    ? "bg-background text-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-                onClick={() => setChartView("bar")}
-              >
-                {t("stats.viewBarChart")}
-              </button>
+    <TooltipProvider delayDuration={120}>
+      <div className="h-full min-w-0 overflow-y-auto overflow-x-hidden bg-background px-4 py-4 sm:px-6 sm:py-5">
+        <div className="mx-auto flex w-full min-w-0 max-w-[1480px] flex-col gap-5 lg:gap-6">
+          <header className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+            <div className="space-y-2">
+              <div className="inline-flex items-center gap-2 rounded-full border border-border bg-muted/70 px-3 py-1 text-xs font-medium text-muted-foreground shadow-around">
+                <Sparkles className="h-3.5 w-3.5 text-primary/70" />
+                {copy.dimensionTitles[dimension]}
+              </div>
+              <div className="space-y-1">
+                <h1 className="text-3xl font-semibold tracking-tight text-foreground">{copy.pageTitle}</h1>
+                <p className="max-w-3xl text-sm leading-6 text-muted-foreground">{copy.pageSubtitle}</p>
+              </div>
             </div>
-          </div>
-        </div>
 
-        {/* Chart content */}
-        {chartView === "heatmap" ? (
-          <>
-            <HeatmapChart dailyStats={liveDailyStats} lang={lang} />
-            <HeatmapLegend />
-          </>
-        ) : (
-          <div className="flex justify-center">
-            <div style={{ maxWidth: "1350px", width: "100%" }}>
-              <BarChart data={barChartData} height={200} emptyMessage={t("stats.noData")} />
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Trend Chart Section */}
-      <div className="rounded-xl border border-border p-5">
-        <div className="mb-4 space-y-1">
-          <h3 className="text-base font-semibold text-foreground">{t("stats.trendTitle")}</h3>
-          <p className="text-xs text-muted-foreground">{t("stats.trendDesc")}</p>
-        </div>
-        <TrendChart data={trendChartData} height={160} emptyMessage={t("stats.noData")} />
-      </div>
-
-      {/* Period Book List */}
-      <div className="rounded-xl border border-border p-5">
-        <div className="mb-4 space-y-1">
-          <h3 className="text-base font-semibold text-foreground">{t("stats.periodBooks")}</h3>
-        </div>
-        <PeriodBookList books={periodBooks} />
-      </div>
-
-      {/* Longest Streak */}
-      {liveOverall && liveOverall.longestStreak > 0 && (
-        <div className="flex items-center gap-3 rounded-xl border border-border p-4">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-orange-500/10">
-            <Flame className="h-5 w-5 text-orange-500" />
-          </div>
-          <div>
-            <p className="text-sm font-semibold text-foreground">
-              {t("stats.longestStreak", { days: liveOverall.longestStreak })}
-            </p>
-            <p className="text-xs text-muted-foreground">{t("stats.longestStreakDesc")}</p>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-/* ── Heatmap Chart ── */
-
-function HeatmapChart({ dailyStats, lang }: { dailyStats: DailyStats[]; lang: string }) {
-  const { t, i18n } = useTranslation();
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [cellSize, setCellSize] = useState(12);
-  const gap = 2;
-  const labelWidth = 28;
-
-  const updateSize = useCallback(() => {
-    const el = containerRef.current;
-    if (!el) return;
-    const availableWidth = el.clientWidth - labelWidth;
-    const computed = Math.floor((availableWidth + gap) / 53 - gap);
-    setCellSize(Math.max(8, Math.min(computed, 22)));
-  }, []);
-
-  useEffect(() => {
-    updateSize();
-    const observer = new ResizeObserver(updateSize);
-    if (containerRef.current) observer.observe(containerRef.current);
-    return () => observer.disconnect();
-  }, [updateSize]);
-
-  const unit = cellSize + gap;
-
-  const { weeks, monthLabels } = useMemo(() => {
-    const statsMap = new Map<string, number>();
-    for (const s of dailyStats) {
-      statsMap.set(s.date, s.totalTime);
-    }
-
-    const today = new Date();
-    const todayDay = today.getDay();
-    const startDate = new Date(today);
-    startDate.setDate(startDate.getDate() - (52 * 7 + todayDay));
-
-    const weeksArr: Array<Array<{ date: string; time: number; dayOfWeek: number }>> = [];
-    const mLabels: Array<{ label: string; col: number }> = [];
-    let currentWeek: Array<{ date: string; time: number; dayOfWeek: number }> = [];
-    let lastMonth = -1;
-
-    const cursor = new Date(startDate);
-    let weekIdx = 0;
-
-    while (cursor <= today) {
-      const dateStr = cursor.toISOString().split("T")[0];
-      const dow = cursor.getDay();
-      const month = cursor.getMonth();
-
-      if (dow === 0 && currentWeek.length > 0) {
-        weeksArr.push(currentWeek);
-        currentWeek = [];
-        weekIdx++;
-      }
-
-      if (month !== lastMonth) {
-        const monthName = cursor.toLocaleDateString(lang === "zh" ? "zh-CN" : "en", {
-          month: "short",
-        });
-        mLabels.push({ label: monthName, col: weekIdx });
-        lastMonth = month;
-      }
-
-      currentWeek.push({
-        date: dateStr,
-        time: statsMap.get(dateStr) || 0,
-        dayOfWeek: dow,
-      });
-      cursor.setDate(cursor.getDate() + 1);
-    }
-    if (currentWeek.length > 0) weeksArr.push(currentWeek);
-
-    return { weeks: weeksArr, monthLabels: mLabels };
-  }, [dailyStats, lang]);
-
-  const dayLabels = useMemo(() => {
-    const isChinese = i18n.language.startsWith("zh");
-    const days = isChinese
-      ? ["日", "一", "二", "三", "四", "五", "六"]
-      : ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-    return [
-      { idx: 1, label: days[1] },
-      { idx: 3, label: days[3] },
-      { idx: 5, label: days[5] },
-    ];
-  }, [i18n.language]);
-
-  return (
-    <TooltipProvider delayDuration={100}>
-      <div ref={containerRef} className="w-full flex justify-center">
-        <div style={{ maxWidth: "1600px" }}>
-          {/* Month labels */}
-          <div className="flex" style={{ paddingLeft: `${labelWidth}px` }}>
-            {monthLabels.map((m, i) => {
-              const nextCol = i + 1 < monthLabels.length ? monthLabels[i + 1].col : weeks.length;
-              const span = nextCol - m.col;
-              return (
-                <div
-                  key={`${m.label}-${m.col}`}
-                  className="text-xs text-muted-foreground"
-                  style={{ width: `${span * unit}px`, minWidth: `${span * unit}px` }}
+            <div className="flex flex-wrap items-center gap-2">
+              {DIMENSIONS.map((item) => (
+                <button
+                  key={item}
+                  className={cn(
+                    "rounded-full border px-4 py-2 text-sm font-medium transition-all",
+                    dimension === item
+                      ? "border-primary bg-primary text-primary-foreground shadow-around"
+                      : "border-border bg-card/80 text-muted-foreground hover:bg-muted hover:text-foreground",
+                  )}
+                  onClick={() => setDimension(item)}
                 >
-                  {span >= 2 ? m.label : ""}
-                </div>
-              );
-            })}
-          </div>
-
-          <div className="flex gap-0">
-            {/* Day of week labels */}
-            <div
-              className="flex flex-col justify-between pr-1.5"
-              style={{ width: `${labelWidth}px`, height: `${7 * unit - gap}px` }}
-            >
-              {[0, 1, 2, 3, 4, 5, 6].map((d) => {
-                const label = dayLabels.find((l) => l.idx === d);
-                return (
-                  <div key={d} className="flex items-center" style={{ height: `${cellSize}px` }}>
-                    <span className="text-[10px] text-muted-foreground">{label?.label || ""}</span>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Heatmap grid */}
-            <div className="flex" style={{ gap: `${gap}px` }}>
-              {weeks.map((week, wi) => (
-                <div key={wi} className="flex flex-col" style={{ gap: `${gap}px` }}>
-                  {week[0] &&
-                    week[0].dayOfWeek > 0 &&
-                    wi === 0 &&
-                    Array.from({ length: week[0].dayOfWeek }).map((_, i) => (
-                      <div
-                        key={`empty-${i}`}
-                        style={{ height: `${cellSize}px`, width: `${cellSize}px` }}
-                      />
-                    ))}
-                  {week.map((day) => (
-                    <Tooltip key={day.date}>
-                      <TooltipTrigger asChild>
-                        <div
-                          className={`rounded-[2px] transition-colors ${getHeatColor(day.time)}`}
-                          style={{ height: `${cellSize}px`, width: `${cellSize}px` }}
-                        />
-                      </TooltipTrigger>
-                      <TooltipContent side="top" className="bg-popover text-popover-foreground">
-                        <p className="text-xs font-medium">
-                          {day.time > 0
-                            ? t("stats.heatmapTooltip", {
-                                time: Math.round(day.time),
-                                date: day.date,
-                              })
-                            : t("stats.heatmapNoReading", { date: day.date })}
-                        </p>
-                      </TooltipContent>
-                    </Tooltip>
-                  ))}
-                </div>
+                  {copy.dimensions[item]}
+                </button>
               ))}
             </div>
-          </div>
+          </header>
+
+          <section className="border-y border-border/80 py-4">
+            <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+              <div className="space-y-1">
+                <p className="text-sm font-medium text-foreground">{periodLabel}</p>
+                <p className="text-xs text-muted-foreground">{copy.periodNavigationHint}</p>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                {dimension !== "lifetime" && report && (
+                  <>
+                    <div className="flex items-center rounded-full border border-border bg-muted/60 p-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="size-8 rounded-full text-muted-foreground hover:bg-accent hover:text-foreground"
+                        onClick={() => setAnchorDate((prev) => shiftAnchorDate(prev, dimension, -1))}
+                        disabled={!report.navigation.canGoPrev}
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="size-8 rounded-full text-muted-foreground hover:bg-accent hover:text-foreground"
+                        onClick={() => setAnchorDate((prev) => shiftAnchorDate(prev, dimension, 1))}
+                        disabled={!report.navigation.canGoNext}
+                      >
+                        <ChevronRight className="h-4 w-4" />
+                      </Button>
+                    </div>
+
+                    {dimension === "year" ? (
+                      <input
+                        type="number"
+                        min="2000"
+                        max={String(new Date().getFullYear())}
+                        value={currentPickerValue}
+                        onChange={onPickPeriod}
+                        className="h-10 w-28 rounded-full border border-input bg-background px-4 text-sm text-foreground outline-none transition-colors focus:border-ring"
+                      />
+                    ) : (
+                      <input
+                        type={dimension === "month" ? "month" : "date"}
+                        value={currentPickerValue}
+                        onChange={onPickPeriod}
+                        className="h-10 rounded-full border border-input bg-background px-4 text-sm text-foreground outline-none transition-colors focus:border-ring"
+                      />
+                    )}
+
+                    <Button
+                      variant="soft"
+                      size="sm"
+                      className="rounded-full border border-border bg-muted px-4 text-foreground hover:bg-muted/80"
+                      onClick={resetToCurrentPeriod}
+                    >
+                      {dimension === "day"
+                        ? copy.today
+                        : dimension === "week"
+                          ? copy.thisWeek
+                          : dimension === "month"
+                            ? copy.thisMonth
+                            : copy.thisYear}
+                    </Button>
+                  </>
+                )}
+              </div>
+            </div>
+          </section>
+
+          {loading ? (
+            <div className="flex min-h-[48vh] items-center justify-center rounded-[32px] border border-border bg-card/80 shadow-around">
+              <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                <div className="h-8 w-8 animate-spin rounded-full border-2 border-border border-t-foreground" />
+                {copy.loading}
+              </div>
+            </div>
+          ) : error || !report ? (
+            <SectionCard className="min-h-[48vh]">
+              <EmptyState
+                title={error ?? copy.noDataTitle}
+                description={copy.noDataDesc}
+                icon={<ScanSearch className="h-8 w-8 text-muted-foreground" />}
+              />
+            </SectionCard>
+          ) : (
+            <>
+              <section className="grid gap-x-6 gap-y-5 border-y border-border/80 py-2 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6">
+                {heroMetrics.map((metric) => (
+                  <MetricTile key={metric.id} metric={metric} />
+                ))}
+              </section>
+
+              <div className="grid min-w-0 gap-6 2xl:grid-cols-[minmax(0,1fr)_320px]">
+                <div className="min-w-0 space-y-6">
+                  {report.dimension === "day" && (
+                    <SectionCard>
+                      <SectionHeader title={copy.daySummary} description={copy.daySummaryDesc} />
+                      <DaySummaryPanel
+                        dayFact={report.dayFact}
+                        topBook={report.topBooks[0]}
+                        copy={copy}
+                        isZh={isZh}
+                      />
+                    </SectionCard>
+                  )}
+
+                  {report.dimension === "lifetime" && (
+                    <SectionCard>
+                      <SectionHeader title={copy.journey} description={copy.journeySubtitle} />
+                      <JourneySummaryPanel report={report} copy={copy} isZh={isZh} />
+                    </SectionCard>
+                  )}
+
+                  {monthlyReport?.readingCalendar && (
+                    <SectionCard>
+                      <SectionHeader
+                        title={copy.readingCalendar}
+                        description={copy.readingCalendarDesc}
+                      />
+                      <MonthCalendarSection calendar={monthlyReport.readingCalendar} isZh={isZh} />
+                    </SectionCard>
+                  )}
+
+                  {primaryChart && (
+                    <SectionCard>
+                      <SectionHeader title={copy.primaryChart} description={copy.primaryChartDesc} />
+                      <ChartSurface chart={primaryChart} copy={copy} isZh={isZh} />
+                    </SectionCard>
+                  )}
+                </div>
+
+                <aside className="min-w-0 space-y-6">
+                  <SectionCard>
+                    <SectionHeader
+                      title={copy.sharePreview}
+                      description={copy.sharePreviewDesc}
+                      icon={<Share2 className="h-4 w-4 text-muted-foreground" />}
+                    />
+                    <SharePreviewCard report={report} copy={copy} isZh={isZh} />
+                  </SectionCard>
+
+                  <SectionCard>
+                    <SectionHeader title={copy.topBooks} description={copy.topBooksDesc} />
+                    <TopBooksSection books={report.topBooks} copy={copy} isZh={isZh} />
+                  </SectionCard>
+
+                  <SectionCard>
+                    <SectionHeader title={copy.insights} description={copy.insightsDesc} />
+                    <InsightsSection insights={localizedInsights} copy={copy} />
+                  </SectionCard>
+
+                  {report.dimension === "lifetime" && localizedMilestones.length > 0 && (
+                    <SectionCard>
+                      <SectionHeader title={copy.milestones} description={copy.milestonesDesc} />
+                      <InsightsSection insights={localizedMilestones} copy={copy} />
+                    </SectionCard>
+                  )}
+                </aside>
+              </div>
+            </>
+          )}
         </div>
       </div>
     </TooltipProvider>
   );
 }
 
-function HeatmapLegend() {
-  const { t } = useTranslation();
-  return (
-    <div className="mt-3 flex items-center justify-end gap-1.5 text-xs text-muted-foreground">
-      <span>{t("stats.less")}</span>
-      <div className="h-[12px] w-[12px] rounded-[2px] bg-muted" />
-      <div className="h-[12px] w-[12px] rounded-[2px] bg-emerald-500/30 dark:bg-emerald-500/30" />
-      <div className="h-[12px] w-[12px] rounded-[2px] bg-emerald-500/50 dark:bg-emerald-500/50" />
-      <div className="h-[12px] w-[12px] rounded-[2px] bg-emerald-500/70 dark:bg-emerald-500/70" />
-      <div className="h-[12px] w-[12px] rounded-[2px] bg-emerald-500/90 dark:bg-emerald-500/90" />
-      <span>{t("stats.more")}</span>
-    </div>
-  );
-}
-
-function getHeatColor(minutes: number): string {
-  if (minutes <= 0) return "bg-muted";
-  if (minutes < 15) return "bg-emerald-500/30 dark:bg-emerald-500/30";
-  if (minutes < 30) return "bg-emerald-500/50 dark:bg-emerald-500/50";
-  if (minutes < 60) return "bg-emerald-500/70 dark:bg-emerald-500/70";
-  return "bg-emerald-500/90 dark:bg-emerald-500/90";
-}
-
-/* ── Stat Card ── */
-
-function StatCard({
-  icon,
-  title,
-  value,
-  description,
+function SectionCard({
+  children,
+  className,
 }: {
-  icon: React.ReactNode;
-  title: string;
-  value: string;
-  description?: string;
+  children: ReactNode;
+  className?: string;
 }) {
   return (
-    <div className="rounded-xl bg-muted p-4 shadow-around">
-      <div className="flex items-center justify-between pb-2">
-        <h3 className="text-sm font-medium text-muted-foreground">{title}</h3>
-        <div className="text-muted-foreground">{icon}</div>
-      </div>
+    <section
+      className={cn(
+        "min-w-0 border-t border-border/80 pt-5",
+        className,
+      )}
+    >
+      {children}
+    </section>
+  );
+}
+
+function SectionHeader({
+  title,
+  description,
+  icon,
+}: {
+  title: string;
+  description?: string;
+  icon?: ReactNode;
+}) {
+  return (
+    <div className="mb-5 flex items-start justify-between gap-4">
       <div className="space-y-1">
-        <div className="text-2xl font-bold text-foreground">{value}</div>
-        {description && <p className="text-xs text-muted-foreground">{description}</p>}
+        <div className="flex items-center gap-2">
+          {icon}
+          <h2 className="text-base font-semibold text-foreground">{title}</h2>
+        </div>
+        {description && <p className="text-sm leading-6 text-muted-foreground">{description}</p>}
       </div>
     </div>
   );
 }
 
-function formatTime(minutes: number): string {
-  if (minutes < 60) return `${Math.round(minutes)}m`;
-  const hours = Math.floor(minutes / 60);
-  const mins = Math.round(minutes % 60);
-  return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
+function MetricTile({ metric }: { metric: MetricTileData }) {
+  return (
+    <div className="min-w-0 border-b border-border/70 py-4">
+      <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+        <span className="text-muted-foreground/80">{metric.icon}</span>
+        <span>{metric.label}</span>
+      </div>
+      <div className="mt-3 space-y-1">
+        <div className="truncate text-[28px] font-semibold tracking-tight text-foreground">{metric.value}</div>
+        {metric.sublabel && <p className="text-sm text-muted-foreground">{metric.sublabel}</p>}
+      </div>
+    </div>
+  );
+}
+
+function EmptyState({
+  title,
+  description,
+  icon,
+}: {
+  title: string;
+  description: string;
+  icon: ReactNode;
+}) {
+  return (
+    <div className="flex min-h-[320px] flex-col items-center justify-center gap-4 text-center">
+      <div className="rounded-full border border-border bg-muted/70 p-5">{icon}</div>
+      <div className="space-y-2">
+        <h3 className="text-lg font-semibold text-foreground">{title}</h3>
+        <p className="max-w-md text-sm leading-6 text-muted-foreground">{description}</p>
+      </div>
+    </div>
+  );
+}
+
+function ChartSurface({
+  chart,
+  copy,
+  isZh,
+}: {
+  chart: StatsChartBlock;
+  copy: StatsCopy;
+  isZh: boolean;
+}) {
+  if (chart.data.length <= 1) {
+    const point = chart.data[0];
+
+    if (!point) {
+      return (
+        <div className="flex min-h-[220px] items-center justify-center text-sm text-muted-foreground">
+          {copy.noDataDesc}
+        </div>
+      );
+    }
+
+    return (
+      <div className="grid gap-6 border-y border-border/70 py-6 lg:grid-cols-[minmax(0,1fr)_220px] lg:items-end">
+        <div className="space-y-3">
+          <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">{copy.singlePointLabel}</div>
+          <div className="text-4xl font-semibold tracking-tight text-foreground">{formatMinutes(point.value, isZh)}</div>
+          <div className="text-sm text-muted-foreground">{point.label}</div>
+          <p className="max-w-xl text-sm leading-6 text-muted-foreground">{copy.singlePointDesc}</p>
+        </div>
+        <div className="border-l border-border/70 pl-5">
+          <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">{copy.primaryChart}</div>
+          <div className="mt-3 space-y-3">
+            <div className="h-2 overflow-hidden rounded-full bg-background">
+              <div className="h-full w-full rounded-full bg-primary/70" />
+            </div>
+            <div className="text-xs leading-5 text-muted-foreground">{copy.readingTime}</div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="px-1">
+        <BarChart
+          data={chart.data.map((item) => ({ label: item.label, value: item.value }))}
+          height={220}
+          emptyMessage={copy.noDataDesc}
+          formatValue={(value) => formatChartMinutes(value, isZh)}
+        />
+      </div>
+      <div className="grid gap-3 sm:grid-cols-3">
+        {chart.data
+          .slice()
+          .sort((a, b) => b.value - a.value)
+          .slice(0, 3)
+          .map((item) => (
+            <div
+              key={item.key}
+              className="border-b border-border/70 px-1 pb-3 text-sm"
+            >
+              <div className="text-muted-foreground">{item.label}</div>
+              <div className="mt-1 text-lg font-semibold text-foreground">
+                {formatMinutes(item.value, isZh)}
+              </div>
+            </div>
+          ))}
+      </div>
+    </div>
+  );
+}
+
+function DaySummaryPanel({
+  dayFact,
+  topBook,
+  copy,
+  isZh,
+}: {
+  dayFact: DailyReadingFact | null;
+  topBook?: TopBookEntry;
+  copy: StatsCopy;
+  isZh: boolean;
+}) {
+  if (!dayFact) {
+    return <EmptyState title={copy.noDataTitle} description={copy.noDataDesc} icon={<Clock3 className="h-8 w-8 text-muted-foreground" />} />;
+  }
+
+  const facts = [
+    { label: copy.firstSession, value: formatClock(dayFact.firstSessionAt, isZh) },
+    { label: copy.lastSession, value: formatClock(dayFact.lastSessionAt, isZh) },
+    {
+      label: copy.peakHour,
+      value: dayFact.peakHour !== undefined ? `${String(dayFact.peakHour).padStart(2, "0")}:00` : "—",
+    },
+    { label: copy.longestRead, value: formatMinutes(dayFact.longestSessionTime, isZh) },
+  ];
+
+  return (
+    <div className="space-y-4">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {facts.map((item) => (
+          <div
+            key={item.label}
+            className="border-b border-border/70 px-1 pb-3"
+          >
+            <div className="text-xs uppercase tracking-[0.16em] text-muted-foreground">{item.label}</div>
+            <div className="mt-2 text-lg font-semibold text-foreground">{item.value}</div>
+          </div>
+        ))}
+      </div>
+
+      <div className="border-l-2 border-primary/25 pl-4">
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div className="space-y-1">
+            <div className="text-xs uppercase tracking-[0.16em] text-primary/70">{copy.topFocus}</div>
+            <div className="text-xl font-semibold text-foreground">
+              {topBook?.title ?? copy.noDayTopBook}
+            </div>
+            <div className="text-sm text-muted-foreground">
+              {topBook ? formatMinutes(topBook.totalTime, isZh) : copy.noTimeline}
+            </div>
+          </div>
+          {dayFact.date === toDateInputValue(new Date()) && (
+            <div className="rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
+              {copy.activeNow}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function JourneySummaryPanel({
+  report,
+  copy,
+  isZh,
+}: {
+  report: Extract<StatsReport, { dimension: "lifetime" }>;
+  copy: StatsCopy;
+  isZh: boolean;
+}) {
+  const metrics = [
+    {
+      label: copy.daysTogether,
+      value: `${report.context.daysSinceJoined.toLocaleString()} ${copy.daysSuffix}`,
+    },
+    {
+      label: copy.activeReadingDays,
+      value: `${report.context.totalActiveDays.toLocaleString()} ${copy.daysSuffix}`,
+    },
+    {
+      label: copy.inactiveReadingDays,
+      value: `${report.context.totalInactiveDays.toLocaleString()} ${copy.daysSuffix}`,
+    },
+    {
+      label: copy.startedOn,
+      value: formatDateLabel(report.context.joinedSince, isZh),
+    },
+  ];
+
+  return (
+    <div className="space-y-4">
+      <div className="border-l-2 border-primary/25 pl-4">
+        <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+          <div className="space-y-2">
+            <div className="text-sm uppercase tracking-[0.18em] text-muted-foreground">{copy.journey}</div>
+            <div className="text-3xl font-semibold tracking-tight text-foreground">
+              {report.context.daysSinceJoined.toLocaleString()} {copy.daysSuffix}
+            </div>
+            <p className="max-w-xl text-sm leading-6 text-muted-foreground">
+              {copy.journeyNarrative(report.context.daysSinceJoined)}
+            </p>
+          </div>
+          <div className="rounded-full bg-muted px-3 py-1 text-xs font-medium text-muted-foreground">
+            {copy.startedOn} {formatDateLabel(report.context.joinedSince, isZh)}
+          </div>
+        </div>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {metrics.map((item) => (
+          <div
+            key={item.label}
+            className="border-b border-border/70 px-1 pb-3"
+          >
+            <div className="text-xs uppercase tracking-[0.16em] text-muted-foreground">{item.label}</div>
+            <div className="mt-2 text-lg font-semibold text-foreground">{item.value}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function MonthCalendarSection({
+  calendar,
+  isZh,
+}: {
+  calendar: NonNullable<MonthReport["readingCalendar"]>;
+  isZh: boolean;
+}) {
+  const weekLabels = isZh
+    ? ["周一", "周二", "周三", "周四", "周五", "周六", "周日"]
+    : ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+  return (
+    <div className="space-y-3">
+      <div className="grid grid-cols-7 gap-2 sm:gap-3">
+        {weekLabels.map((label) => (
+          <div key={label} className="px-1.5 text-[11px] font-medium text-muted-foreground sm:px-2 sm:text-xs">
+            {label}
+          </div>
+        ))}
+      </div>
+
+      <div className="space-y-3">
+        {calendar.weeks.map((week, index) => (
+          <div key={`${calendar.monthKey}-${index}`} className="grid grid-cols-7 gap-2 sm:gap-3">
+            {week.map((cell) => (
+              <CalendarDayCell key={cell.date} cell={cell} isZh={isZh} />
+            ))}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function CalendarDayCell({ cell, isZh }: { cell: StatsCalendarCell; isZh: boolean }) {
+  const { t } = useTranslation();
+  const copy = useMemo(() => getStatsCopy(t), [t]);
+  const tooltipText =
+    cell.totalTime > 0
+      ? `${formatDateLabel(cell.date, isZh)} · ${formatMinutes(cell.totalTime, isZh)} · ${cell.sessionsCount.toLocaleString()} ${copy.sessionsSuffix}`
+      : `${formatDateLabel(cell.date, isZh)} · ${t("stats.noReading")}`;
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <div
+          className={cn(
+            "relative min-h-[88px] min-w-0 rounded-[20px] border p-2.5 shadow-sm transition-transform hover:-translate-y-0.5 sm:min-h-[102px] sm:rounded-[22px] sm:p-3",
+            intensityClass(cell.intensity, cell.inCurrentMonth),
+            cell.isToday && "ring-2 ring-primary/30",
+          )}
+        >
+          <div className="flex items-start justify-between gap-2">
+            <div className={cn("text-sm font-semibold text-foreground", !cell.inCurrentMonth && "text-muted-foreground/70")}>
+              {cell.dayOfMonth}
+            </div>
+            {cell.totalTime > 0 && (
+              <div className="rounded-full bg-background/90 px-2 py-0.5 text-[11px] font-medium text-foreground shadow-xs">
+                {formatCompactMinutes(cell.totalTime, isZh)}
+              </div>
+            )}
+          </div>
+
+          <div className="mt-2 text-[11px] leading-5 text-muted-foreground sm:mt-3">
+            {cell.totalTime > 0
+              ? copy.daySessions(cell.sessionsCount)
+              : "\u00A0"}
+          </div>
+
+          {cell.covers.length > 0 && (
+            <div className="absolute bottom-3 left-3 flex items-end">
+              {cell.covers.slice(0, 3).map((cover, index) => (
+                <div
+                  key={`${cover.bookId}-${index}`}
+                  className={cn(
+                    "relative",
+                    index > 0 && "-ml-2",
+                  )}
+                  style={{ zIndex: 5 - index }}
+                >
+                  <CoverThumb
+                    title={cover.title}
+                    coverUrl={cover.coverUrl}
+                    className="h-8 w-6 rounded-md border border-background/90 shadow-md sm:h-9 sm:w-7"
+                    fallbackClassName="text-[9px] font-semibold"
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </TooltipTrigger>
+      <TooltipContent side="top" className="max-w-[240px] rounded-xl border border-border bg-popover px-3 py-2 text-popover-foreground shadow-xl">
+        <div className="space-y-1">
+          <div className="text-xs font-medium">{tooltipText}</div>
+          {cell.covers.length > 0 && (
+            <div className="text-[11px] text-muted-foreground">
+              {cell.covers.map((cover) => cover.title).join(" · ")}
+            </div>
+          )}
+        </div>
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
+function CoverThumb({
+  title,
+  coverUrl,
+  className,
+  fallbackClassName,
+}: {
+  title: string;
+  coverUrl?: string;
+  className?: string;
+  fallbackClassName?: string;
+}) {
+  const resolved = useResolvedSrc(coverUrl);
+
+  return (
+    <div className={cn("overflow-hidden bg-muted/80", className)}>
+      {resolved ? (
+        <img src={resolved} alt="" className="h-full w-full object-cover" />
+      ) : (
+        <div
+          className={cn(
+            "flex h-full w-full items-center justify-center bg-muted text-center text-[10px] font-semibold text-muted-foreground",
+            fallbackClassName,
+          )}
+        >
+          {title.trim().slice(0, 1)}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TopBooksSection({
+  books,
+  copy,
+  isZh,
+}: {
+  books: TopBookEntry[];
+  copy: StatsCopy;
+  isZh: boolean;
+}) {
+  if (books.length === 0) {
+    return <p className="text-sm leading-6 text-muted-foreground">{copy.noTopBooks}</p>;
+  }
+
+  return (
+    <div className="space-y-3">
+      {books.slice(0, 5).map((book, index) => (
+        <div
+          key={book.bookId}
+          className="flex min-w-0 items-center gap-3 border-b border-border/70 py-3"
+        >
+          <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-muted text-sm font-semibold text-muted-foreground">
+            {index + 1}
+          </div>
+          <CoverThumb title={book.title} coverUrl={book.coverUrl} className="h-16 w-12 rounded-xl shadow-md" />
+
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-sm font-semibold text-foreground">{book.title}</div>
+            <div className="truncate text-xs text-muted-foreground">{book.author || copy.unknownAuthor}</div>
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+              <span className="rounded-full bg-background/90 px-2 py-1">{formatCompactMinutes(book.totalTime, isZh)}</span>
+              <span className="rounded-full bg-background/90 px-2 py-1">
+                {book.pagesRead.toLocaleString()} {copy.pagesReadSuffix}
+              </span>
+              <span className="rounded-full bg-background/90 px-2 py-1">
+                {book.sessionsCount.toLocaleString()} {copy.sessionsSuffix}
+              </span>
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function InsightsSection({ insights, copy }: { insights: StatsInsight[]; copy: StatsCopy }) {
+  if (insights.length === 0) {
+    return <p className="text-sm leading-6 text-muted-foreground">{copy.noInsights}</p>;
+  }
+
+  return (
+    <div className="space-y-3">
+      {insights.map((insight) => (
+        <div
+          key={insight.id}
+          className={cn(
+            "border-l-2 pl-4",
+            insight.tone === "celebration" && "border-primary/30",
+            insight.tone === "positive" && "border-border",
+            insight.tone === "warning" && "border-destructive/30",
+            (!insight.tone || insight.tone === "neutral") && "border-border/80",
+          )}
+        >
+          <div className="flex items-start gap-3">
+            <div className="mt-0.5 rounded-full bg-muted p-2 text-muted-foreground">
+              <Sparkles className="h-4 w-4" />
+            </div>
+            <div className="space-y-1">
+              <div className="text-sm font-semibold text-foreground">{insight.title}</div>
+              <div className="text-sm leading-6 text-muted-foreground">{insight.body}</div>
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function SharePreviewCard({
+  report,
+  copy,
+  isZh,
+}: {
+  report: StatsReport;
+  copy: StatsCopy;
+  isZh: boolean;
+}) {
+  const topBook = report.topBooks[0];
+
+  return (
+    <div className="overflow-hidden rounded-[28px] border border-border bg-card shadow-around">
+      <div className="flex items-center justify-between border-b border-border px-4 py-3">
+        <div className="space-y-0.5">
+          <div className="text-xs uppercase tracking-[0.16em] text-muted-foreground">ReadAny</div>
+          <div className="text-sm font-semibold text-foreground">{copy.dimensionTitles[report.dimension]}</div>
+        </div>
+        <div className="rounded-full bg-muted px-3 py-1 text-[11px] font-medium text-muted-foreground shadow-sm">
+          {copy.exportSoon}
+        </div>
+      </div>
+
+      <div className="space-y-5 px-4 py-5">
+        <div className="rounded-[24px] border border-primary/15 bg-primary/5 p-4">
+          <div className="space-y-1">
+            <div className="text-xs uppercase tracking-[0.16em] text-primary/70">{formatPeriodLabel(report, isZh, copy)}</div>
+            <div className="text-3xl font-semibold tracking-tight text-foreground">
+              {report.dimension === "lifetime"
+                ? `${report.context.daysSinceJoined.toLocaleString()} ${copy.daysSuffix}`
+                : formatMinutes(report.summary.totalReadingTime, isZh)}
+            </div>
+            <div className="text-sm text-muted-foreground">
+              {report.dimension === "lifetime" ? copy.daysTogether : copy.readingTime}
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-3 gap-3">
+          <ShareMetric label={copy.sessions} value={report.summary.totalSessions.toLocaleString()} />
+          <ShareMetric label={copy.books} value={report.summary.booksTouched.toLocaleString()} />
+          <ShareMetric
+            label={copy.streak}
+            value={`${
+              report.dimension === "lifetime" ? report.summary.longestStreak : report.summary.currentStreak
+            }`}
+          />
+        </div>
+
+        {topBook && (
+          <div className="flex min-w-0 items-center gap-3 rounded-[22px] border border-border bg-muted/45 p-3 shadow-sm">
+            <CoverThumb title={topBook.title} coverUrl={topBook.coverUrl} className="h-16 w-12 rounded-xl shadow-md" />
+            <div className="min-w-0 flex-1">
+              <div className="text-xs uppercase tracking-[0.16em] text-muted-foreground">{copy.topBooks}</div>
+              <div className="truncate text-sm font-semibold text-foreground">{topBook.title}</div>
+              <div className="truncate text-xs text-muted-foreground">
+                {formatCompactMinutes(topBook.totalTime, isZh)} · {topBook.author || copy.unknownAuthor}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ShareMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="px-1 py-1 text-center">
+      <div className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">{label}</div>
+      <div className="mt-1 text-lg font-semibold text-foreground">{value}</div>
+    </div>
+  );
 }

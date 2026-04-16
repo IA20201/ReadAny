@@ -13,16 +13,22 @@ interface BarChartProps {
   data: BarData[];
   height?: number;
   emptyMessage?: string;
+  formatValue?: (value: number) => string;
 }
 
-const formatTime = (minutes: number): string => {
+const defaultFormatTime = (minutes: number): string => {
   if (minutes < 60) return `${Math.round(minutes)}m`;
   const h = Math.floor(minutes / 60);
   const m = Math.round(minutes % 60);
   return m > 0 ? `${h}h${m}m` : `${h}h`;
 };
 
-export function BarChart({ data, height = 200, emptyMessage }: BarChartProps) {
+export function BarChart({
+  data,
+  height = 200,
+  emptyMessage,
+  formatValue = defaultFormatTime,
+}: BarChartProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(400);
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
@@ -91,8 +97,8 @@ export function BarChart({ data, height = 200, emptyMessage }: BarChartProps) {
       <svg width={width} height={height}>
         <defs>
           <linearGradient id="barGradient" x1="0" y1="1" x2="0" y2="0">
-            <stop offset="0%" stopColor="rgb(16, 185, 129)" stopOpacity={0.3} />
-            <stop offset="100%" stopColor="rgb(16, 185, 129)" stopOpacity={0.9} />
+            <stop offset="0%" stopColor="var(--primary)" stopOpacity={0.18} />
+            <stop offset="100%" stopColor="var(--primary)" stopOpacity={0.72} />
           </linearGradient>
         </defs>
         <g transform={`translate(${margin.left},${margin.top})`}>
@@ -115,7 +121,7 @@ export function BarChart({ data, height = 200, emptyMessage }: BarChartProps) {
                 fontSize={10}
                 fill="var(--muted-foreground)"
               >
-                {formatTime(tick)}
+                {formatValue(tick)}
               </text>
             </g>
           ))}
@@ -171,7 +177,7 @@ export function BarChart({ data, height = 200, emptyMessage }: BarChartProps) {
                       fontSize={11}
                       fontWeight={500}
                     >
-                      {formatTime(d.value)}
+                      {formatValue(d.value)}
                     </text>
                   </g>
                 )}

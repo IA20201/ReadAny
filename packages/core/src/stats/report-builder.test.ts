@@ -1,0 +1,212 @@
+import { describe, expect, it } from "vitest";
+
+import type { DailyReadingFact } from "./schema";
+import {
+  buildDayReport,
+  buildLifetimeReport,
+  buildMonthReport,
+  buildStatsSummary,
+  buildTopBooksFromFacts,
+  buildWeekReport,
+  buildYearReport,
+} from "./report-builder";
+
+const facts: DailyReadingFact[] = [
+  {
+    date: "2026-04-13",
+    weekKey: "2026-W16",
+    monthKey: "2026-04",
+    yearKey: "2026",
+    totalTime: 30,
+    pagesRead: 10,
+    sessionsCount: 1,
+    booksTouched: 1,
+    completedBooks: 0,
+    avgSessionTime: 30,
+    longestSessionTime: 30,
+    firstSessionAt: new Date(2026, 3, 13, 8, 0, 0).getTime(),
+    lastSessionAt: new Date(2026, 3, 13, 8, 30, 0).getTime(),
+    peakHour: 8,
+    bookBreakdown: [
+      {
+        bookId: "book-1",
+        title: "Deep Reading",
+        author: "Alice",
+        totalTime: 30,
+        pagesRead: 10,
+        sessionsCount: 1,
+      },
+    ],
+  },
+  {
+    date: "2026-04-14",
+    weekKey: "2026-W16",
+    monthKey: "2026-04",
+    yearKey: "2026",
+    totalTime: 45,
+    pagesRead: 14,
+    sessionsCount: 2,
+    booksTouched: 1,
+    completedBooks: 0,
+    avgSessionTime: 22.5,
+    longestSessionTime: 25,
+    firstSessionAt: new Date(2026, 3, 14, 20, 0, 0).getTime(),
+    lastSessionAt: new Date(2026, 3, 14, 21, 0, 0).getTime(),
+    peakHour: 20,
+    bookBreakdown: [
+      {
+        bookId: "book-1",
+        title: "Deep Reading",
+        author: "Alice",
+        totalTime: 45,
+        pagesRead: 14,
+        sessionsCount: 2,
+      },
+    ],
+  },
+  {
+    date: "2026-04-16",
+    weekKey: "2026-W16",
+    monthKey: "2026-04",
+    yearKey: "2026",
+    totalTime: 60,
+    pagesRead: 18,
+    sessionsCount: 1,
+    booksTouched: 1,
+    completedBooks: 0,
+    avgSessionTime: 60,
+    longestSessionTime: 60,
+    firstSessionAt: new Date(2026, 3, 16, 21, 0, 0).getTime(),
+    lastSessionAt: new Date(2026, 3, 16, 22, 0, 0).getTime(),
+    peakHour: 21,
+    bookBreakdown: [
+      {
+        bookId: "book-2",
+        title: "Systems Thinking",
+        author: "Bob",
+        totalTime: 60,
+        pagesRead: 18,
+        sessionsCount: 1,
+      },
+    ],
+  },
+  {
+    date: "2026-05-02",
+    weekKey: "2026-W18",
+    monthKey: "2026-05",
+    yearKey: "2026",
+    totalTime: 20,
+    pagesRead: 5,
+    sessionsCount: 1,
+    booksTouched: 1,
+    completedBooks: 0,
+    avgSessionTime: 20,
+    longestSessionTime: 20,
+    firstSessionAt: new Date(2026, 4, 2, 9, 0, 0).getTime(),
+    lastSessionAt: new Date(2026, 4, 2, 9, 20, 0).getTime(),
+    peakHour: 9,
+    bookBreakdown: [
+      {
+        bookId: "book-1",
+        title: "Deep Reading",
+        author: "Alice",
+        totalTime: 20,
+        pagesRead: 5,
+        sessionsCount: 1,
+      },
+    ],
+  },
+];
+
+describe("report-builder", () => {
+  it("builds summary and top books from daily facts", () => {
+    const summary = buildStatsSummary(facts.slice(0, 3));
+    expect(summary).toMatchObject({
+      totalReadingTime: 135,
+      totalSessions: 4,
+      totalPagesRead: 42,
+      activeDays: 3,
+      booksTouched: 2,
+      avgSessionTime: 33.75,
+      avgActiveDayTime: 45,
+      longestSessionTime: 60,
+      currentStreak: 1,
+      longestStreak: 2,
+    });
+
+    const topBooks = buildTopBooksFromFacts(facts.slice(0, 3));
+    expect(topBooks[0]).toMatchObject({
+      bookId: "book-1",
+      totalTime: 75,
+    });
+    expect(topBooks[1]).toMatchObject({
+      bookId: "book-2",
+      totalTime: 60,
+    });
+  });
+
+  it("builds a day report for a single local date", () => {
+    const report = buildDayReport(facts, new Date(2026, 3, 16), {
+      now: new Date(2026, 4, 10),
+    });
+    expect(report.dimension).toBe("day");
+    expect(report.period.key).toBe("2026-04-16");
+    expect(report.summary.totalReadingTime).toBe(60);
+    expect(report.dayFact?.peakHour).toBe(21);
+    expect(report.topBooks[0].bookId).toBe("book-2");
+  });
+
+  it("builds a week report with 7 chart buckets", () => {
+    const report = buildWeekReport(facts, new Date(2026, 3, 16), {
+      now: new Date(2026, 4, 10),
+    });
+    expect(report.dimension).toBe("week");
+    expect(report.period.key).toBe("2026-W16");
+    expect(report.summary.totalReadingTime).toBe(135);
+    expect(report.weekdayDistribution?.data).toHaveLength(7);
+    expect(report.navigation.canGoNext).toBe(true);
+  });
+
+  it("builds month, year and lifetime reports", () => {
+    const monthReport = buildMonthReport(facts, new Date(2026, 3, 16), {
+      now: new Date(2026, 4, 10),
+    });
+    expect(monthReport.dimension).toBe("month");
+    expect(monthReport.period.key).toBe("2026-04");
+    expect(monthReport.summary.totalReadingTime).toBe(135);
+    expect(monthReport.readingCalendar?.monthKey).toBe("2026-04");
+    expect(monthReport.readingCalendar?.weeks.length).toBeGreaterThanOrEqual(4);
+    const activeCalendarCell = monthReport.readingCalendar?.weeks
+      .flat()
+      .find((cell) => cell.date === "2026-04-16");
+    expect(activeCalendarCell).toMatchObject({
+      inCurrentMonth: true,
+      totalTime: 60,
+      intensity: 4,
+    });
+    expect(activeCalendarCell?.covers[0]).toMatchObject({
+      bookId: "book-2",
+      title: "Systems Thinking",
+    });
+
+    const yearReport = buildYearReport(facts, new Date(2026, 3, 16), {
+      now: new Date(2026, 4, 10),
+    });
+    expect(yearReport.dimension).toBe("year");
+    expect(yearReport.period.key).toBe("2026");
+    expect(yearReport.monthlyCharts[0].data.find((item) => item.key === "2026-04")?.value).toBe(
+      135,
+    );
+
+    const lifetimeReport = buildLifetimeReport(facts, {
+      now: new Date(2026, 4, 10),
+    });
+    expect(lifetimeReport.dimension).toBe("lifetime");
+    expect(lifetimeReport.context.joinedSince).toBe("2026-04-13");
+    expect(lifetimeReport.context.daysSinceJoined).toBeGreaterThan(0);
+    expect(lifetimeReport.yearlyCharts[0].data[0]).toMatchObject({
+      key: "2026",
+      value: 155,
+    });
+  });
+});

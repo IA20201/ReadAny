@@ -82,6 +82,7 @@ export {
 } from "./message-queries";
 
 export {
+  getAllReadingSessions,
   getReadingSessions,
   getReadingSessionsByDateRange,
   insertReadingSession,
