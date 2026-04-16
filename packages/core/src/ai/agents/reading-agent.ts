@@ -169,6 +169,14 @@ export async function* streamReadingAgent(
       aiConfig.activeModel?.toLowerCase().includes("deepseek") ||
       aiConfig.activeModel?.toLowerCase().includes("reasoner");
 
+    // For local providers (Ollama, LM Studio), control thinking via message suffix.
+    // Qwen3, DeepSeek-R1 and similar models support /think and /no_think suffixes
+    // to toggle reasoning mode. This is the only reliable way for Ollama since it
+    // doesn't support the enable_thinking API parameter.
+    const isLocalProvider =
+      activeEndpoint?.provider === "ollama" || activeEndpoint?.provider === "lmstudio";
+    const thinkingSuffix = isLocalProvider ? (deepThinking ? " /think" : " /no_think") : "";
+
     const inputMessages: BaseMessage[] = [
       ...history.map((h) => {
         if (h.role === "user") {
@@ -183,7 +191,7 @@ export async function* streamReadingAgent(
         }
         return new AIMessage(h.content);
       }),
-      new HumanMessage(userInput),
+      new HumanMessage(userInput + thinkingSuffix),
     ];
 
     // If no tools available, stream directly without agent graph

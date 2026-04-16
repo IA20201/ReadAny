@@ -423,10 +423,6 @@ export async function createChatModelFromEndpoint(
 
       const { ChatOpenAI } = await import("@langchain/openai");
 
-      // For Ollama / LM Studio, pass `think: true` so reasoning models
-      // (e.g. Qwen3, DeepSeek-R1) return their thinking process.
-      const isLocalProvider = endpoint.provider === "ollama" || endpoint.provider === "lmstudio";
-
       return new ChatOpenAI({
         model,
         apiKey,
@@ -437,7 +433,6 @@ export async function createChatModelFromEndpoint(
         temperature,
         maxTokens,
         streaming,
-        ...(isLocalProvider ? { modelKwargs: { think: true } } : {}),
       });
     }
   }
