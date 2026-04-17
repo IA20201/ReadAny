@@ -1,9 +1,8 @@
 /**
  * BadgesPreview.tsx — Compact badge summary for the Stats page sidebar.
- * Horizontal scroll of earned badges (rich icons) + "查看全部 >" link.
+ * Horizontal scroll of earned badges.
  */
 import type { EarnedBadge } from "@readany/core/stats";
-import { ChevronRight } from "lucide-react";
 import type { StatsCopy } from "./stats-copy";
 import { BadgeIcon } from "./BadgeIcon";
 
@@ -27,16 +26,10 @@ export function BadgesPreview({
   return (
     <div className="space-y-3">
       {/* Header — only when there are badges */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center">
         <span className="text-[13px] font-medium text-foreground/60">
           {t("stats.desktop.badgesEarnedCount", { count: earned.length })}
         </span>
-        <button
-          onClick={onViewAll}
-          className="flex items-center gap-0.5 text-[12px] font-medium text-primary/60 transition-colors hover:text-primary/80"
-        >
-          {t("stats.desktop.viewAllBadges")} <ChevronRight className="h-3.5 w-3.5" />
-        </button>
       </div>
 
       {/* Earned badges scroll */}

@@ -1,9 +1,8 @@
 /**
  * BadgesPreview.tsx — Compact badge summary for mobile Stats screen.
- * Horizontal scroll of earned badges with rich icon rendering + "查看全部 >" link.
+ * Horizontal scroll of earned badges with rich icon rendering.
  */
 import { useColors, withOpacity } from "@/styles/theme";
-import { ChevronRightIcon } from "@/components/ui/Icon";
 import type { EarnedBadge } from "@readany/core/stats";
 import { ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { BadgeIconMobile } from "./BadgeIconMobile";
@@ -30,20 +29,10 @@ export function BadgesPreview({
   return (
     <View style={{ gap: 10 }}>
       {/* Header */}
-      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+      <View style={{ flexDirection: "row", alignItems: "center" }}>
         <Text style={{ fontSize: 13, fontWeight: "500", color: withOpacity(colors.foreground, 0.6) }}>
           {t("stats.desktop.badgesEarnedCount", { count: earned.length })}
         </Text>
-        <TouchableOpacity
-          onPress={onViewAll}
-          style={{ flexDirection: "row", alignItems: "center", gap: 2 }}
-          activeOpacity={0.6}
-        >
-          <Text style={{ fontSize: 12, fontWeight: "500", color: withOpacity(colors.primary, 0.6) }}>
-            {t("stats.desktop.viewAllBadges")}
-          </Text>
-          <ChevronRightIcon size={14} color={withOpacity(colors.primary, 0.6)} />
-        </TouchableOpacity>
       </View>
 
       {/* Horizontal badge scroll */}

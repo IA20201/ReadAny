@@ -168,6 +168,44 @@ export const makeStyles = (colors: ThemeColors) =>
       marginTop: 1,
     },
 
+    /* ── Compact stat card ── */
+    statCard: {
+      backgroundColor: colors.card,
+      borderRadius: radius.xl,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: withOpacity(colors.border, 0.28),
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      gap: 8,
+    },
+    statCardHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: 8,
+    },
+    statCardTitle: {
+      fontSize: 11,
+      fontWeight: fontWeight.medium,
+      color: withOpacity(colors.mutedForeground, 0.55),
+    },
+    statCardBody: {
+      flexDirection: "row",
+      alignItems: "baseline",
+      gap: 4,
+    },
+    statCardValue: {
+      fontSize: 28,
+      fontWeight: fontWeight.bold,
+      color: withOpacity(colors.foreground, 0.9),
+      letterSpacing: -0.8,
+    },
+    statCardUnit: {
+      fontSize: 13,
+      fontWeight: fontWeight.medium,
+      color: withOpacity(colors.mutedForeground, 0.5),
+    },
+
     /* ── Section cards ── */
     sectionCard: {
       backgroundColor: colors.card,
@@ -236,10 +274,10 @@ export const makeStyles = (colors: ThemeColors) =>
 
     /* ── Bar chart ── */
     barChartWrap: { height: 180 },
-    barChartContent: { alignItems: "flex-end", gap: 4, paddingBottom: 4 },
-    barCol: { alignItems: "center", width: 28 },
-    barTrack: { justifyContent: "flex-end", width: 16 },
-    barFill: { width: 16, borderRadius: 4 },
+    barChartContent: { flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between", gap: 6, paddingBottom: 4 },
+    barCol: { alignItems: "center", justifyContent: "flex-end", width: 28 },
+    barTrack: { justifyContent: "flex-end", alignItems: "center" },
+    barFill: { borderRadius: 4 },
     barLabel: { fontSize: 8, color: colors.mutedForeground, marginTop: 4 },
     barChartEmpty: { height: 120, alignItems: "center", justifyContent: "center" },
     barChartEmptyText: { fontSize: fontSize.xs, color: colors.mutedForeground },
@@ -279,7 +317,51 @@ export const makeStyles = (colors: ThemeColors) =>
     bookRankText: { fontSize: 11, fontWeight: fontWeight.bold },
     bookRankTextFirst: { color: withOpacity(colors.primary, 0.6) },
     bookRankTextDefault: { color: withOpacity(colors.mutedForeground, 0.35) },
+    periodBooksEmpty: {
+      fontSize: 13,
+      color: withOpacity(colors.mutedForeground, 0.42),
+      textAlign: "center",
+      paddingVertical: 12,
+    },
+    bookRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+      borderRadius: radius.lg,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: withOpacity(colors.border, 0.22),
+      backgroundColor: withOpacity(colors.muted, 0.08),
+      paddingHorizontal: 10,
+      paddingVertical: 10,
+    },
+    bookCover: {
+      width: 38,
+      height: 54,
+      borderRadius: 10,
+      backgroundColor: withOpacity(colors.muted, 0.26),
+    },
+    bookCoverPlaceholder: {
+      width: 38,
+      height: 54,
+      borderRadius: 10,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: withOpacity(colors.muted, 0.28),
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: withOpacity(colors.border, 0.28),
+    },
+    bookCoverLetter: {
+      fontSize: 14,
+      fontWeight: fontWeight.bold,
+      color: withOpacity(colors.foreground, 0.45),
+    },
     bookInfo: { flex: 1, paddingTop: 1 },
+    bookTitleRow: {
+      flexDirection: "row",
+      alignItems: "baseline",
+      justifyContent: "space-between",
+      gap: 8,
+    },
     bookLeadBadge: {
       fontSize: 9,
       fontWeight: fontWeight.semibold,
@@ -296,6 +378,31 @@ export const makeStyles = (colors: ThemeColors) =>
     bookTimeFirst: { fontSize: 18 },
     bookTimeDefault: { fontSize: 14 },
     bookMeta: { fontSize: 10, color: withOpacity(colors.mutedForeground, 0.35) },
+    progressRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+      marginTop: 8,
+    },
+    progressTrack: {
+      flex: 1,
+      height: 4,
+      borderRadius: radius.full,
+      backgroundColor: withOpacity(colors.border, 0.35),
+      overflow: "hidden",
+    },
+    progressFill: {
+      height: "100%",
+      borderRadius: radius.full,
+      backgroundColor: withOpacity(colors.primary, 0.78),
+    },
+    progressPercent: {
+      minWidth: 34,
+      fontSize: 10,
+      fontWeight: fontWeight.semibold,
+      color: withOpacity(colors.mutedForeground, 0.5),
+      textAlign: "right",
+    },
     expandBtn: {
       flexDirection: "row",
       alignItems: "center",
@@ -497,15 +604,6 @@ export const makeStyles = (colors: ThemeColors) =>
       backgroundColor: "rgba(0,0,0,0.35)",
       zIndex: 3,
     },
-    calCoverBottomScrim: {
-      position: "absolute",
-      bottom: 0,
-      left: 0,
-      right: 0,
-      height: "30%",
-      backgroundColor: "rgba(0,0,0,0.25)",
-      zIndex: 3,
-    },
     calCoverOverlay: {
       position: "absolute",
       top: 0,
@@ -537,17 +635,14 @@ export const makeStyles = (colors: ThemeColors) =>
       textShadowOffset: { width: 0, height: 1 },
       textShadowRadius: 2,
     },
-    calCoverPageBadge: {
-      alignSelf: "flex-end",
-      backgroundColor: "rgba(0,0,0,0.5)",
-      borderRadius: 3,
-      paddingHorizontal: 3,
-      paddingVertical: 1,
-    },
     calCoverPageText: {
       fontSize: 7,
       fontWeight: fontWeight.bold,
       color: "#fff",
+      textShadowColor: "rgba(0,0,0,0.6)",
+      textShadowOffset: { width: 0, height: 1 },
+      textShadowRadius: 2,
+      alignSelf: "flex-end",
     },
 
     /* Calendar cell — WITHOUT cover (plain intensity) */
@@ -680,11 +775,4 @@ export const makeStyles = (colors: ThemeColors) =>
       color: withOpacity(colors.foreground, 0.8),
     },
 
-    /* ── Hero narrative ── */
-    heroNarrative: {
-      fontSize: 13,
-      color: withOpacity(colors.mutedForeground, 0.45),
-      lineHeight: 18,
-      marginTop: 4,
-    },
   });

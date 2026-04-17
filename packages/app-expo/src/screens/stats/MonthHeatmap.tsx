@@ -93,11 +93,11 @@ export function MonthHeatmap({
   const getColor = (value: number): string => {
     if (value <= 0) return withOpacity(colors.muted, 0.3);
     const ratio = value / maxVal;
-    if (ratio < 0.2) return withOpacity(colors.emerald, 0.25);
-    if (ratio < 0.4) return withOpacity(colors.emerald, 0.4);
-    if (ratio < 0.6) return withOpacity(colors.emerald, 0.55);
-    if (ratio < 0.8) return withOpacity(colors.emerald, 0.7);
-    return withOpacity(colors.emerald, 0.9);
+    if (ratio < 0.2) return withOpacity(colors.primary, 0.12);
+    if (ratio < 0.4) return withOpacity(colors.primary, 0.2);
+    if (ratio < 0.6) return withOpacity(colors.primary, 0.3);
+    if (ratio < 0.8) return withOpacity(colors.primary, 0.42);
+    return withOpacity(colors.primary, 0.56);
   };
 
   const todayKey = (() => {
@@ -170,10 +170,10 @@ export function MonthHeatmap({
           <Text style={s.legendText}>{copy.heatmapLegendLow}</Text>
           {[
             withOpacity(colors.muted, 0.3),
-            withOpacity(colors.emerald, 0.25),
-            withOpacity(colors.emerald, 0.4),
-            withOpacity(colors.emerald, 0.7),
-            withOpacity(colors.emerald, 0.9),
+            withOpacity(colors.primary, 0.12),
+            withOpacity(colors.primary, 0.2),
+            withOpacity(colors.primary, 0.42),
+            withOpacity(colors.primary, 0.56),
           ].map((c, i) => (
             <View key={i} style={[s.legendCell, { backgroundColor: c }]} />
           ))}

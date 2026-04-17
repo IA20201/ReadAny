@@ -1,23 +1,12 @@
 /**
  * CalendarSection.tsx — Month calendar grid with day cells.
+ * Desktop behavior intentionally matches mobile stats calendar.
  */
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { MonthReport, StatsCalendarCell } from "@readany/core/stats";
 import { cn } from "@readany/core/utils";
-import { useMemo } from "react";
-import { useTranslation } from "react-i18next";
-import { getStatsCopy } from "./stats-copy";
-import {
-  formatCompactMinutes,
-  formatDateLabel,
-  formatMinutes,
-  intensityClass,
-} from "./stats-utils";
+import { useMemo, useState } from "react";
 import { CoverThumb } from "./StatsShared";
-
-/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- *  Month Calendar
- * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+import { formatCompactMinutes, intensityClass } from "./stats-utils";
 
 export function MonthCalendarSection({
   calendar,
@@ -38,8 +27,7 @@ export function MonthCalendarSection({
 
   return (
     <div className="space-y-3">
-      {/* Weekday header */}
-      <div className="grid grid-cols-7 gap-2">
+      <div className="grid grid-cols-7 gap-2.5">
         {weekLabels.map((label) => (
           <div
             key={label}
@@ -50,10 +38,9 @@ export function MonthCalendarSection({
         ))}
       </div>
 
-      {/* Week rows */}
-      <div className="space-y-2">
+      <div className="space-y-2.5">
         {calendar.weeks.map((week, index) => (
-          <div key={`${calendar.monthKey}-${index}`} className="grid grid-cols-7 gap-2">
+          <div key={`${calendar.monthKey}-${index}`} className="grid grid-cols-7 gap-2.5">
             {week.map((cell) => (
               <CalendarDayCell key={cell.date} cell={cell} isZh={isZh} />
             ))}
@@ -64,87 +51,121 @@ export function MonthCalendarSection({
   );
 }
 
-function CalendarDayCell({ cell, isZh }: { cell: StatsCalendarCell; isZh: boolean }) {
-  const { t } = useTranslation();
-  const copy = useMemo(() => getStatsCopy(t), [t]);
+function CalendarDayCell({
+  cell,
+  isZh,
+}: {
+  cell: StatsCalendarCell;
+  isZh: boolean;
+}) {
+  const [coverIndex, setCoverIndex] = useState(0);
+  const hasCovers = cell.covers.length > 0;
+  const multipleCovers = cell.covers.length > 1;
+  const currentCover = hasCovers ? cell.covers[coverIndex % cell.covers.length] : null;
 
-  const tooltipText =
+  const titleText =
     cell.totalTime > 0
-      ? `${formatDateLabel(cell.date, isZh)} · ${formatMinutes(cell.totalTime, isZh)} · ${cell.sessionsCount.toLocaleString()} ${copy.sessionsSuffix}`
-      : `${formatDateLabel(cell.date, isZh)} · ${t("stats.noReading")}`;
+      ? `${cell.date} · ${formatCompactMinutes(cell.totalTime, isZh)}`
+      : `${cell.date} · ${isZh ? "无阅读" : "No reading"}`;
 
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <div
-          className={cn(
-            "flex min-h-[80px] min-w-0 flex-col justify-between rounded-[14px] border p-2 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_3px_10px_rgba(0,0,0,0.03)] sm:min-h-[92px] sm:rounded-2xl sm:p-2.5",
-            intensityClass(cell.intensity, cell.inCurrentMonth),
-            cell.isToday && "ring-1.5 ring-primary/20 ring-offset-1 ring-offset-background",
-          )}
-        >
-          {/* Top row: day number + time badge */}
-          <div className="flex items-start justify-between gap-0.5">
-            <div
-              className={cn(
-                "text-[13px] font-semibold tabular-nums leading-none",
-                cell.inCurrentMonth ? "text-foreground/75" : "text-muted-foreground/25",
-                cell.isToday && "text-primary/70",
-              )}
-            >
+  if (currentCover) {
+    const shellClassName = cn(
+      "relative aspect-[28/41] overflow-hidden rounded-[14px] border border-border/30 shadow-[0_10px_28px_rgba(120,92,46,0.08)] transition-all duration-200",
+      "hover:-translate-y-0.5 hover:shadow-[0_14px_34px_rgba(120,92,46,0.12)]",
+      cell.isToday && "ring-1.5 ring-primary/25 ring-offset-1 ring-offset-background",
+      !cell.inCurrentMonth && "opacity-55",
+      multipleCovers && "cursor-pointer",
+    );
+
+    const content = (
+      <>
+        <CoverThumb
+          title={currentCover.title}
+          coverUrl={currentCover.coverUrl}
+          className="absolute inset-0 h-full w-full rounded-[14px]"
+          fallbackClassName="text-[9px] font-bold"
+        />
+
+        <div className="absolute inset-y-0 left-0 z-[2] flex w-[8%] flex-row">
+          <div className="h-full w-[6%] bg-black/10" />
+          <div className="h-full w-[8%] bg-neutral-950/20" />
+          <div className="h-full w-[5%] bg-neutral-100/40" />
+          <div className="h-full w-[18%] bg-neutral-200/35" />
+          <div className="h-full w-[12%] bg-neutral-400/25" />
+          <div className="h-full w-[20%] bg-neutral-500/18" />
+          <div className="h-full w-[31%] bg-neutral-300/12" />
+        </div>
+
+        <div className="absolute inset-x-0 top-0 z-[3] h-[40%] bg-gradient-to-b from-black/32 via-black/10 to-transparent" />
+
+        <div className="absolute inset-0 z-[4] flex flex-col justify-between p-2">
+          <div className="flex items-start justify-between gap-1">
+            <span className="text-[13px] font-semibold tabular-nums text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.55)]">
               {cell.dayOfMonth}
-            </div>
+            </span>
             {cell.totalTime > 0 && (
-              <div className="shrink-0 whitespace-nowrap rounded-md bg-background/70 px-1 py-0.5 text-[9px] font-medium tabular-nums leading-none text-foreground/60 shadow-xs backdrop-blur-sm">
+              <span className="text-[10px] font-semibold tabular-nums text-white/92 drop-shadow-[0_1px_2px_rgba(0,0,0,0.55)]">
                 {formatCompactMinutes(cell.totalTime, isZh)}
-              </div>
+              </span>
             )}
           </div>
 
-          {/* Book covers — flush to bottom via flex justify-between */}
-          {cell.covers.length > 0 ? (
-            <div className="flex items-end">
-              {cell.covers.slice(0, 3).map((cover, index) => (
-                <div
-                  key={`${cover.bookId}-${index}`}
-                  className={cn("relative", index > 0 && "-ml-2")}
-                  style={{ zIndex: 10 - index }}
-                >
-                  <CoverThumb
-                    title={cover.title}
-                    coverUrl={cover.coverUrl}
-                    className="h-9 w-7 rounded-[4px] border-[1.5px] border-background/80 shadow-sm sm:h-10 sm:w-8"
-                    fallbackClassName="text-[8px] font-bold"
-                  />
-                </div>
-              ))}
-              {cell.covers.length > 3 && (
-                <div
-                  className="relative -ml-1 flex h-9 w-7 shrink-0 items-center justify-center rounded-[4px] border-[1.5px] border-background/80 bg-muted/80 text-[10px] font-bold tabular-nums text-muted-foreground/70 shadow-sm backdrop-blur-sm sm:h-10 sm:w-8"
-                  style={{ zIndex: 7 }}
-                >
-                  +{cell.covers.length - 3}
-                </div>
-              )}
-            </div>
-          ) : (
-            <div />
-          )}
-        </div>
-      </TooltipTrigger>
-      <TooltipContent
-        side="top"
-        className="max-w-[220px] rounded-lg border border-border/40 bg-popover px-3 py-2 text-popover-foreground shadow-md"
-      >
-        <div className="space-y-1">
-          <div className="text-[12px] font-medium">{tooltipText}</div>
-          {cell.covers.length > 0 && (
-            <div className="text-[11px] text-muted-foreground/50">
-              {cell.covers.map((cover) => cover.title).join(" · ")}
+          {multipleCovers && (
+            <div className="flex justify-end">
+              <span className="text-[10px] font-semibold tabular-nums text-white/92 drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)]">
+                {(coverIndex % cell.covers.length) + 1}/{cell.covers.length}
+              </span>
             </div>
           )}
         </div>
-      </TooltipContent>
-    </Tooltip>
+      </>
+    );
+
+    if (multipleCovers) {
+      return (
+        <button
+          type="button"
+          title={titleText}
+          onClick={() => setCoverIndex((prev) => (prev + 1) % cell.covers.length)}
+          className={shellClassName}
+        >
+          {content}
+        </button>
+      );
+    }
+
+    return (
+      <div title={titleText} className={shellClassName}>
+        {content}
+      </div>
+    );
+  }
+
+  return (
+    <div
+      title={titleText}
+      className={cn(
+        "flex aspect-[28/41] flex-col rounded-[14px] border p-2 transition-all duration-200",
+        intensityClass(cell.intensity, cell.inCurrentMonth),
+        cell.isToday && "ring-1.5 ring-primary/25 ring-offset-1 ring-offset-background",
+      )}
+    >
+      <div className="flex items-start justify-between gap-1">
+        <span
+          className={cn(
+            "text-[13px] font-semibold tabular-nums",
+            cell.inCurrentMonth ? "text-foreground/78" : "text-muted-foreground/25",
+            cell.isToday && "text-primary/72",
+          )}
+        >
+          {cell.dayOfMonth}
+        </span>
+        {cell.totalTime > 0 && (
+          <span className="text-[10px] font-medium tabular-nums text-foreground/46">
+            {formatCompactMinutes(cell.totalTime, isZh)}
+          </span>
+        )}
+      </div>
+    </div>
   );
 }

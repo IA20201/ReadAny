@@ -114,37 +114,43 @@ export function HeatmapChart({
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-[48px_minmax(0,1fr)] gap-3 sm:grid-cols-[56px_minmax(0,1fr)]">
-        <div className="grid grid-rows-7 gap-2 pt-8">
+      <div className="grid grid-cols-[52px_minmax(0,1fr)] gap-3 sm:grid-cols-[64px_minmax(0,1fr)]">
+        <div className="grid grid-rows-7 gap-3 pt-8">
           {weekdayLabels.map((label, index) => (
             <div
               key={`${label}-${index}`}
-              className="flex h-5 items-center text-[11px] text-muted-foreground sm:h-6"
+              className="flex h-10 items-center text-[11px] text-muted-foreground sm:h-11"
             >
               {label}
             </div>
           ))}
         </div>
 
-        <div className="min-w-0 overflow-x-auto">
-          <div className="inline-grid min-w-fit gap-2">
+        <div className="min-w-0">
+          <div className="grid w-full gap-3">
             <div
               className="grid gap-2"
-              style={{ gridTemplateColumns: `repeat(${weeks.length}, minmax(36px, 36px))` }}
+              style={{ gridTemplateColumns: `repeat(${weeks.length}, minmax(0, 1fr))` }}
             >
               {weeks.map((week, index) => (
-                <div key={`${week.label}-${index}`} className="text-center text-[11px] text-muted-foreground">
+                <div
+                  key={`${week.label}-${index}`}
+                  className="text-center text-[11px] text-muted-foreground"
+                >
                   {index === 0 || index % 2 === 1 ? week.label : ""}
                 </div>
               ))}
             </div>
 
             <div
-              className="grid gap-2"
-              style={{ gridTemplateColumns: `repeat(${weeks.length}, minmax(36px, 36px))` }}
+              className="grid gap-3"
+              style={{ gridTemplateColumns: `repeat(${weeks.length}, minmax(0, 1fr))` }}
             >
               {weeks.map((week) => (
-                <div key={`${week.label}-${week.cells[0]?.key ?? "week"}`} className="grid grid-rows-7 gap-2">
+                <div
+                  key={`${week.label}-${week.cells[0]?.key ?? "week"}`}
+                  className="grid grid-rows-7 gap-3"
+                >
                   {week.cells.map((cell) => {
                     const intensity = getIntensity(cell.value, maxValue);
                     const tooltipLabel = cell.inRange
@@ -156,7 +162,7 @@ export function HeatmapChart({
                         key={cell.key}
                         title={tooltipLabel}
                         className={cn(
-                          "h-5 w-9 rounded-[8px] border transition-transform duration-150 hover:-translate-y-0.5 sm:h-6 sm:w-9",
+                          "h-10 w-full rounded-[16px] border transition-transform duration-150 hover:-translate-y-0.5 sm:h-11",
                           cell.inRange ? intensityClass(intensity) : "border-transparent bg-transparent",
                         )}
                       />

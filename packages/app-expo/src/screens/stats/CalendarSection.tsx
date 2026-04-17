@@ -136,9 +136,6 @@ function CalendarDayCell({
         {/* Top scrim — gradient for date readability */}
         <View style={s.calCoverTopScrim} />
 
-        {/* Bottom scrim — gradient for page badge readability */}
-        <View style={s.calCoverBottomScrim} />
-
         {/* Overlaid info */}
         <View style={s.calCoverOverlay}>
           <View style={s.calCoverTopRow}>
@@ -148,11 +145,9 @@ function CalendarDayCell({
             )}
           </View>
           {multipleCovers && (
-            <View style={s.calCoverPageBadge}>
-              <Text style={s.calCoverPageText}>
-                {(coverIdx % cell.covers.length) + 1}/{cell.covers.length}
-              </Text>
-            </View>
+            <Text style={s.calCoverPageText}>
+              {(coverIdx % cell.covers.length) + 1}/{cell.covers.length}
+            </Text>
           )}
         </View>
       </View>
