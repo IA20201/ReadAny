@@ -29,12 +29,12 @@ interface TierPalette {
 
 const PALETTES: Record<string, TierPalette> = {
   bronze: {
-    baseFrom: "#d4954a", baseTo: "#8b5e3c",
-    innerFrom: "#f5deb3", innerTo: "#cdaa7d",
-    ringStroke: "rgba(139,94,60,0.4)",
-    numBg: "#8b5e3c", numText: "#fff8ee",
-    iconColor: "#6b4226",
-    glow: "rgba(180,120,50,0.35)",
+    baseFrom: "#b87333", baseTo: "#7a4f2e",
+    innerFrom: "#e8c9a0", innerTo: "#c49a6c",
+    ringStroke: "rgba(122,79,46,0.4)",
+    numBg: "#7a4f2e", numText: "#fff8ee",
+    iconColor: "#5c3a1e",
+    glow: "rgba(184,115,51,0.35)",
   },
   silver: {
     baseFrom: "#b8bcc5", baseTo: "#7a7d85",
@@ -51,6 +51,30 @@ const PALETTES: Record<string, TierPalette> = {
     numBg: "#9a7209", numText: "#fffdf0",
     iconColor: "#7a5a08",
     glow: "rgba(240,192,48,0.4)",
+  },
+  platinum: {
+    baseFrom: "#e8ecf0", baseTo: "#a0b0c0",
+    innerFrom: "#f5f7fa", innerTo: "#d0d8e0",
+    ringStroke: "rgba(100,140,180,0.3)",
+    numBg: "#708090", numText: "#f8fafc",
+    iconColor: "#4a6070",
+    glow: "rgba(120,160,200,0.35)",
+  },
+  diamond: {
+    baseFrom: "#7dd3fc", baseTo: "#0284c7",
+    innerFrom: "#e0f2fe", innerTo: "#7dd3fc",
+    ringStroke: "rgba(2,132,199,0.3)",
+    numBg: "#0369a1", numText: "#f0f9ff",
+    iconColor: "#075985",
+    glow: "rgba(56,189,248,0.4)",
+  },
+  legendary: {
+    baseFrom: "#c084fc", baseTo: "#7c3aed",
+    innerFrom: "#f3e8ff", innerTo: "#c4b5fd",
+    ringStroke: "rgba(124,58,237,0.3)",
+    numBg: "#6d28d9", numText: "#faf5ff",
+    iconColor: "#5b21b6",
+    glow: "rgba(167,139,250,0.45)",
   },
 };
 
