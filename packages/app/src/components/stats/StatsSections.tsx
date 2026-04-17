@@ -63,7 +63,7 @@ export function ChartSurface({
     const point = chart.data[0];
     if (!point) {
       return (
-        <div className="flex min-h-[200px] items-center justify-center text-sm text-muted-foreground/40">
+        <div className="flex min-h-[200px] items-center justify-center text-sm text-muted-foreground/55">
           {copy.noDataDesc}
         </div>
       );
@@ -72,15 +72,15 @@ export function ChartSurface({
     return (
       <div className="space-y-4">
         <div className="space-y-2">
-          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/40">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/55">
             {copy.singlePointLabel}
           </div>
           <div className="text-4xl font-bold tabular-nums tracking-tighter text-foreground">
             {formatMinutes(point.value, isZh)}
           </div>
-          <div className="text-[13px] text-muted-foreground/50">{point.label}</div>
+          <div className="text-[13px] text-muted-foreground/65">{point.label}</div>
         </div>
-        <p className="max-w-lg text-[13px] leading-relaxed text-muted-foreground/40">
+        <p className="max-w-lg text-[13px] leading-relaxed text-muted-foreground/60">
           {copy.singlePointDesc}
         </p>
       </div>
@@ -141,7 +141,7 @@ export function DaySummaryPanel({
       <EmptyState
         title={copy.noDataTitle}
         description={copy.noDataDesc}
-        icon={<Clock3 className="h-7 w-7 text-muted-foreground/50" />}
+        icon={<Clock3 className="h-7 w-7 text-muted-foreground/60" />}
       />
     );
   }
@@ -162,7 +162,7 @@ export function DaySummaryPanel({
       <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-4">
         {facts.map((item) => (
           <div key={item.label} className="rounded-xl bg-muted/[0.12] px-3.5 py-2.5">
-            <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground/40">
+            <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground/55">
               {item.label}
             </div>
             <div className="mt-1.5 text-lg font-bold tabular-nums text-foreground/85">
@@ -182,7 +182,7 @@ export function DaySummaryPanel({
             <div className="text-lg font-bold text-foreground/85">
               {topBook?.title ?? copy.noDayTopBook}
             </div>
-            <div className="text-[13px] text-muted-foreground/45">
+            <div className="text-[13px] text-muted-foreground/62">
               {topBook ? formatMinutes(topBook.totalTime, isZh) : copy.noTimeline}
             </div>
           </div>
@@ -211,7 +211,7 @@ export function InsightsSection({
 }) {
   if (insights.length === 0) {
     return (
-      <p className="py-6 text-center text-[13px] text-muted-foreground/45">{copy.noInsights}</p>
+      <p className="py-6 text-center text-[13px] text-muted-foreground/62">{copy.noInsights}</p>
     );
   }
 
@@ -238,7 +238,7 @@ export function InsightsSection({
             </div>
             <div className="min-w-0 space-y-0.5">
               <div className="text-[13px] font-semibold text-foreground/75">{insight.title}</div>
-              <div className="text-[13px] leading-relaxed text-muted-foreground/45">
+              <div className="text-[13px] leading-relaxed text-muted-foreground/62">
                 {insight.body}
               </div>
             </div>

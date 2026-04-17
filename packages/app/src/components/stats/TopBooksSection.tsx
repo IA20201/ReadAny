@@ -28,7 +28,7 @@ export function TopBooksSection({
 
   if (books.length === 0) {
     return (
-      <p className="py-8 text-center text-[13px] text-muted-foreground/45">{copy.noTopBooks}</p>
+      <p className="py-8 text-center text-[13px] text-muted-foreground/62">{copy.noTopBooks}</p>
     );
   }
 
@@ -52,7 +52,7 @@ export function TopBooksSection({
       {canExpand && (
         <button
           onClick={() => setExpanded((v) => !v)}
-          className="flex w-full items-center justify-center gap-1 rounded-lg py-2 text-[12px] font-medium text-muted-foreground/50 transition-colors hover:bg-muted/[0.1] hover:text-muted-foreground/70"
+          className="flex w-full items-center justify-center gap-1 rounded-lg py-2 text-[12px] font-medium text-muted-foreground/65 transition-colors hover:bg-muted/[0.1] hover:text-foreground/80"
         >
           {expanded ? (
             <>
@@ -101,7 +101,7 @@ function TopBookItem({
           "mt-1 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-md text-[11px] font-bold tabular-nums",
           isFirst
             ? "bg-primary/8 text-primary/60"
-            : "bg-muted/25 text-muted-foreground/35",
+            : "bg-muted/25 text-muted-foreground/50",
         )}
       >
         {index + 1}
@@ -133,7 +133,7 @@ function TopBookItem({
         >
           {book.title}
         </div>
-        <div className="mt-0.5 truncate text-[11px] text-muted-foreground/40">
+        <div className="mt-0.5 truncate text-[11px] text-muted-foreground/58">
           {book.author || copy.unknownAuthor}
         </div>
         <div className="mt-2 flex flex-wrap items-baseline gap-x-2">
@@ -145,7 +145,7 @@ function TopBookItem({
           >
             {formatCompactMinutes(book.totalTime, isZh)}
           </span>
-          <span className="text-[10px] text-muted-foreground/35">
+          <span className="text-[10px] text-muted-foreground/52">
             {book.pagesRead > 0 && <>{book.pagesRead.toLocaleString()} {copy.pagesReadSuffix} · </>}
             {book.sessionsCount.toLocaleString()} {copy.sessionsSuffix}
           </span>

@@ -97,6 +97,7 @@ export function BadgeIconMobile({
   const ringR = size * 0.41;
   const iconSize = size * 0.3;
   const bid = `b-${badge.id}`;
+  const glowInset = size * 0.14;
 
   if (!isEarned) {
     return (
@@ -116,10 +117,28 @@ export function BadgeIconMobile({
   return (
     <View style={{
       width: size, height: size, position: "relative",
-      shadowColor: p.glow, shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 1, shadowRadius: 12, elevation: 6,
     }}>
-      <Svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+      <View
+        pointerEvents="none"
+        style={{
+          position: "absolute",
+          top: glowInset,
+          right: glowInset,
+          bottom: glowInset,
+          left: glowInset,
+          borderRadius: 999,
+          backgroundColor: p.glow,
+          opacity: 0.42,
+          transform: [{ scale: 1.18 }],
+          shadowColor: p.glow,
+          shadowOffset: { width: 0, height: 0 },
+          shadowOpacity: 0.95,
+          shadowRadius: 14,
+          elevation: 8,
+        }}
+      />
+
+      <Svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ zIndex: 1 }}>
         <Defs>
           <RadialGradient id={`${bid}-base`} cx="35%" cy="30%" r="70%">
             <Stop offset="0%" stopColor={p.baseFrom} />
@@ -148,7 +167,7 @@ export function BadgeIconMobile({
       {/* Center icon — bigger when no number tag */}
       <View style={{
         position: "absolute", top: 0, left: 0, right: 0, bottom: num ? size * 0.06 : 0,
-        alignItems: "center", justifyContent: "center",
+        alignItems: "center", justifyContent: "center", zIndex: 2,
       }}>
         <Icon size={num ? iconSize : iconSize * 1.2} color={p.iconColor} />
       </View>
@@ -168,6 +187,7 @@ export function BadgeIconMobile({
           alignItems: "center",
           justifyContent: "center",
           paddingHorizontal: 4,
+          zIndex: 3,
         }}>
           <Text style={{ fontSize: size * 0.13, fontWeight: "800", color: p.numText }}>
             {num}

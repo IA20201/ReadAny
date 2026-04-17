@@ -49,7 +49,7 @@ export function SectionHeader({
       <div className="space-y-1">
         <h2 className="text-[15px] font-semibold tracking-tight text-foreground/90">{title}</h2>
         {description && (
-          <p className="text-[13px] leading-relaxed text-muted-foreground/50">{description}</p>
+          <p className="text-[13px] leading-relaxed text-muted-foreground/65">{description}</p>
         )}
       </div>
       {action}
@@ -62,7 +62,7 @@ export function SectionHeader({
 export function MetricTile({ metric }: { metric: MetricTileData }) {
   return (
     <div className="group min-w-0 rounded-xl bg-muted/[0.12] px-3.5 py-3 transition-colors hover:bg-muted/[0.2]">
-      <div className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground/45">
+      <div className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground/60">
         <span className="text-primary/35 transition-colors group-hover:text-primary/55">
           {metric.icon}
         </span>
@@ -82,7 +82,7 @@ export function MetricTile({ metric }: { metric: MetricTileData }) {
         )}
       </div>
       {metric.sublabel && (
-        <p className="mt-0.5 text-[12px] text-muted-foreground/40">{metric.sublabel}</p>
+        <p className="mt-0.5 text-[12px] text-muted-foreground/55">{metric.sublabel}</p>
       )}
     </div>
   );
@@ -104,7 +104,7 @@ export function EmptyState({
       <div className="rounded-2xl border border-border/30 bg-muted/20 p-5">{icon}</div>
       <div className="space-y-1.5">
         <h3 className="text-base font-semibold text-foreground/75">{title}</h3>
-        <p className="max-w-sm text-[13px] leading-relaxed text-muted-foreground/50">
+        <p className="max-w-sm text-[13px] leading-relaxed text-muted-foreground/65">
           {description}
         </p>
       </div>
@@ -134,7 +134,7 @@ export function CoverThumb({
       ) : (
         <div
           className={cn(
-            "flex h-full w-full items-center justify-center bg-gradient-to-br from-muted/60 to-muted/30 text-center text-[10px] font-semibold text-muted-foreground/40",
+            "flex h-full w-full items-center justify-center bg-gradient-to-br from-muted/60 to-muted/30 text-center text-[10px] font-semibold text-muted-foreground/55",
             fallbackClassName,
           )}
         >

@@ -110,6 +110,7 @@ export function BadgeIcon({
   const ringR = size * 0.41;
   const iconSize = size * 0.3;
   const baseId = `badge-${badge.id}`;
+  const glowInset = size * 0.14;
 
   if (!isEarned) {
     return (
@@ -127,8 +128,25 @@ export function BadgeIcon({
   }
 
   return (
-    <div className="relative" style={{ width: size, height: size, filter: p.glowStrength }}>
-      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+    <div className="relative" style={{ width: size, height: size }}>
+      <div
+        aria-hidden
+        className="pointer-events-none absolute rounded-full"
+        style={{
+          inset: glowInset,
+          background: `radial-gradient(circle, ${p.glow} 0%, ${p.glow} 48%, transparent 76%)`,
+          filter: "blur(10px)",
+          opacity: 0.95,
+          transform: "scale(1.22)",
+        }}
+      />
+
+      <svg
+        width={size}
+        height={size}
+        viewBox={`0 0 ${size} ${size}`}
+        className="relative z-[1]"
+      >
         <defs>
           {/* Outer base gradient */}
           <radialGradient id={`${baseId}-base`} cx="35%" cy="30%" r="70%">
@@ -157,14 +175,17 @@ export function BadgeIcon({
       </svg>
 
       {/* Center icon — bigger when no number tag */}
-      <div className="absolute inset-0 flex items-center justify-center" style={{ paddingBottom: num ? size * 0.06 : 0 }}>
+      <div
+        className="absolute inset-0 z-[2] flex items-center justify-center"
+        style={{ paddingBottom: num ? size * 0.06 : 0 }}
+      >
         <Icon style={{ width: num ? iconSize : iconSize * 1.2, height: num ? iconSize : iconSize * 1.2, color: p.iconColor }} />
       </div>
 
       {/* Number tag at bottom — only when there's an actual number */}
       {num ? (
         <div
-          className="absolute left-1/2 -translate-x-1/2 flex items-center justify-center rounded-full"
+          className="absolute left-1/2 z-[3] flex -translate-x-1/2 items-center justify-center rounded-full"
           style={{
             bottom: size * 0.04,
             minWidth: size * 0.32,

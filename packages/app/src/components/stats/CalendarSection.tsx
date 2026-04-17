@@ -2,10 +2,10 @@
  * CalendarSection.tsx — Month calendar grid with day cells.
  * Desktop behavior intentionally matches mobile stats calendar.
  */
+import { useResolvedSrc } from "@/hooks/use-resolved-src";
 import type { MonthReport, StatsCalendarCell } from "@readany/core/stats";
 import { cn } from "@readany/core/utils";
 import { useMemo, useState } from "react";
-import { CoverThumb } from "./StatsShared";
 import { formatCompactMinutes, intensityClass } from "./stats-utils";
 
 export function MonthCalendarSection({
@@ -31,7 +31,7 @@ export function MonthCalendarSection({
         {weekLabels.map((label) => (
           <div
             key={label}
-            className="px-1 text-center text-[11px] font-medium text-muted-foreground/35"
+            className="px-1 text-center text-[11px] font-medium text-muted-foreground/52"
           >
             {label}
           </div>
@@ -70,8 +70,8 @@ function CalendarDayCell({
 
   if (currentCover) {
     const shellClassName = cn(
-      "relative aspect-[28/41] overflow-hidden rounded-[14px] border border-border/30 shadow-[0_10px_28px_rgba(120,92,46,0.08)] transition-all duration-200",
-      "hover:-translate-y-0.5 hover:shadow-[0_14px_34px_rgba(120,92,46,0.12)]",
+      "book-cover-shadow relative aspect-[28/41] overflow-hidden rounded transition-all duration-200",
+      "hover:-translate-y-0.5",
       cell.isToday && "ring-1.5 ring-primary/25 ring-offset-1 ring-offset-background",
       !cell.inCurrentMonth && "opacity-55",
       multipleCovers && "cursor-pointer",
@@ -79,26 +79,16 @@ function CalendarDayCell({
 
     const content = (
       <>
-        <CoverThumb
+        <CalendarBookFace
           title={currentCover.title}
           coverUrl={currentCover.coverUrl}
-          className="absolute inset-0 h-full w-full rounded-[14px]"
-          fallbackClassName="text-[9px] font-bold"
+          className="absolute inset-0 h-full w-full rounded"
         />
+        <div className="book-spine absolute inset-0 rounded" />
 
-        <div className="absolute inset-y-0 left-0 z-[2] flex w-[8%] flex-row">
-          <div className="h-full w-[6%] bg-black/10" />
-          <div className="h-full w-[8%] bg-neutral-950/20" />
-          <div className="h-full w-[5%] bg-neutral-100/40" />
-          <div className="h-full w-[18%] bg-neutral-200/35" />
-          <div className="h-full w-[12%] bg-neutral-400/25" />
-          <div className="h-full w-[20%] bg-neutral-500/18" />
-          <div className="h-full w-[31%] bg-neutral-300/12" />
-        </div>
+        <div className="absolute inset-x-0 top-0 z-[3] h-[44%] bg-gradient-to-b from-black/42 via-black/14 to-transparent" />
 
-        <div className="absolute inset-x-0 top-0 z-[3] h-[40%] bg-gradient-to-b from-black/32 via-black/10 to-transparent" />
-
-        <div className="absolute inset-0 z-[4] flex flex-col justify-between p-2">
+        <div className="absolute inset-0 z-[4] flex flex-col justify-between p-1.5">
           <div className="flex items-start justify-between gap-1">
             <span className="text-[13px] font-semibold tabular-nums text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.55)]">
               {cell.dayOfMonth}
@@ -112,7 +102,7 @@ function CalendarDayCell({
 
           {multipleCovers && (
             <div className="flex justify-end">
-              <span className="text-[10px] font-semibold tabular-nums text-white/92 drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)]">
+              <span className="inline-flex items-center rounded-full border border-white/24 bg-black/28 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-white/92 shadow-[0_2px_6px_rgba(0,0,0,0.18)] backdrop-blur-[2px]">
                 {(coverIndex % cell.covers.length) + 1}/{cell.covers.length}
               </span>
             </div>
@@ -154,18 +144,50 @@ function CalendarDayCell({
         <span
           className={cn(
             "text-[13px] font-semibold tabular-nums",
-            cell.inCurrentMonth ? "text-foreground/78" : "text-muted-foreground/25",
+            cell.inCurrentMonth ? "text-foreground/78" : "text-muted-foreground/32",
             cell.isToday && "text-primary/72",
           )}
         >
           {cell.dayOfMonth}
         </span>
         {cell.totalTime > 0 && (
-          <span className="text-[10px] font-medium tabular-nums text-foreground/46">
+          <span className="text-[10px] font-medium tabular-nums text-foreground/62">
             {formatCompactMinutes(cell.totalTime, isZh)}
           </span>
         )}
       </div>
+    </div>
+  );
+}
+
+function CalendarBookFace({
+  title,
+  coverUrl,
+  className,
+}: {
+  title: string;
+  coverUrl?: string;
+  className?: string;
+}) {
+  const resolved = useResolvedSrc(coverUrl);
+
+  return resolved ? (
+    <img
+      src={resolved}
+      alt=""
+      className={cn("absolute inset-0 h-full w-full rounded object-cover", className)}
+      loading="lazy"
+    />
+  ) : (
+    <div
+      className={cn(
+        "absolute inset-0 flex items-center justify-center rounded bg-gradient-to-b from-stone-100 to-stone-200 px-1.5",
+        className,
+      )}
+    >
+      <span className="line-clamp-2 text-center font-serif text-[10px] font-medium leading-tight text-stone-400">
+        {title.trim().slice(0, 6)}
+      </span>
     </div>
   );
 }

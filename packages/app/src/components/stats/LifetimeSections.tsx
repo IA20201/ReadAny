@@ -37,7 +37,7 @@ export function RhythmProfileSection({
         <div className={cn("space-y-5", hasTwo && "xl:border-r xl:border-border/20 xl:pr-8")}>
           <div className="space-y-1">
             <h3 className="text-[14px] font-semibold text-foreground/85">{copy.timeOfDay}</h3>
-            <p className="text-[13px] leading-relaxed text-muted-foreground/45">
+            <p className="text-[13px] leading-relaxed text-muted-foreground/62">
               {copy.timeOfDayDesc}
             </p>
           </div>
@@ -59,7 +59,7 @@ export function RhythmProfileSection({
             <h3 className="text-[14px] font-semibold text-foreground/85">
               {copy.categoryDistribution}
             </h3>
-            <p className="text-[13px] leading-relaxed text-muted-foreground/45">
+            <p className="text-[13px] leading-relaxed text-muted-foreground/62">
               {copy.categoryDistributionDesc}
             </p>
           </div>
@@ -93,7 +93,7 @@ function CategoryDistributionList({
               <div className="min-w-0 text-[13px] font-medium text-foreground/75 transition-colors group-hover:text-foreground">
                 {label}
               </div>
-              <div className="flex-shrink-0 text-[13px] tabular-nums text-muted-foreground/50">
+              <div className="flex-shrink-0 text-[13px] tabular-nums text-muted-foreground/65">
                 {formatCompactMinutes(item.value, isZh)}
               </div>
             </div>
@@ -152,11 +152,11 @@ export function YearlySnapshotsSection({
             <div className="text-[15px] font-bold tabular-nums tracking-tight text-foreground/85">
               {formatCompactMinutes(snapshot.totalReadingTime, isZh)}
             </div>
-            <div className="mt-0.5 flex flex-wrap items-center gap-x-3 text-[12px] text-muted-foreground/45">
+            <div className="mt-0.5 flex flex-wrap items-center gap-x-3 text-[12px] text-muted-foreground/62">
               <span>{snapshot.booksTouched.toLocaleString()} {copy.books}</span>
               <span>{snapshot.activeDays.toLocaleString()} {copy.activeDays}</span>
               {snapshot.topBook && (
-                <span className="truncate text-foreground/50">{snapshot.topBook.title}</span>
+                <span className="truncate text-foreground/68">{snapshot.topBook.title}</span>
               )}
             </div>
           </div>
@@ -185,13 +185,13 @@ export function JourneySummaryPanel({
       <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div className="space-y-2">
           <div className="text-[42px] font-bold tabular-nums leading-none tracking-tighter text-foreground/85">
-            {report.context.daysSinceJoined.toLocaleString()} <span className="text-[24px] font-semibold tracking-normal text-muted-foreground/50">{copy.daysSuffix}</span>
+            {report.context.daysSinceJoined.toLocaleString()} <span className="text-[24px] font-semibold tracking-normal text-muted-foreground/65">{copy.daysSuffix}</span>
           </div>
-          <p className="max-w-lg text-[13px] leading-relaxed text-muted-foreground/45">
+          <p className="max-w-lg text-[13px] leading-relaxed text-muted-foreground/62">
             {copy.journeyNarrative(report.context.daysSinceJoined)}
           </p>
         </div>
-        <div className="shrink-0 text-[12px] text-muted-foreground/40">
+        <div className="shrink-0 text-[12px] text-muted-foreground/56">
           {copy.startedOn} {formatDateLabel(report.context.joinedSince, isZh)}
         </div>
       </div>
@@ -203,7 +203,7 @@ export function JourneySummaryPanel({
           { label: copy.inactiveReadingDays, value: `${report.context.totalInactiveDays.toLocaleString()} ${copy.daysSuffix}` },
         ].map((item) => (
           <div key={item.label}>
-            <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground/35">
+            <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground/52">
               {item.label}
             </div>
             <div className="mt-1 text-[16px] font-bold tabular-nums text-foreground/80">

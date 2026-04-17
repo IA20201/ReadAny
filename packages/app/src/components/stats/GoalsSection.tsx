@@ -51,7 +51,7 @@ function GoalAddForm({
     <div className="space-y-4 rounded-xl border border-border/30 bg-muted/[0.06] p-4">
       {/* Type picker */}
       <div className="space-y-1.5">
-        <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground/40">
+        <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground/55">
           {periodLabel} · {copy.goalTarget}
         </div>
         <div className="flex gap-1.5">
@@ -63,7 +63,7 @@ function GoalAddForm({
                 "flex-1 rounded-lg px-3 py-1.5 text-[12px] font-medium transition-all",
                 type === opt.key
                   ? "bg-primary/10 text-primary shadow-sm"
-                  : "bg-background/50 text-muted-foreground/50 hover:text-foreground/70",
+                  : "bg-background/50 text-muted-foreground/65 hover:text-foreground/80",
               )}
             >
               {opt.label}
@@ -81,7 +81,7 @@ function GoalAddForm({
           onChange={(e) => setTarget(e.target.value)}
           className="h-9 w-24 rounded-lg border border-border/30 bg-background/50 px-3 text-center text-[15px] font-bold tabular-nums text-foreground outline-none transition-colors focus:border-primary/30 focus:ring-1 focus:ring-primary/15"
         />
-        <span className="text-[13px] text-muted-foreground/50">
+        <span className="text-[13px] text-muted-foreground/65">
           {type === "books" ? copy.goalBooksUnit : type === "time" ? copy.goalTimeUnit : copy.goalPagesUnit}
           {" / "}
           {periodLabel.toLowerCase()}
@@ -98,7 +98,7 @@ function GoalAddForm({
         </button>
         <button
           onClick={onCancel}
-          className="rounded-lg px-4 py-2 text-[13px] font-medium text-muted-foreground/60 transition-colors hover:bg-muted/20"
+          className="rounded-lg px-4 py-2 text-[13px] font-medium text-muted-foreground/72 transition-colors hover:bg-muted/20"
         >
           {copy.goalCancel}
         </button>
@@ -181,7 +181,7 @@ export function GoalsSection({
                 {Math.round(current * 10) / 10} / {goal.target} {goalTypeLabel(goal.type)}
               </div>
               {percentage < 100 && (
-                <div className="text-[12px] text-muted-foreground/45">
+                <div className="text-[12px] text-muted-foreground/62">
                   {copy.goalRemaining.replace("{{remaining}}", `${Math.round(remaining * 10) / 10} ${goalTypeLabel(goal.type)}`)}
                 </div>
               )}
@@ -190,7 +190,7 @@ export function GoalsSection({
             {/* Remove */}
             {onRemoveGoal && (
               <button onClick={() => onRemoveGoal(goal.id)}
-                className="shrink-0 rounded-lg px-2 py-1 text-[11px] text-muted-foreground/35 opacity-0 transition-all hover:bg-destructive/10 hover:text-destructive/70 group-hover:opacity-100">
+                className="shrink-0 rounded-lg px-2 py-1 text-[11px] text-muted-foreground/52 opacity-0 transition-all hover:bg-destructive/10 hover:text-destructive/70 group-hover:opacity-100">
                 {copy.removeGoal}
               </button>
             )}
@@ -200,7 +200,7 @@ export function GoalsSection({
 
       {/* Empty state */}
       {progress.length === 0 && !showForm && (
-        <p className="py-4 text-center text-[13px] text-muted-foreground/45">
+        <p className="py-4 text-center text-[13px] text-muted-foreground/62">
           {copy.noGoals}
         </p>
       )}
@@ -210,7 +210,7 @@ export function GoalsSection({
         <GoalAddForm copy={copy} onSubmit={handleSubmit} onCancel={() => setShowForm(false)} period={defaultPeriod} />
       ) : onAddGoal ? (
         <button onClick={() => setShowForm(true)}
-          className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-border/30 py-3 text-[13px] font-medium text-muted-foreground/50 transition-colors hover:border-primary/20 hover:bg-primary/[0.02] hover:text-primary/70">
+          className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-border/30 py-3 text-[13px] font-medium text-muted-foreground/65 transition-colors hover:border-primary/20 hover:bg-primary/[0.02] hover:text-primary/70">
           + {copy.setGoal}
         </button>
       ) : null}

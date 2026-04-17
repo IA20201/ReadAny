@@ -118,7 +118,13 @@ function CalendarDayCell({
           <Image source={{ uri: currentCoverUrl }} style={s.calCoverImage} resizeMode="cover" />
         ) : (
           <View style={s.calCoverFallback}>
-            <Text style={s.calCoverFallbackText}>{currentCover.title.slice(0, 4)}</Text>
+            <View style={s.calCoverFallbackTop} />
+            <View style={s.calCoverFallbackBottom} />
+            <View style={s.calCoverFallbackOverlay}>
+              <Text style={s.calCoverFallbackText} numberOfLines={2}>
+                {currentCover.title.slice(0, 6)}
+              </Text>
+            </View>
           </View>
         )}
 
@@ -132,6 +138,9 @@ function CalendarDayCell({
           <View style={{ width: "20%", height: "100%", backgroundColor: "rgba(100,100,100,0.18)" }} />
           <View style={{ width: "31%", height: "100%", backgroundColor: "rgba(175,175,175,0.12)" }} />
         </View>
+        <View style={s.calSpineEdgeRight} />
+        <View style={s.calSpineTopHighlight} />
+        <View style={s.calSpineBottomShadow} />
 
         {/* Top scrim — gradient for date readability */}
         <View style={s.calCoverTopScrim} />
@@ -145,9 +154,11 @@ function CalendarDayCell({
             )}
           </View>
           {multipleCovers && (
-            <Text style={s.calCoverPageText}>
-              {(coverIdx % cell.covers.length) + 1}/{cell.covers.length}
-            </Text>
+            <View style={s.calCoverPageBadge}>
+              <Text style={s.calCoverPageText}>
+                {(coverIdx % cell.covers.length) + 1}/{cell.covers.length}
+              </Text>
+            </View>
           )}
         </View>
       </View>

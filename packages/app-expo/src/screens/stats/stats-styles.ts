@@ -130,7 +130,7 @@ export const makeStyles = (colors: ThemeColors) =>
     },
     heroNarrative: {
       fontSize: 13,
-      color: withOpacity(colors.mutedForeground, 0.45),
+      color: withOpacity(colors.mutedForeground, 0.62),
       lineHeight: 20,
       marginTop: 8,
     },
@@ -152,7 +152,7 @@ export const makeStyles = (colors: ThemeColors) =>
     metricLabel: {
       fontSize: 9,
       fontWeight: fontWeight.medium,
-      color: withOpacity(colors.mutedForeground, 0.45),
+      color: withOpacity(colors.mutedForeground, 0.6),
       textTransform: "uppercase",
       letterSpacing: 1,
     },
@@ -164,7 +164,7 @@ export const makeStyles = (colors: ThemeColors) =>
     },
     metricSub: {
       fontSize: 10,
-      color: withOpacity(colors.mutedForeground, 0.4),
+      color: withOpacity(colors.mutedForeground, 0.55),
       marginTop: 1,
     },
 
@@ -187,7 +187,7 @@ export const makeStyles = (colors: ThemeColors) =>
     statCardTitle: {
       fontSize: 11,
       fontWeight: fontWeight.medium,
-      color: withOpacity(colors.mutedForeground, 0.55),
+      color: withOpacity(colors.mutedForeground, 0.66),
     },
     statCardBody: {
       flexDirection: "row",
@@ -203,7 +203,7 @@ export const makeStyles = (colors: ThemeColors) =>
     statCardUnit: {
       fontSize: 13,
       fontWeight: fontWeight.medium,
-      color: withOpacity(colors.mutedForeground, 0.5),
+      color: withOpacity(colors.mutedForeground, 0.64),
     },
 
     /* ── Section cards ── */
@@ -316,10 +316,10 @@ export const makeStyles = (colors: ThemeColors) =>
     bookRankDefault: { backgroundColor: withOpacity(colors.muted, 0.25) },
     bookRankText: { fontSize: 11, fontWeight: fontWeight.bold },
     bookRankTextFirst: { color: withOpacity(colors.primary, 0.6) },
-    bookRankTextDefault: { color: withOpacity(colors.mutedForeground, 0.35) },
+    bookRankTextDefault: { color: withOpacity(colors.mutedForeground, 0.5) },
     periodBooksEmpty: {
       fontSize: 13,
-      color: withOpacity(colors.mutedForeground, 0.42),
+      color: withOpacity(colors.mutedForeground, 0.58),
       textAlign: "center",
       paddingVertical: 12,
     },
@@ -353,7 +353,7 @@ export const makeStyles = (colors: ThemeColors) =>
     bookCoverLetter: {
       fontSize: 14,
       fontWeight: fontWeight.bold,
-      color: withOpacity(colors.foreground, 0.45),
+      color: withOpacity(colors.foreground, 0.62),
     },
     bookInfo: { flex: 1, paddingTop: 1 },
     bookTitleRow: {
@@ -372,12 +372,12 @@ export const makeStyles = (colors: ThemeColors) =>
     },
     bookTitle: { fontSize: 13, fontWeight: fontWeight.semibold, color: withOpacity(colors.foreground, 0.8) },
     bookTitleFirst: { fontSize: 14 },
-    bookAuthor: { fontSize: 11, color: withOpacity(colors.mutedForeground, 0.4), marginTop: 2 },
+    bookAuthor: { fontSize: 11, color: withOpacity(colors.mutedForeground, 0.58), marginTop: 2 },
     bookStatsRow: { flexDirection: "row", alignItems: "baseline", gap: 6, marginTop: 6 },
     bookTime: { fontWeight: fontWeight.bold, color: withOpacity(colors.foreground, 0.75) },
     bookTimeFirst: { fontSize: 18 },
     bookTimeDefault: { fontSize: 14 },
-    bookMeta: { fontSize: 10, color: withOpacity(colors.mutedForeground, 0.35) },
+    bookMeta: { fontSize: 10, color: withOpacity(colors.mutedForeground, 0.52) },
     progressRow: {
       flexDirection: "row",
       alignItems: "center",
@@ -400,7 +400,7 @@ export const makeStyles = (colors: ThemeColors) =>
       minWidth: 34,
       fontSize: 10,
       fontWeight: fontWeight.semibold,
-      color: withOpacity(colors.mutedForeground, 0.5),
+      color: withOpacity(colors.mutedForeground, 0.64),
       textAlign: "right",
     },
     expandBtn: {
@@ -412,7 +412,7 @@ export const makeStyles = (colors: ThemeColors) =>
       borderRadius: radius.md,
       marginTop: 4,
     },
-    expandBtnText: { fontSize: 12, fontWeight: fontWeight.medium, color: withOpacity(colors.mutedForeground, 0.5) },
+    expandBtnText: { fontSize: 12, fontWeight: fontWeight.medium, color: withOpacity(colors.mutedForeground, 0.64) },
 
     /* ── Insights ── */
     insightItem: {
@@ -432,7 +432,7 @@ export const makeStyles = (colors: ThemeColors) =>
     insightDotPositive: { backgroundColor: withOpacity(colors.primary, 0.45) },
     insightDotDefault: { backgroundColor: withOpacity(colors.border, 0.6) },
     insightTitle: { fontSize: 13, fontWeight: fontWeight.semibold, color: withOpacity(colors.foreground, 0.75) },
-    insightBody: { fontSize: 13, color: withOpacity(colors.mutedForeground, 0.45), lineHeight: 18, marginTop: 2 },
+    insightBody: { fontSize: 13, color: withOpacity(colors.mutedForeground, 0.62), lineHeight: 18, marginTop: 2 },
 
     /* ── Streak ── */
     streakCard: {
@@ -523,7 +523,7 @@ export const makeStyles = (colors: ThemeColors) =>
     },
     dayTopFocusSub: {
       fontSize: 13,
-      color: withOpacity(colors.mutedForeground, 0.45),
+      color: withOpacity(colors.mutedForeground, 0.62),
       marginTop: 2,
     },
 
@@ -540,7 +540,7 @@ export const makeStyles = (colors: ThemeColors) =>
     calendarHeaderText: {
       fontSize: 10,
       fontWeight: fontWeight.medium,
-      color: withOpacity(colors.mutedForeground, 0.35),
+      color: withOpacity(colors.mutedForeground, 0.52),
     },
 
     /* Calendar cell — WITH cover (cover fills cell) */
@@ -575,16 +575,42 @@ export const makeStyles = (colors: ThemeColors) =>
       left: 0,
       right: 0,
       bottom: 0,
-      backgroundColor: withOpacity(colors.muted, 0.5),
+      overflow: "hidden",
+      borderRadius: radius.sm,
+    },
+    calCoverFallbackTop: {
+      position: "absolute",
+      top: 0,
+      left: 0,
+      right: 0,
+      height: "50%",
+      backgroundColor: colors.stone100,
+    },
+    calCoverFallbackBottom: {
+      position: "absolute",
+      bottom: 0,
+      left: 0,
+      right: 0,
+      height: "50%",
+      backgroundColor: colors.stone200,
+    },
+    calCoverFallbackOverlay: {
+      position: "absolute",
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
       alignItems: "center",
       justifyContent: "center",
-      paddingHorizontal: 2,
+      paddingHorizontal: 4,
     },
     calCoverFallbackText: {
       fontSize: 8,
-      fontWeight: fontWeight.semibold,
-      color: withOpacity(colors.mutedForeground, 0.5),
+      fontWeight: fontWeight.medium,
+      color: colors.stone400,
       textAlign: "center",
+      lineHeight: 11,
+      fontFamily: "serif",
     },
     calSpineOverlay: {
       position: "absolute",
@@ -595,13 +621,40 @@ export const makeStyles = (colors: ThemeColors) =>
       flexDirection: "row",
       zIndex: 2,
     },
+    calSpineEdgeRight: {
+      position: "absolute",
+      top: 0,
+      right: 0,
+      bottom: 0,
+      width: "1.8%",
+      backgroundColor: "rgba(30,30,30,0.12)",
+      zIndex: 2,
+    },
+    calSpineTopHighlight: {
+      position: "absolute",
+      top: 0,
+      left: 0,
+      right: 0,
+      height: "3%",
+      backgroundColor: "rgba(240,240,240,0.15)",
+      zIndex: 3,
+    },
+    calSpineBottomShadow: {
+      position: "absolute",
+      bottom: 0,
+      left: 0,
+      right: 0,
+      height: "8%",
+      backgroundColor: "rgba(15,15,15,0.15)",
+      zIndex: 3,
+    },
     calCoverTopScrim: {
       position: "absolute",
       top: 0,
       left: 0,
       right: 0,
-      height: "40%",
-      backgroundColor: "rgba(0,0,0,0.35)",
+      height: "44%",
+      backgroundColor: "rgba(0,0,0,0.42)",
       zIndex: 3,
     },
     calCoverOverlay: {
@@ -635,6 +688,20 @@ export const makeStyles = (colors: ThemeColors) =>
       textShadowOffset: { width: 0, height: 1 },
       textShadowRadius: 2,
     },
+    calCoverPageBadge: {
+      alignSelf: "flex-end",
+      borderRadius: radius.full,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: "rgba(255,255,255,0.24)",
+      backgroundColor: "rgba(0,0,0,0.28)",
+      paddingHorizontal: 6,
+      paddingVertical: 2,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.16,
+      shadowRadius: 4,
+      elevation: 2,
+    },
     calCoverPageText: {
       fontSize: 7,
       fontWeight: fontWeight.bold,
@@ -642,7 +709,7 @@ export const makeStyles = (colors: ThemeColors) =>
       textShadowColor: "rgba(0,0,0,0.6)",
       textShadowOffset: { width: 0, height: 1 },
       textShadowRadius: 2,
-      alignSelf: "flex-end",
+      textAlign: "center",
     },
 
     /* Calendar cell — WITHOUT cover (plain intensity) */
@@ -668,7 +735,7 @@ export const makeStyles = (colors: ThemeColors) =>
     calPlainTime: {
       fontSize: 8,
       fontWeight: fontWeight.medium,
-      color: withOpacity(colors.foreground, 0.45),
+      color: withOpacity(colors.foreground, 0.62),
     },
     /* ── Rhythm profile ── */
     rhythmSubTitle: {
@@ -678,7 +745,7 @@ export const makeStyles = (colors: ThemeColors) =>
     },
     rhythmSubDesc: {
       fontSize: 12,
-      color: withOpacity(colors.mutedForeground, 0.45),
+      color: withOpacity(colors.mutedForeground, 0.62),
       lineHeight: 17,
     },
     categoryLabel: {
@@ -726,11 +793,11 @@ export const makeStyles = (colors: ThemeColors) =>
     },
     snapshotMeta: {
       fontSize: 11,
-      color: withOpacity(colors.mutedForeground, 0.45),
+      color: withOpacity(colors.mutedForeground, 0.6),
     },
     snapshotTopBookTitle: {
       fontSize: 11,
-      color: withOpacity(colors.foreground, 0.5),
+      color: withOpacity(colors.foreground, 0.66),
     },
 
     /* ── Journey summary ── */
@@ -744,16 +811,16 @@ export const makeStyles = (colors: ThemeColors) =>
     journeyBigSuffix: {
       fontSize: 20,
       fontWeight: fontWeight.semibold,
-      color: withOpacity(colors.mutedForeground, 0.5),
+      color: withOpacity(colors.mutedForeground, 0.64),
     },
     journeyNarrative: {
       fontSize: 13,
-      color: withOpacity(colors.mutedForeground, 0.45),
+      color: withOpacity(colors.mutedForeground, 0.62),
       lineHeight: 18,
     },
     journeyStartDate: {
       fontSize: 12,
-      color: withOpacity(colors.mutedForeground, 0.4),
+      color: withOpacity(colors.mutedForeground, 0.56),
     },
     journeyMetricsRow: {
       flexDirection: "row",
@@ -765,7 +832,7 @@ export const makeStyles = (colors: ThemeColors) =>
     journeyMetricLabel: {
       fontSize: 9,
       fontWeight: fontWeight.medium,
-      color: withOpacity(colors.mutedForeground, 0.35),
+      color: withOpacity(colors.mutedForeground, 0.52),
       textTransform: "uppercase",
       letterSpacing: 1,
     },
