@@ -311,6 +311,28 @@ export const TrendingUpIcon = icon(() => (
   </>
 ));
 
+export const TrophyIcon = icon(() => (
+  <>
+    <Path d="M8 21h8" />
+    <Path d="M12 17v4" />
+    <Path d="M7 4h10v5a5 5 0 0 1-10 0V4Z" />
+    <Path d="M5 6H4a2 2 0 0 0 0 4h1" />
+    <Path d="M19 6h1a2 2 0 0 1 0 4h-1" />
+  </>
+));
+
+export const SwordsIcon = icon(() => (
+  <>
+    <Path d="m14.5 5.5 4 4" />
+    <Path d="m5.5 14.5 4 4" />
+    <Path d="m4 20 6.5-6.5" />
+    <Path d="m13.5 10.5 6.5-6.5" />
+    <Path d="m8 4 12 12" />
+    <Path d="m15.5 18.5 2.5 2.5" />
+    <Path d="m3.5 6.5 2.5 2.5" />
+  </>
+));
+
 export const HighlighterIcon = icon(() => (
   <>
     <Path d="m9 11-6 6v3h9l3-3" />

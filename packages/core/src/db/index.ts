@@ -56,6 +56,7 @@ export {
   getMessages,
   insertMessage,
   // Reading session queries
+  getAllReadingSessions,
   getReadingSessions,
   getReadingSessionsByDateRange,
   insertReadingSession,

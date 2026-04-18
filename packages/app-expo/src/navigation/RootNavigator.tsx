@@ -4,6 +4,7 @@ import { FullScreenNotesScreen } from "@/screens/FullScreenNotesScreen";
 import { ReaderScreen } from "@/screens/ReaderScreen";
 import SkillsScreen from "@/screens/SkillsScreen";
 import StatsScreen from "@/screens/StatsScreen";
+import BadgesScreen from "@/screens/BadgesScreen";
 import AISettingsScreen from "@/screens/settings/AISettingsScreen";
 import AboutScreen from "@/screens/settings/AboutScreen";
 import AppearanceSettingsScreen from "@/screens/settings/AppearanceSettingsScreen";
@@ -25,6 +26,7 @@ export type RootStackParamList = {
   Reader: { bookId: string; cfi?: string; highlight?: boolean; openTTS?: boolean };
   BookChat: { bookId: string; selectedText?: string; chapterTitle?: string };
   Stats: undefined;
+  Badges: undefined;
   Skills: undefined;
   VectorModelSettings: undefined;
   AppearanceSettings: undefined;
@@ -66,6 +68,11 @@ export function RootNavigator() {
           <Stack.Screen
             name="Stats"
             component={StatsScreen}
+            options={{ animation: "slide_from_right" }}
+          />
+          <Stack.Screen
+            name="Badges"
+            component={BadgesScreen}
             options={{ animation: "slide_from_right" }}
           />
           <Stack.Screen

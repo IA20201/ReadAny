@@ -28,7 +28,7 @@ import { useNotebookStore } from "@/stores/notebook-store";
 import { useReaderStore } from "@/stores/reader-store";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useTTSStore } from "@/stores/tts-store";
-import { useFontStore, getCSSFontFace } from "@readany/core/stores";
+import { useFontStore, getCSSFontFace, useReadingSessionStore } from "@readany/core/stores";
 import { useChapterTranslation } from "@readany/core/hooks";
 import { splitNarrationText } from "@readany/core/tts";
 import type { CitationPart, HighlightColor } from "@readany/core/types";
@@ -49,6 +49,43 @@ import { SelectionPopover } from "./SelectionPopover";
 import { TOCPanel } from "./TOCPanel";
 import { TTSPage } from "./TTSPage";
 import { TranslationPopover } from "./TranslationPopover";
+
+const REFLOWABLE_CHARACTERS_PER_LOCATION = 1500;
+const MAX_TRACKED_LOCATION_DELTA = 20;
+const MAX_TRACKED_PAGE_DELTA = 20;
+const MAX_TRACKED_FRACTION_DELTA = 0.08;
+const INITIAL_PROGRESS_RESTORE_GUARD_MS = 1800;
+const PROGRAMMATIC_NAV_GUARD_MS = 1200;
+
+function countReadableCharacters(doc: Document): number {
+  const rawText = doc.body?.textContent ?? "";
+  const normalizedText = rawText.replace(/\s+/g, "");
+  return normalizedText.length;
+}
+
+async function measureReflowableBookCharacters(bookDoc: BookDoc): Promise<number | null> {
+  const sections = bookDoc.sections ?? [];
+  if (sections.length === 0) return null;
+
+  let totalCharacters = 0;
+
+  for (const section of sections) {
+    try {
+      const doc = await section.createDocument();
+      const sectionCharacters = countReadableCharacters(doc);
+      if (sectionCharacters > 0) {
+        totalCharacters += sectionCharacters;
+      }
+    } catch (error) {
+      console.warn("[ReaderView] Failed to measure section characters", {
+        href: section.href,
+        error,
+      });
+    }
+  }
+
+  return totalCharacters > 0 ? totalCharacters : null;
+}
 
 // --- Tauri file loading ---
 async function loadFileAsBlob(filePath: string): Promise<Blob> {
@@ -476,6 +513,10 @@ export function ReaderView({ bookId, tabId }: ReaderViewProps) {
       }
 
       console.log("[ReaderView] Navigating to CFI:", cfi);
+      progressTrackingGuardUntilRef.current = Math.max(
+        progressTrackingGuardUntilRef.current,
+        Date.now() + PROGRAMMATIC_NAV_GUARD_MS,
+      );
       foliateRef.current.goToCFI(cfi);
     },
     [tabId, readerTab, pushHistory],
@@ -753,6 +794,42 @@ export function ReaderView({ bookId, tabId }: ReaderViewProps) {
   const toolbarVisible = controlsVisible || isToolbarPinned;
   const readingHeaderTitle = (readerTab?.chapterTitle || book?.meta.title || "").trim();
   const contentTopPadding = isToolbarPinned ? 78 : 56;
+  const incrementPagesRead = useReadingSessionStore((s) => s.incrementPagesRead);
+  const incrementCharactersRead = useReadingSessionStore((s) => s.incrementCharactersRead);
+  const sessionProgressRef = useRef<{
+    mode: "location" | "page" | "characters";
+    current: number;
+    fraction?: number;
+    section?: number;
+    page?: number;
+  } | null>(null);
+  const totalBookCharactersRef = useRef<number | null>(null);
+  const progressTrackingGuardUntilRef = useRef(0);
+
+  const suppressProgressTracking = useCallback((duration = PROGRAMMATIC_NAV_GUARD_MS) => {
+    progressTrackingGuardUntilRef.current = Math.max(
+      progressTrackingGuardUntilRef.current,
+      Date.now() + duration,
+    );
+  }, []);
+
+  const goToCFISafely = useCallback(
+    (targetCfi: string) => {
+      if (!targetCfi) return;
+      suppressProgressTracking();
+      foliateRef.current?.goToCFI(targetCfi);
+    },
+    [suppressProgressTracking],
+  );
+
+  const goToHrefSafely = useCallback(
+    (href: string) => {
+      if (!href) return;
+      suppressProgressTracking();
+      foliateRef.current?.goToHref(href);
+    },
+    [suppressProgressTracking],
+  );
 
   useEffect(() => {
     window.localStorage.setItem(TOOLBAR_PIN_STORAGE_KEY, String(isToolbarPinned));
@@ -807,6 +884,32 @@ export function ReaderView({ bookId, tabId }: ReaderViewProps) {
     });
   }, [bookId, loadAnnotations]);
 
+  useEffect(() => {
+    sessionProgressRef.current = null;
+    suppressProgressTracking(INITIAL_PROGRESS_RESTORE_GUARD_MS);
+  }, [bookId, tabId, bookFormat, suppressProgressTracking]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    if (!bookDoc || isFixedLayoutFormat(bookFormat)) {
+      totalBookCharactersRef.current = null;
+      return;
+    }
+
+    totalBookCharactersRef.current = null;
+
+    void measureReflowableBookCharacters(bookDoc).then((totalCharacters) => {
+      if (!cancelled) {
+        totalBookCharactersRef.current = totalCharacters;
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [bookDoc, bookFormat]);
+
   // Load annotations
   useEffect(() => {
     loadAnnotations(bookId);
@@ -839,22 +942,92 @@ export function ReaderView({ bookId, tabId }: ReaderViewProps) {
         setChapter(tabId, detail.section?.current ?? 0, detail.tocItem.label, detail.tocItem.href);
       }
 
-      // Track pages (reference: Readest progressRelocateHandler)
-      // For fixed layout (PDF/CBZ): use section index (real pages)
-      // For reflowable (EPUB): use location (virtual loc based on sizePerLoc=1500)
-      //   location.current is 0-based; display as current+1 / total
-      //   At end of book, clamp to total to prevent overflow
-      if (isFixedLayoutFormat(bookFormat) && detail.section) {
+      // Display true pages only when the renderer exposes them.
+      if (detail.page) {
+        setTotalPages(detail.page.total);
+        setCurrentPage(detail.page.current);
+      } else if (isFixedLayoutFormat(bookFormat) && detail.section) {
         setTotalPages(detail.section.total);
         setCurrentPage(detail.section.current + 1);
+      } else {
+        // Reflowable documents without renderer-backed pagination should use percent instead.
+        setTotalPages(0);
+        setCurrentPage(0);
+      }
+
+      const trackingSuppressed = Date.now() < progressTrackingGuardUntilRef.current;
+
+      // Track reading progress.
+      // For fixed layout (PDF/CBZ): use section index (stable real pages)
+      // For reflowable (EPUB/TXT): use logical locations for character accumulation
+      if (isFixedLayoutFormat(bookFormat) && detail.section) {
+        const previous = sessionProgressRef.current;
+        const currentSection = detail.section.current;
+        if (
+          !trackingSuppressed &&
+          previous?.mode === "page" &&
+          currentSection > previous.current
+        ) {
+          const delta = currentSection - previous.current;
+          if (delta <= MAX_TRACKED_PAGE_DELTA) {
+            incrementPagesRead(delta);
+          }
+        }
+        sessionProgressRef.current = { mode: "page", current: currentSection };
       } else if (detail.location) {
-        const { current, total } = detail.location;
-        // Check if renderer is at the very end (same as Readest's atEnd check)
-        const view = foliateRef.current?.getView();
-        const atEnd = view?.renderer?.atEnd || false;
-        const currentLoc = atEnd && total > 0 ? total : current + 1;
-        setTotalPages(total);
-        setCurrentPage(currentLoc);
+        const { current } = detail.location;
+        const fraction = detail.fraction ?? 0;
+        const totalBookCharacters = totalBookCharactersRef.current;
+
+        if (totalBookCharacters && totalBookCharacters > 0) {
+          const currentCharacters = Math.round(totalBookCharacters * fraction);
+          const previous = sessionProgressRef.current;
+          const currentSection = detail.section?.current ?? 0;
+          const currentRendererPage = detail.page?.current ?? null;
+
+          if (!trackingSuppressed && previous?.mode === "characters" && currentCharacters > previous.current) {
+            if (
+              currentRendererPage != null &&
+              previous.page != null &&
+              previous.section != null
+            ) {
+              const samePage =
+                previous.section === currentSection && previous.page === currentRendererPage;
+              const movedForwardWithinSection =
+                previous.section === currentSection &&
+                currentRendererPage > previous.page &&
+                currentRendererPage - previous.page <= MAX_TRACKED_PAGE_DELTA;
+              const movedForwardAcrossSection =
+                currentSection > previous.section && currentSection - previous.section <= 1;
+
+              if (!samePage && (movedForwardWithinSection || movedForwardAcrossSection)) {
+                incrementCharactersRead(currentCharacters - previous.current);
+              }
+            } else if (Math.abs(fraction - (previous.fraction ?? 0)) <= MAX_TRACKED_FRACTION_DELTA) {
+              incrementCharactersRead(currentCharacters - previous.current);
+            }
+          }
+          sessionProgressRef.current = {
+            mode: "characters",
+            current: currentCharacters,
+            fraction,
+            section: currentSection,
+            page: currentRendererPage ?? undefined,
+          };
+        } else {
+          const previous = sessionProgressRef.current;
+          if (
+            !trackingSuppressed &&
+            previous?.mode === "location" &&
+            current > previous.current
+          ) {
+            const delta = current - previous.current;
+            if (delta <= MAX_TRACKED_LOCATION_DELTA) {
+              incrementCharactersRead(delta * REFLOWABLE_CHARACTERS_PER_LOCATION);
+            }
+          }
+          sessionProgressRef.current = { mode: "location", current, fraction };
+        }
       }
 
       // Throttled save to DB
@@ -1060,8 +1233,8 @@ export function ReaderView({ bookId, tabId }: ReaderViewProps) {
   }, []);
 
   const handleGoToChapter = useCallback((href: string) => {
-    foliateRef.current?.goToHref(href);
-  }, []);
+    goToHrefSafely(href);
+  }, [goToHrefSafely]);
 
   // --- Selection actions ---
   const handleHighlight = useCallback(
@@ -1546,7 +1719,7 @@ export function ReaderView({ bookId, tabId }: ReaderViewProps) {
         clearTimeout(pendingTTSContinueSafetyTimerRef.current);
         pendingTTSContinueSafetyTimerRef.current = null;
       }
-      foliateRef.current?.goToCFI(targetCfi);
+      goToCFISafely(targetCfi);
       await new Promise((resolve) => setTimeout(resolve, 280));
       const segments =
         (await foliateRef.current?.getVisibleTTSSegments(targetCfi))?.map((segment) => ({
@@ -1749,7 +1922,7 @@ export function ReaderView({ bookId, tabId }: ReaderViewProps) {
         ttsLastTextRef.current = nextText;
         if (nextCfi) {
           ttsSetCurrentLocation(nextCfi);
-          foliateRef.current?.goToCFI(nextCfi);
+          goToCFISafely(nextCfi);
           foliateRef.current?.highlightCFITemporarily(nextCfi, 1200);
         }
         setTimeout(() => ttsPlay(allSegments.map((segment) => segment.text)), 0);
@@ -1772,12 +1945,12 @@ export function ReaderView({ bookId, tabId }: ReaderViewProps) {
       ttsLastTextRef.current = nextText;
       if (nextCfi) {
         ttsSetCurrentLocation(nextCfi);
-        foliateRef.current?.goToCFI(nextCfi);
+        goToCFISafely(nextCfi);
         foliateRef.current?.highlightCFITemporarily(nextCfi, 1200);
       }
       setTimeout(() => ttsPlay(sliced.map((segment) => segment.text)), 0);
     },
-    [ttsPrevPageSegments, ttsSegments, ttsSetCurrentLocation, ttsPlay],
+    [ttsPrevPageSegments, ttsSegments, ttsSetCurrentLocation, ttsPlay, goToCFISafely],
   );
 
   const handleJumpToTTSLyricSegment = useCallback(
@@ -1816,7 +1989,7 @@ export function ReaderView({ bookId, tabId }: ReaderViewProps) {
         ttsFutureSegmentsRef.current = [];
         if (nextCfi) {
           ttsSetCurrentLocation(nextCfi);
-          foliateRef.current?.goToCFI(nextCfi);
+          goToCFISafely(nextCfi);
         }
         ttsPlay(allSegments.map((s) => s.text));
         return;
@@ -1843,7 +2016,7 @@ export function ReaderView({ bookId, tabId }: ReaderViewProps) {
         ttsFutureSegmentsRef.current = [];
         if (nextCfi) {
           ttsSetCurrentLocation(nextCfi);
-          foliateRef.current?.goToCFI(nextCfi);
+          goToCFISafely(nextCfi);
         }
         ttsPlay(remainingFuture.map((s) => s.text));
         void primeDesktopTTSLyricContext(
@@ -1866,6 +2039,7 @@ export function ReaderView({ bookId, tabId }: ReaderViewProps) {
       ttsSegments,
       ttsFutureSegments,
       ttsSetCurrentLocation,
+      goToCFISafely,
     ],
   );
 
