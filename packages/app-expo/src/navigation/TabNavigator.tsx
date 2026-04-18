@@ -30,7 +30,7 @@ export function TabNavigator() {
   // Some Android devices (e.g. OnePlus Ace5 Ultra) underreport the bottom
   // safe area inset, causing tab bar labels to be clipped by the gesture
   // navigation bar. Ensure a minimum bottom inset so content stays visible.
-  const bottomInset = Platform.OS === "android" ? Math.max(insets.bottom, 16) : insets.bottom;
+  const bottomInset = Platform.OS === "android" ? Math.max(insets.bottom, 28) : insets.bottom;
 
   return (
     <Tab.Navigator
