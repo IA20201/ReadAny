@@ -3,9 +3,11 @@
  * Extracted from StatsSections.tsx.
  */
 import { useColors, withOpacity } from "@/styles/theme";
-import type { TopBookEntry } from "@readany/core/stats";
+import type { DailyReadingFact, TopBookEntry } from "@readany/core/stats";
+import { computeBookETA } from "@readany/core/stats";
 import { ChevronDownIcon, ChevronUpIcon } from "@/components/ui/Icon";
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Text, TouchableOpacity, View } from "react-native";
 import { makeStyles } from "./stats-styles";
 import { formatTimeLocalized } from "./stats-utils";
@@ -19,14 +21,17 @@ export function TopBooksSection({
   resolvedCovers,
   isZh,
   copy,
+  allFacts,
 }: {
   books: TopBookEntry[];
   resolvedCovers: Map<string, string>;
   isZh: boolean;
   copy: StatsCopy;
+  allFacts?: DailyReadingFact[];
 }) {
   const colors = useColors();
   const s = makeStyles(colors);
+  const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
 
   if (books.length === 0) {
@@ -45,6 +50,10 @@ export function TopBooksSection({
       {visibleBooks.map((book, index) => {
         const isFirst = index === 0;
         const coverUrl = resolvedCovers.get(book.bookId) || book.coverUrl;
+        const eta =
+          allFacts && book.progress !== undefined && book.progress < 1
+            ? computeBookETA(book.bookId, book.progress, book.totalPages, allFacts)
+            : null;
         return (
           <View
             key={book.bookId}
@@ -82,6 +91,18 @@ export function TopBooksSection({
                   {book.sessionsCount} {copy.sessionsSuffix}
                 </Text>
               </View>
+              {eta && (
+                <Text
+                  style={{
+                    marginTop: 2,
+                    fontSize: 11,
+                    fontWeight: "500",
+                    color: withOpacity(colors.primary, 0.7),
+                  }}
+                >
+                  {t("stats.desktop.etaFinishDays", { days: eta.etaDays })}
+                </Text>
+              )}
             </View>
           </View>
         );
@@ -95,8 +116,8 @@ export function TopBooksSection({
         >
           <Text style={s.expandBtnText}>
             {expanded
-              ? isZh ? "收起" : "Show less"
-              : isZh ? `查看全部 ${books.length} 本` : `Show all ${books.length} books`}
+              ? copy.topBooksCollapse
+              : copy.topBooksExpandCount(books.length)}
           </Text>
           {expanded
             ? <ChevronUpIcon size={14} color={withOpacity(colors.mutedForeground, 0.5)} />

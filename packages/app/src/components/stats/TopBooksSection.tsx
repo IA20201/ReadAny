@@ -2,10 +2,12 @@
  * TopBooksSection.tsx — Top books ranking with expand/collapse.
  */
 import { useResolvedSrc } from "@/hooks/use-resolved-src";
-import type { TopBookEntry } from "@readany/core/stats";
+import type { DailyReadingFact, TopBookEntry } from "@readany/core/stats";
+import { computeBookETA } from "@readany/core/stats";
 import { cn } from "@readany/core/utils";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import type { StatsCopy } from "./stats-copy";
 import { formatCompactMinutes } from "./stats-utils";
 
@@ -19,10 +21,12 @@ export function TopBooksSection({
   books,
   copy,
   isZh,
+  allFacts,
 }: {
   books: TopBookEntry[];
   copy: StatsCopy;
   isZh: boolean;
+  allFacts?: DailyReadingFact[];
 }) {
   const [expanded, setExpanded] = useState(false);
 
@@ -45,6 +49,7 @@ export function TopBooksSection({
           isFirst={index === 0}
           copy={copy}
           isZh={isZh}
+          allFacts={allFacts}
         />
       ))}
 
@@ -56,14 +61,12 @@ export function TopBooksSection({
         >
           {expanded ? (
             <>
-              {isZh ? "收起" : "Show less"}
+              {copy.topBooksCollapse}
               <ChevronUp className="h-3.5 w-3.5" />
             </>
           ) : (
             <>
-              {isZh
-                ? `查看全部 ${books.length} 本`
-                : `Show all ${books.length} books`}
+              {copy.topBooksExpandCount(books.length)}
               <ChevronDown className="h-3.5 w-3.5" />
             </>
           )}
@@ -79,13 +82,21 @@ function TopBookItem({
   isFirst,
   copy,
   isZh,
+  allFacts,
 }: {
   book: TopBookEntry;
   index: number;
   isFirst: boolean;
   copy: StatsCopy;
   isZh: boolean;
+  allFacts?: DailyReadingFact[];
 }) {
+  const { t } = useTranslation();
+  const eta =
+    allFacts && book.progress !== undefined && book.progress < 1
+      ? computeBookETA(book.bookId, book.progress, book.totalPages, allFacts)
+      : null;
+
   return (
     <article
       className={cn(
@@ -150,6 +161,11 @@ function TopBookItem({
             {book.sessionsCount.toLocaleString()} {copy.sessionsSuffix}
           </span>
         </div>
+        {eta && (
+          <div className="mt-1 text-[11px] font-medium text-primary/70">
+            {t("stats.desktop.etaFinishDays", { days: eta.etaDays })}
+          </div>
+        )}
       </div>
     </article>
   );

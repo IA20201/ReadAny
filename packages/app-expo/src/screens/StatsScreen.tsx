@@ -30,13 +30,18 @@ import {
   readingReportsService,
   evaluateBadges,
   buildStatsSummary,
+  evaluateStreakStatus,
+  getAllGoalProgress,
   type StatsDimension,
   type StatsReport,
+  type GoalType,
+  type GoalPeriod,
 } from "@readany/core/stats";
+import { useGoalsStore } from "@readany/core/stores";
 import { eventBus } from "@readany/core/utils/event-bus";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ActivityIndicator, ScrollView, Text, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useResolvedCovers } from "./notes/useResolvedCovers";
 import { makeStyles } from "./stats/stats-styles";
@@ -59,6 +64,7 @@ import {
   TopBooksSection,
 } from "./stats/StatsSections";
 import { BadgesPreview } from "./stats/BadgesPreview";
+import { GoalsSection } from "./stats/GoalsSection";
 
 const DIMENSIONS: StatsDimension[] = ["day", "week", "month", "year", "lifetime"];
 
@@ -103,7 +109,7 @@ export default function StatsScreen() {
   const [anchorDate, setAnchorDate] = useState<Date>(() => new Date());
   const [report, setReport] = useState<StatsReport | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [errorKey, setErrorKey] = useState<string | null>(null);
 
   const resolvedCovers = useResolvedCovers(report?.topBooks);
 
@@ -129,7 +135,7 @@ export default function StatsScreen() {
   /* ── Data loading ── */
   const loadReport = useCallback(async () => {
     setLoading(true);
-    setError(null);
+    setErrorKey(null);
     try {
       let r: StatsReport;
       if (dimension === "day") r = await readingReportsService.getDayReport(anchorDate, currentSession);
@@ -140,17 +146,37 @@ export default function StatsScreen() {
       setReport(r);
     } catch (err) {
       console.error("[StatsScreen] Failed to load report", err);
-      setError(t("stats.loadFailed"));
+      setErrorKey("stats.loadFailed");
     } finally {
       setLoading(false);
     }
-  }, [anchorDate, currentSession, dimension, t]);
+  }, [anchorDate, currentSession, dimension]);
+
+  const loadReportRef = useRef(loadReport);
+
+  useEffect(() => {
+    loadReportRef.current = loadReport;
+  }, [loadReport]);
 
   useFocusEffect(
     useCallback(() => {
-      void saveCurrentSession().finally(() => void loadReport());
-    }, [saveCurrentSession, loadReport]),
+      let cancelled = false;
+
+      void saveCurrentSession().finally(() => {
+        if (!cancelled) {
+          void loadReportRef.current();
+        }
+      });
+
+      return () => {
+        cancelled = true;
+      };
+    }, [saveCurrentSession]),
   );
+
+  useEffect(() => {
+    void loadReport();
+  }, [loadReport]);
 
   useEffect(() => {
     return eventBus.on("sync:completed", () => void loadReport());
@@ -162,9 +188,9 @@ export default function StatsScreen() {
   const headlineValue = useMemo(() => {
     if (!report) return "";
     if (report.dimension === "lifetime")
-      return `${report.context.daysSinceJoined.toLocaleString()}${isZh ? " 天" : "d"}`;
+      return `${report.context.daysSinceJoined.toLocaleString()} ${t("stats.desktop.daysSuffix")}`;
     return formatTimeLocalized(report.summary.totalReadingTime, isZh);
-  }, [report, isZh]);
+  }, [report, isZh, t]);
 
   const headlineLabel = useMemo(() => {
     if (!report) return "";
@@ -188,10 +214,10 @@ export default function StatsScreen() {
     const ssC = compMap.get("sessions");
     const bkC = compMap.get("books");
     return [
-      { label: t("stats.desktop.activeDays"), value: `${report.summary.activeDays}${isZh ? "天" : "d"}`, delta: adC?.delta, deltaLabel: adC?.deltaLabel },
-      { label: t("stats.desktop.sessions"), value: `${report.summary.totalSessions}${isZh ? "次" : ""}`, delta: ssC?.delta, deltaLabel: ssC?.deltaLabel },
+      { label: t("stats.desktop.activeDays"), value: `${report.summary.activeDays} ${t("stats.desktop.daysSuffix")}`, delta: adC?.delta, deltaLabel: adC?.deltaLabel },
+      { label: t("stats.desktop.sessions"), value: `${report.summary.totalSessions} ${t("stats.desktop.sessionsSuffix")}`, delta: ssC?.delta, deltaLabel: ssC?.deltaLabel },
       { label: t("stats.desktop.books"), value: String(report.summary.booksTouched), sublabel: `${report.summary.totalPagesRead} ${t("stats.desktop.pagesReadSuffix")}`, delta: bkC?.delta, deltaLabel: bkC?.deltaLabel },
-      { label: t("stats.desktop.streak"), value: `${report.dimension === "lifetime" ? report.summary.longestStreak : report.summary.currentStreak}${isZh ? "天" : "d"}` },
+      { label: t("stats.desktop.streak"), value: `${report.dimension === "lifetime" ? report.summary.longestStreak : report.summary.currentStreak} ${t("stats.desktop.daysSuffix")}` },
       { label: t("stats.desktop.avgActiveDay"), value: formatTimeLocalized(report.summary.avgActiveDayTime, isZh) },
     ];
   }, [report, isZh, t]);
@@ -223,14 +249,83 @@ export default function StatsScreen() {
     return evaluateBadges(allFacts, lifetimeSummary);
   }, [allFacts]);
 
+  /* ── Streak risk ── */
+  const streakStatus = useMemo(
+    () => (allFacts.length > 0 ? evaluateStreakStatus(allFacts) : null),
+    [allFacts],
+  );
+
+  /* ── Goals ── */
+  const goals = useGoalsStore((s) => s.goals);
+  const addGoalAction = useGoalsStore((s) => s.addGoal);
+  const removeGoalAction = useGoalsStore((s) => s.removeGoal);
+
+  const goalProgress = useMemo(
+    () => (goals.length > 0 && allFacts.length > 0 ? getAllGoalProgress(goals, allFacts) : []),
+    [goals, allFacts],
+  );
+
+  const activeGoalPeriod = useMemo<GoalPeriod | null>(() => {
+    if (dimension === "month") return "monthly";
+    if (dimension === "year") return "yearly";
+    return null;
+  }, [dimension]);
+
+  const visibleGoalProgress = useMemo(
+    () =>
+      activeGoalPeriod
+        ? goalProgress.filter(({ goal }) => goal.period === activeGoalPeriod)
+        : [],
+    [goalProgress, activeGoalPeriod],
+  );
+
+  const goalSectionTitle = useMemo(
+    () =>
+      activeGoalPeriod
+        ? t(
+            activeGoalPeriod === "yearly"
+              ? "stats.desktop.goalsTitleYearly"
+              : "stats.desktop.goalsTitleMonthly",
+          )
+        : "",
+    [activeGoalPeriod, t],
+  );
+
+  const goalSectionDescription = useMemo(
+    () =>
+      activeGoalPeriod
+        ? t(
+            activeGoalPeriod === "yearly"
+              ? "stats.desktop.goalsDescYearly"
+              : "stats.desktop.goalsDescMonthly",
+          )
+        : "",
+    [activeGoalPeriod, t],
+  );
+
+  const handleAddGoal = useCallback(
+    (type: GoalType, target: number, period: GoalPeriod) => {
+      addGoalAction({
+        id: `goal-${Date.now()}`,
+        type,
+        target,
+        period,
+        createdAt: Date.now(),
+      });
+    },
+    [addGoalAction],
+  );
+
   const copy = useMemo(() => ({
-    heatmapLegendLow: t("stats.desktop.heatmapLegendLow", isZh ? "少" : "Less"),
-    heatmapLegendHigh: t("stats.desktop.heatmapLegendHigh", isZh ? "多" : "More"),
+    heatmapLegendLow: t("stats.desktop.heatmapLegendLow"),
+    heatmapLegendHigh: t("stats.desktop.heatmapLegendHigh"),
     activeDaysSummary: (count: number) => t("stats.desktop.activeDaysSummary", { count }),
     noDataDesc: t("stats.desktop.noDataDesc"),
     noDataTitle: t("stats.desktop.noDataTitle"),
     chartPeakLabel: (label: string, value: string) => t("stats.desktop.chartPeakLabel", { label, value }),
     topBookLead: t("stats.desktop.topBookLead"),
+    topBooksCollapse: t("stats.desktop.topBooksCollapse"),
+    topBooksExpandCount: (count: number) => t("stats.desktop.topBooksExpandCount", { count }),
     noTopBooks: t("stats.desktop.noTopBooks"),
     unknownAuthor: t("stats.desktop.unknownAuthor"),
     pagesReadSuffix: t("stats.desktop.pagesReadSuffix"),
@@ -277,7 +372,7 @@ export default function StatsScreen() {
     // Day summary
     daySummary: t("stats.desktop.daySummary"),
     daySummaryDesc: t("stats.desktop.daySummaryDesc"),
-  }), [t, isZh]);
+  }), [t]);
 
   const dimLabels: Record<StatsDimension, string> = {
     day: t("stats.desktop.dimensions.day"),
@@ -301,39 +396,78 @@ export default function StatsScreen() {
         <TouchableOpacity style={s.backBtn} onPress={() => nav.goBack()}>
           <ChevronLeftIcon size={20} color={colors.foreground} />
         </TouchableOpacity>
-        <Text style={s.headerTitle}>{t("stats.title", "阅读统计")}</Text>
+        <Text style={s.headerTitle}>{t("stats.title")}</Text>
         <View style={{ width: 36 }} />
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scrollContent}>
-        {/* Dimension tabs */}
-        <View style={s.dimTabs}>
-          {DIMENSIONS.map((dim) => (
-            <TouchableOpacity
-              key={dim}
-              style={[s.dimTab, dimension === dim && s.dimTabActive]}
-              onPress={() => { setDimension(dim); setAnchorDate(new Date()); }}
-              activeOpacity={0.7}
-            >
-              <Text style={[s.dimTabText, dimension === dim && s.dimTabTextActive]}>
-                {dimLabels[dim]}
-              </Text>
-            </TouchableOpacity>
-          ))}
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={s.scrollContent}
+        stickyHeaderIndices={[0]}
+      >
+        {/* Dimension tabs — sticky */}
+        <View style={s.dimTabsSticky}>
+          <View style={s.dimTabs}>
+            {DIMENSIONS.map((dim) => (
+              <TouchableOpacity
+                key={dim}
+                style={[s.dimTab, dimension === dim && s.dimTabActive]}
+                onPress={() => { setDimension(dim); setAnchorDate(new Date()); }}
+                activeOpacity={0.7}
+              >
+                <Text style={[s.dimTabText, dimension === dim && s.dimTabTextActive]}>
+                  {dimLabels[dim]}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
         </View>
 
         {loading ? (
           <View style={s.loadingWrap}>
             <ActivityIndicator size="large" color={colors.mutedForeground} />
           </View>
-        ) : error || !report ? (
+        ) : errorKey || !report ? (
           <EmptyState
-            title={error ?? t("stats.desktop.noDataTitle")}
+            title={errorKey ? t(errorKey) : t("stats.desktop.noDataTitle")}
             description={t("stats.desktop.noDataDesc")}
             icon={<SearchIcon size={24} color={withOpacity(colors.mutedForeground, 0.45)} />}
           />
         ) : (
           <>
+            {/* ═══ Streak at risk banner ═══ */}
+            {streakStatus?.atRisk && streakStatus.streakCount > 0 && (
+              <View
+                style={{
+                  marginBottom: 16,
+                  padding: 14,
+                  borderRadius: 14,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 12,
+                  backgroundColor: "rgba(245,158,11,0.1)",
+                  borderWidth: StyleSheet.hairlineWidth,
+                  borderColor: "rgba(245,158,11,0.25)",
+                }}
+              >
+                <FlameIcon size={22} color="#d97706" />
+                <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+                  <Text style={{ fontSize: 13, fontWeight: "700", color: "#d97706" }}>
+                    {t("stats.desktop.streakAtRiskTitle", { count: streakStatus.streakCount })}
+                  </Text>
+                  <Text
+                    style={{
+                      fontSize: 11,
+                      lineHeight: 16,
+                      color: withOpacity(colors.mutedForeground, 0.75),
+                    }}
+                  >
+                    {t("stats.desktop.streakAtRiskBody")}
+                  </Text>
+                </View>
+              </View>
+            )}
+
             {/* ═══ Hero Section ═══ */}
             <View style={s.heroCard}>
               {/* Period row + nav */}
@@ -383,6 +517,21 @@ export default function StatsScreen() {
                 ))}
               </View>
             </View>
+
+            {/* ═══ Reading Goals (month/year only) ═══ */}
+            {activeGoalPeriod && (
+              <SectionCard
+                title={goalSectionTitle}
+                description={goalSectionDescription}
+              >
+                <GoalsSection
+                  progress={visibleGoalProgress}
+                  onAddGoal={handleAddGoal}
+                  onRemoveGoal={removeGoalAction}
+                  currentDimension={dimension}
+                />
+              </SectionCard>
+            )}
 
             {/* ═══ Day Summary (day dimension) ═══ */}
             {report.dimension === "day" && (
@@ -472,6 +621,7 @@ export default function StatsScreen() {
                 resolvedCovers={resolvedCovers}
                 isZh={isZh}
                 copy={copy}
+                allFacts={allFacts}
               />
             </SectionCard>
 

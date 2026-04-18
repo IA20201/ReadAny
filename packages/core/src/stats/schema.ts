@@ -59,6 +59,7 @@ export interface DailyBookBreakdown {
   progressStart?: number;
   progressEnd?: number;
   progressDelta?: number;
+  totalPages?: number;
 }
 
 export interface DailyReadingFact {
@@ -160,6 +161,7 @@ export interface TopBookEntry {
   pagesRead: number;
   sessionsCount: number;
   progress?: number;
+  totalPages?: number;
 }
 
 export interface StatsYearSnapshot {

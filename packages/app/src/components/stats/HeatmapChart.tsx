@@ -1,5 +1,6 @@
 import type { StatsChartDatum } from "@readany/core/stats";
 import { cn } from "@readany/core/utils";
+import { formatCompactMinutes } from "./stats-utils";
 
 function startOfWeek(date: Date): Date {
   const next = new Date(date);
@@ -154,7 +155,7 @@ export function HeatmapChart({
                   {week.cells.map((cell) => {
                     const intensity = getIntensity(cell.value, maxValue);
                     const tooltipLabel = cell.inRange
-                      ? `${toLabel(cell.date, locale)} · ${Math.round(cell.value)} ${isZh ? "分钟" : "min"}`
+                      ? `${toLabel(cell.date, locale)} · ${formatCompactMinutes(cell.value, isZh)}`
                       : toLabel(cell.date, locale);
 
                     return (

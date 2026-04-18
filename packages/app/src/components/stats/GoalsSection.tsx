@@ -123,10 +123,7 @@ export function GoalsSection({
   const [showForm, setShowForm] = useState(false);
 
   // Auto-determine default period from current stats dimension
-  const defaultPeriod: GoalPeriod =
-    currentDimension === "month" || currentDimension === "week" || currentDimension === "day"
-      ? "monthly"
-      : "yearly";
+  const defaultPeriod: GoalPeriod = currentDimension === "year" ? "yearly" : "monthly";
 
   const goalTypeLabel = (type: string) =>
     type === "books" ? copy.goalBooksUnit : type === "time" ? copy.goalTimeUnit : copy.goalPagesUnit;

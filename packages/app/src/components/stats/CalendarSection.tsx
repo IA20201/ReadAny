@@ -6,6 +6,7 @@ import { useResolvedSrc } from "@/hooks/use-resolved-src";
 import type { MonthReport, StatsCalendarCell } from "@readany/core/stats";
 import { cn } from "@readany/core/utils";
 import { useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { formatCompactMinutes, intensityClass } from "./stats-utils";
 
 export function MonthCalendarSection({
@@ -58,6 +59,7 @@ function CalendarDayCell({
   cell: StatsCalendarCell;
   isZh: boolean;
 }) {
+  const { t } = useTranslation();
   const [coverIndex, setCoverIndex] = useState(0);
   const hasCovers = cell.covers.length > 0;
   const multipleCovers = cell.covers.length > 1;
@@ -66,7 +68,7 @@ function CalendarDayCell({
   const titleText =
     cell.totalTime > 0
       ? `${cell.date} · ${formatCompactMinutes(cell.totalTime, isZh)}`
-      : `${cell.date} · ${isZh ? "无阅读" : "No reading"}`;
+      : `${cell.date} · ${t("stats.noReading")}`;
 
   if (currentCover) {
     const shellClassName = cn(

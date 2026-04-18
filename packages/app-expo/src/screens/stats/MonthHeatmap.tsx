@@ -21,6 +21,7 @@ export function MonthHeatmap({
 }) {
   const colors = useColors();
   const s = makeStyles(colors);
+  const locale = isZh ? "zh-CN" : "en-US";
 
   // Build a date→value map
   const valueMap = useMemo(() => {
@@ -80,7 +81,6 @@ export function MonthHeatmap({
   }, [year, month, valueMap]);
 
   // Weekday labels
-  const locale = isZh ? "zh-CN" : "en-US";
   const weekLabels = useMemo(() => {
     const monday = new Date(2024, 0, 1); // Monday
     return Array.from({ length: 7 }, (_, i) => {
@@ -107,7 +107,7 @@ export function MonthHeatmap({
     return `${now.getFullYear()}-${mm}-${dd}`;
   })();
 
-  const [selected, setSelected] = useState<{ day: number; value: number } | null>(null);
+  const [selected, setSelected] = useState<{ day: number; value: number; dateKey: string } | null>(null);
 
   return (
     <View style={{ gap: 6 }}>
@@ -135,7 +135,11 @@ export function MonthHeatmap({
                 key={cell.dateKey}
                 activeOpacity={0.7}
                 onPress={() => {
-                  setSelected(selected?.day === cell.day ? null : { day: cell.day, value: cell.value });
+                  setSelected(
+                    selected?.dateKey === cell.dateKey
+                      ? null
+                      : { day: cell.day, value: cell.value, dateKey: cell.dateKey },
+                  );
                   if (selected?.day !== cell.day) setTimeout(() => setSelected(null), 2000);
                 }}
                 style={{
@@ -182,7 +186,10 @@ export function MonthHeatmap({
 
         {selected && (
           <Text style={{ fontSize: 11, color: withOpacity(colors.foreground, 0.6) }}>
-            {selected.day}{isZh ? "日" : "th"} · {formatCompactMinutes(selected.value, isZh)}
+            {new Intl.DateTimeFormat(locale, { month: "numeric", day: "numeric" }).format(
+              new Date(`${selected.dateKey}T00:00:00`),
+            )}{" "}
+            · {formatCompactMinutes(selected.value, isZh)}
           </Text>
         )}
       </View>

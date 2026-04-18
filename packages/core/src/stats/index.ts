@@ -21,6 +21,12 @@ export {
   getAllGoalProgress,
 } from "./goals-service";
 export {
+  evaluateStreakStatus,
+} from "./streak-service";
+export type { StreakStatus } from "./streak-service";
+export { computeBookETA } from "./eta-service";
+export type { BookETA } from "./eta-service";
+export {
   evaluateBadges,
   ALL_BADGE_DEFINITIONS,
   BADGE_NUMBERS,

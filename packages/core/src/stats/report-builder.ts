@@ -106,12 +106,14 @@ export function buildTopBooksFromFacts(
         pagesRead: 0,
         sessionsCount: 0,
         progress: book.progressEnd,
+        totalPages: book.totalPages,
       };
 
       existing.totalTime += book.totalTime;
       existing.pagesRead += book.pagesRead;
       existing.sessionsCount += book.sessionsCount;
       existing.progress = book.progressEnd ?? existing.progress;
+      existing.totalPages = book.totalPages ?? existing.totalPages;
 
       map.set(book.bookId, existing);
     }

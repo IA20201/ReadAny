@@ -175,7 +175,7 @@ export function FullHeatmap({ dailyStats }: { dailyStats: DailyStats[] }) {
         >
           <Text style={{ fontSize: 12, color: colors.cardForeground, fontWeight: "500", textAlign: "center" }}>
             {formatDisplayDate(selectedDay.date)}{" "}
-            {selectedDay.time > 0 ? formatTime(selectedDay.time) : t("stats.noReading", "无阅读")}
+            {selectedDay.time > 0 ? formatTime(selectedDay.time) : t("stats.noReading")}
           </Text>
         </View>
       )}

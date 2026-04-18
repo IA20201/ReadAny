@@ -38,6 +38,10 @@ export const makeStyles = (colors: ThemeColors) =>
     },
 
     /* ── Dimension tabs ── */
+    dimTabsSticky: {
+      backgroundColor: colors.background,
+      paddingBottom: 12,
+    },
     dimTabs: {
       flexDirection: "row",
       borderRadius: radius.lg,
@@ -45,7 +49,6 @@ export const makeStyles = (colors: ThemeColors) =>
       borderColor: withOpacity(colors.border, 0.5),
       backgroundColor: withOpacity(colors.muted, 0.3),
       padding: 2,
-      marginBottom: 16,
     },
     dimTab: {
       flex: 1,

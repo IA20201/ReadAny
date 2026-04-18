@@ -34,7 +34,7 @@ export function BarChart({
   if (data.length === 0) {
     return (
       <View style={s.barChartEmpty}>
-        <Text style={s.barChartEmptyText}>{t("stats.noData", "暂无数据")}</Text>
+        <Text style={s.barChartEmptyText}>{t("stats.noData")}</Text>
       </View>
     );
   }

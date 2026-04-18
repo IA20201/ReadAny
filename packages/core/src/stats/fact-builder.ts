@@ -112,6 +112,7 @@ export function buildDailyReadingFacts(
             pagesRead: 0,
             sessionsCount: 0,
             progressEnd: book.progress,
+            totalPages: book.meta.totalPages,
           }
         : createUnknownBookBreakdown(session.bookId));
 

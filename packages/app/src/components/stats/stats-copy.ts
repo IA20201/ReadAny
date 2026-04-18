@@ -6,6 +6,7 @@ import type { TFunction } from "i18next";
 import type { StatsDimension } from "@readany/core/stats";
 
 export type StatsCopy = ReturnType<typeof getStatsCopy>;
+type GoalPeriod = "monthly" | "yearly";
 
 export function getStatsCopy(t: TFunction) {
   return {
@@ -131,6 +132,10 @@ export function getStatsCopy(t: TFunction) {
     // Goals
     goals: t("stats.desktop.goals"),
     goalsDesc: t("stats.desktop.goalsDesc"),
+    goalsTitle: (period: GoalPeriod) =>
+      t(period === "yearly" ? "stats.desktop.goalsTitleYearly" : "stats.desktop.goalsTitleMonthly"),
+    goalsDescription: (period: GoalPeriod) =>
+      t(period === "yearly" ? "stats.desktop.goalsDescYearly" : "stats.desktop.goalsDescMonthly"),
     setGoal: t("stats.desktop.setGoal"),
     editGoal: t("stats.desktop.editGoal"),
     removeGoal: t("stats.desktop.removeGoal"),
@@ -149,6 +154,8 @@ export function getStatsCopy(t: TFunction) {
     goalPagesUnit: t("stats.desktop.goalPagesUnit"),
     noGoals: t("stats.desktop.noGoals"),
     goalCancel: t("stats.desktop.goalCancel"),
+    topBooksCollapse: t("stats.desktop.topBooksCollapse"),
+    topBooksExpandCount: (count: number) => t("stats.desktop.topBooksExpandCount", { count }),
     // Badges
     badges: t("stats.desktop.badges"),
     badgesDesc: t("stats.desktop.badgesDesc"),

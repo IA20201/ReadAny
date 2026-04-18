@@ -20,6 +20,7 @@ import {
   readingReportsService,
   getAllGoalProgress,
   evaluateBadges,
+  evaluateStreakStatus,
   ALL_BADGE_DEFINITIONS,
   buildStatsSummary,
   type StatsDimension,
@@ -274,6 +275,20 @@ export function ReadingStatsPanel() {
     [goals, allFacts],
   );
 
+  const activeGoalPeriod = useMemo<"monthly" | "yearly" | null>(() => {
+    if (dimension === "month") return "monthly";
+    if (dimension === "year") return "yearly";
+    return null;
+  }, [dimension]);
+
+  const visibleGoalProgress = useMemo(
+    () =>
+      activeGoalPeriod
+        ? goalProgress.filter(({ goal }) => goal.period === activeGoalPeriod)
+        : [],
+    [goalProgress, activeGoalPeriod],
+  );
+
   const handleAddGoal = (type: "books" | "time" | "pages", target: number, period: "monthly" | "yearly") => {
     addGoalAction({
       id: `goal-${Date.now()}`,
@@ -290,6 +305,12 @@ export function ReadingStatsPanel() {
     const lifetimeSummary = buildStatsSummary(allFacts);
     return evaluateBadges(allFacts, lifetimeSummary);
   }, [allFacts]);
+
+  /* ── Streak risk ── */
+  const streakStatus = useMemo(
+    () => (allFacts.length > 0 ? evaluateStreakStatus(allFacts) : null),
+    [allFacts],
+  );
 
   const [badgesDialogOpen, setBadgesDialogOpen] = useState(false);
 
@@ -336,35 +357,36 @@ export function ReadingStatsPanel() {
       <div className="h-full min-w-0 overflow-y-auto overflow-x-hidden bg-background">
         <div className="mx-auto flex w-full min-w-0 max-w-[1800px] flex-col gap-6 px-5 py-6 sm:px-8 sm:py-8 lg:gap-8">
 
-          {/* ════════ Header ════════ */}
-          <header className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-            <div className="space-y-1.5">
-              <h1 className="text-[28px] font-bold tracking-tight text-foreground sm:text-[34px]">
-                {copy.pageTitle}
-              </h1>
-              <p className="max-w-xl text-[15px] leading-relaxed text-muted-foreground/55">
-                {copy.pageSubtitle}
-              </p>
-            </div>
+          {/* ════════ Sticky Header ════════ */}
+          <div className="sticky top-0 z-30 -mx-5 border-b border-border/10 bg-background/92 px-5 py-3 backdrop-blur-md sm:-mx-8 sm:px-8 sm:py-4">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between lg:gap-5">
+              <header className="min-w-0 space-y-1 lg:max-w-[720px] lg:flex-1">
+                <h1 className="text-[26px] font-bold tracking-tight text-foreground sm:text-[30px] lg:text-[34px]">
+                  {copy.pageTitle}
+                </h1>
+                <p className="max-w-2xl text-[13px] leading-relaxed text-muted-foreground/55 sm:text-[14px] lg:text-[15px]">
+                  {copy.pageSubtitle}
+                </p>
+              </header>
 
-            {/* Dimension tabs */}
-            <nav className="inline-flex w-full max-w-full rounded-xl border border-border/30 bg-muted/25 p-1 lg:w-auto">
-              {DIMENSIONS.map((dim) => (
-                <button
-                  key={dim}
-                  className={cn(
-                    "min-w-0 flex-1 rounded-[10px] px-4 py-2 text-[13px] font-medium transition-all duration-150 lg:flex-none lg:px-5",
-                    dimension === dim
-                      ? "bg-background text-foreground shadow-[0_1px_2px_rgba(0,0,0,0.04)]"
-                      : "text-muted-foreground/55 hover:text-foreground/70",
-                  )}
-                  onClick={() => setDimension(dim)}
-                >
-                  {copy.dimensions[dim]}
-                </button>
-              ))}
-            </nav>
-          </header>
+              <nav className="-mx-1 flex w-full max-w-full items-center gap-1 overflow-x-auto rounded-xl border border-border/30 bg-muted/25 p-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden lg:mx-0 lg:w-auto lg:min-w-[420px] lg:max-w-[540px] lg:justify-end">
+                {DIMENSIONS.map((dim) => (
+                  <button
+                    key={dim}
+                    className={cn(
+                      "flex-none rounded-[10px] px-4 py-2 text-[13px] font-medium transition-all duration-150 sm:min-w-[72px] sm:px-4 lg:px-5",
+                      dimension === dim
+                        ? "bg-background text-foreground shadow-[0_1px_2px_rgba(0,0,0,0.04)]"
+                        : "text-muted-foreground/55 hover:text-foreground/70",
+                    )}
+                    onClick={() => setDimension(dim)}
+                  >
+                    {copy.dimensions[dim]}
+                  </button>
+                ))}
+              </nav>
+            </div>
+          </div>
 
           {/* ════════ Loading ════════ */}
           {loading ? (
@@ -385,6 +407,21 @@ export function ReadingStatsPanel() {
             </StatsCard>
           ) : (
             <>
+              {/* ════════ Streak at risk banner ════════ */}
+              {streakStatus?.atRisk && streakStatus.streakCount > 0 && (
+                <div className="flex items-center gap-3 rounded-xl border border-amber-500/25 bg-amber-500/[0.08] px-4 py-3">
+                  <Flame className="h-5 w-5 shrink-0 text-amber-600" />
+                  <div className="min-w-0 flex-1 space-y-0.5">
+                    <div className="text-[13px] font-semibold text-amber-700 dark:text-amber-400">
+                      {t("stats.desktop.streakAtRiskTitle", { count: streakStatus.streakCount })}
+                    </div>
+                    <div className="text-[11px] leading-[1.4] text-muted-foreground/75">
+                      {t("stats.desktop.streakAtRiskBody")}
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* ════════ Hero Section ════════ */}
               <section className="relative overflow-hidden rounded-2xl border border-border/30 bg-gradient-to-br from-card via-card to-primary/[0.02]">
                 {/* Decorative glow */}
@@ -599,11 +636,14 @@ export function ReadingStatsPanel() {
                 {/* ─── Sidebar ─── */}
                 <aside className="min-w-0 space-y-6">
                   {/* Reading goals */}
-                  {(goals.length > 0 || dimension === "lifetime" || dimension === "year" || dimension === "month") && (
+                  {activeGoalPeriod && (
                     <StatsCard>
-                      <SectionHeader title={copy.goals} description={copy.goalsDesc} />
+                      <SectionHeader
+                        title={copy.goalsTitle(activeGoalPeriod)}
+                        description={copy.goalsDescription(activeGoalPeriod)}
+                      />
                       <GoalsSection
-                        progress={goalProgress}
+                        progress={visibleGoalProgress}
                         copy={copy}
                         onAddGoal={handleAddGoal}
                         onRemoveGoal={removeGoal}
@@ -615,7 +655,7 @@ export function ReadingStatsPanel() {
                   {/* Top books — featured variant */}
                   <StatsCard variant="featured">
                     <SectionHeader title={copy.topBooks} description={copy.topBooksDesc} />
-                    <TopBooksSection books={report.topBooks} copy={copy} isZh={isZh} />
+                    <TopBooksSection books={report.topBooks} copy={copy} isZh={isZh} allFacts={allFacts} />
                   </StatsCard>
 
                   {/* Insights */}

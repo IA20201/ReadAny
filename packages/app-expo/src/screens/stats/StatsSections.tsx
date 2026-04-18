@@ -42,6 +42,8 @@ export type StatsCopy = {
   noDataTitle: string;
   chartPeakLabel: (label: string, value: string) => string;
   topBookLead: string;
+  topBooksCollapse: string;
+  topBooksExpandCount: (count: number) => string;
   noTopBooks: string;
   unknownAuthor: string;
   pagesReadSuffix: string;
