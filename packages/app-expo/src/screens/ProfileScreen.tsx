@@ -18,7 +18,6 @@ import {
 } from "@/components/ui/Icon";
 import type { RootStackParamList } from "@/navigation/RootNavigator";
 import { useReadingSessionStore } from "@/stores";
-import { useResponsiveLayout } from "@/hooks/use-responsive-layout";
 import {
   mergeCurrentSessionIntoDailyStats,
   mergeCurrentSessionIntoOverallStats,
@@ -263,7 +262,6 @@ function MiniHeatmap({ dailyStats }: { dailyStats: DailyStats[] }) {
 export function ProfileScreen() {
   const colors = useColors();
   const s = makeStyles(colors);
-  const layout = useResponsiveLayout();
   const { t, i18n } = useTranslation();
   const nav = useNavigation<Nav>();
   const [overall, setOverall] = useState<OverallStats | null>(null);
@@ -378,18 +376,15 @@ export function ProfileScreen() {
 
   return (
     <SafeAreaView style={[s.container, { backgroundColor: colors.background }]} edges={["top"]}>
-      <View style={[s.header, { alignItems: "center", paddingHorizontal: layout.horizontalPadding }]}>
-        <View style={{ width: "100%", maxWidth: layout.centeredContentWidth }}>
-          <Text style={s.headerTitle}>{t("profile.title", "我的")}</Text>
-        </View>
+      <View style={s.header}>
+        <Text style={s.headerTitle}>{t("profile.title", "我的")}</Text>
       </View>
 
       <ScrollView
         style={s.scrollView}
-        contentContainerStyle={{ alignItems: "center", paddingBottom: 24 }}
+        contentContainerStyle={{ paddingBottom: 24 }}
         showsVerticalScrollIndicator={false}
       >
-        <View style={{ width: "100%", maxWidth: layout.centeredContentWidth }}>
         {/* Stats cards */}
         <View style={s.statsSection}>
           {statsLoading ? (
@@ -470,7 +465,6 @@ export function ProfileScreen() {
 
         {/* Version */}
         <Text style={s.version}>{t("profile.version", { version: Constants.expoConfig?.version ?? "1.0.0" })}</Text>
-        </View>
       </ScrollView>
     </SafeAreaView>
   );

@@ -256,19 +256,21 @@ export function SectionCard({
   title,
   featured,
   action,
+  style,
   children,
 }: {
   title: string;
   description?: string;
   featured?: boolean;
   action?: React.ReactNode;
+  style?: ViewStyle;
   children: React.ReactNode;
 }) {
   const colors = useColors();
   const s = makeStyles(colors);
 
   return (
-    <View style={[s.sectionCard, featured && s.sectionFeatured]}>
+    <View style={[s.sectionCard, featured && s.sectionFeatured, style]}>
       <View style={[s.sectionHeader, action ? { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" } : undefined]}>
         <View style={{ flex: 1 }}>
           <Text style={s.sectionTitle}>{title}</Text>

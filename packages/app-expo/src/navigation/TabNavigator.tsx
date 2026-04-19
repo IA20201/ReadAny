@@ -29,11 +29,25 @@ export function TabNavigator() {
   const insets = useSafeAreaInsets();
   const layout = useResponsiveLayout();
 
-  // Some Android devices (e.g. OnePlus Ace5 Ultra) underreport the bottom
-  // safe area inset, causing tab bar labels to be clipped by the gesture
-  // navigation bar. Ensure a minimum bottom inset so content stays visible.
-  const bottomInset = Platform.OS === "android" ? Math.max(insets.bottom, 28) : insets.bottom;
-  const tabBarHeight = layout.isTabletLandscape ? 72 + bottomInset : layout.isTablet ? 76 + bottomInset : undefined;
+  const androidNavigationFallback =
+    Platform.OS === "android"
+      ? insets.bottom > 0
+        ? 28
+        : layout.isTablet
+          ? 32
+          : 40
+      : 0;
+
+  // Some Android devices under-report or completely miss the bottom inset when
+  // classic three-button navigation is enabled, so we keep a larger fallback
+  // reserve in that case to stop the system bar from covering the tab bar.
+  const bottomInset =
+    Platform.OS === "android"
+      ? Math.max(insets.bottom, androidNavigationFallback)
+      : insets.bottom;
+
+  const baseTabBarHeight = layout.isTabletLandscape ? 72 : layout.isTablet ? 76 : 60;
+  const tabBarHeight = baseTabBarHeight + bottomInset;
 
   return (
     <Tab.Navigator
@@ -55,6 +69,9 @@ export function TabNavigator() {
           paddingTop: layout.isTabletLandscape ? 8 : 4,
           paddingBottom: bottomInset,
           height: tabBarHeight,
+        },
+        sceneStyle: {
+          paddingBottom: Platform.OS === "android" && insets.bottom === 0 ? 4 : 0,
         },
       }}
     >
