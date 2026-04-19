@@ -613,6 +613,15 @@
       return null;
     }
 
+    function armNoteTapGuard(doc, duration = 750) {
+      if (!doc) return;
+      doc.__readany_noteTapGuardUntil = Date.now() + duration;
+    }
+
+    function isNoteTapGuardActive(doc) {
+      return !!doc?.__readany_noteTapGuardUntil && doc.__readany_noteTapGuardUntil > Date.now();
+    }
+
     // Attach long-press note tooltip detection to each doc
     function attachNoteLongPress(doc) {
       if (doc.__readany_noteLongPress) return;
@@ -632,6 +641,7 @@
           timer = null;
           const hit = isPointInNoteRange(doc, startX, startY);
           if (!hit) return;
+          armNoteTapGuard(doc, 900);
 
           // Prevent subsequent click / show-annotation
           e.preventDefault && e.preventDefault();
@@ -963,6 +973,7 @@
         el.addEventListener('show-annotation', (e) => {
           const { value, index, range } = e.detail;
           if (!value || !range) return;
+          armNoteTapGuard(range.startContainer.ownerDocument, 900);
           const rect = range.getBoundingClientRect();
           const iframe = range.startContainer.ownerDocument?.defaultView?.frameElement;
           const iframeRect = iframe ? iframe.getBoundingClientRect() : { left: 0, top: 0 };
@@ -1314,13 +1325,16 @@ a { color: ${primary} !important; }
           return;
         }
         const touch = e.touches[0];
+        const hitNote = isPointInNoteRange(doc, touch.clientX, touch.clientY);
         tapState = {
           startedAt: Date.now(),
           startX: touch.clientX,
           startY: touch.clientY,
           moved: false,
           target: e.target,
+          noteRangeHit: !!hitNote,
         };
+        if (hitNote) armNoteTapGuard(doc);
       }, { passive: true });
 
       doc.addEventListener('touchmove', (e) => {
@@ -1352,6 +1366,11 @@ a { color: ${primary} !important; }
         tapState = null;
         if (!state || state.moved || e.changedTouches.length !== 1) return;
         if (Date.now() - state.startedAt > MAX_TAP_MS) return;
+        if (state.noteRangeHit || isNoteTapGuardActive(doc)) {
+          e.preventDefault();
+          e.stopPropagation();
+          return;
+        }
 
         const touch = e.changedTouches[0];
         const target = e.target || state.target;
@@ -1560,6 +1579,9 @@ a { color: ${primary} !important; }
       if (!text) return;
 
       const rect = range.getBoundingClientRect();
+      const rects = Array.from(range.getClientRects()).filter(r => r.width > 0 && r.height > 0);
+      const firstRect = rects[0] || rect;
+      const lastRect = rects[rects.length - 1] || rect;
       const iframe = doc.defaultView && doc.defaultView.frameElement;
       const iframeRect = iframe ? iframe.getBoundingClientRect() : { left: 0, top: 0 };
 
@@ -1577,9 +1599,9 @@ a { color: ${primary} !important; }
         cfi,
         position: {
           x: iframeRect.left + rect.left + rect.width / 2,
-          y: iframeRect.top + rect.top - 8,
-          selectionTop: iframeRect.top + rect.top,
-          selectionBottom: iframeRect.top + rect.bottom,
+          y: iframeRect.top + firstRect.top - 4,
+          selectionTop: iframeRect.top + firstRect.top,
+          selectionBottom: iframeRect.top + lastRect.bottom,
         },
       });
     }
