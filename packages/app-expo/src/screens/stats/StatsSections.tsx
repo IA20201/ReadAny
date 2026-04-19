@@ -23,7 +23,7 @@ import type {
 } from "@readany/core/stats";
 import { ClockIcon } from "@/components/ui/Icon";
 import { useState } from "react";
-import { Text, TouchableOpacity, View } from "react-native";
+import { Text, TouchableOpacity, type ViewStyle, View } from "react-native";
 import { BarChart } from "./BarChart";
 import { MonthHeatmap } from "./MonthHeatmap";
 import { makeStyles } from "./stats-styles";
@@ -290,18 +290,20 @@ export function MetricTile({
   sublabel,
   delta,
   deltaLabel,
+  style,
 }: {
   label: string;
   value: string;
   sublabel?: string;
   delta?: number;
   deltaLabel?: string;
+  style?: ViewStyle;
 }) {
   const colors = useColors();
   const s = makeStyles(colors);
 
   return (
-    <View style={s.metricTile}>
+    <View style={[s.metricTile, style]}>
       <Text style={s.metricLabel} numberOfLines={1}>{label}</Text>
       <View style={{ flexDirection: "row", alignItems: "baseline", gap: 4 }}>
         <Text style={s.metricValue} numberOfLines={1}>{value}</Text>

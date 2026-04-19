@@ -22,6 +22,7 @@ import {
   FlameIcon,
   SearchIcon,
 } from "@/components/ui/Icon";
+import { useResponsiveLayout } from "@/hooks/use-responsive-layout";
 import { useReadingSessionStore } from "@/stores";
 import { useColors, withOpacity } from "@/styles/theme";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
@@ -100,10 +101,13 @@ function shiftAnchor(date: Date, dim: StatsDimension, delta: -1 | 1): Date {
 
 export default function StatsScreen() {
   const colors = useColors();
-  const s = makeStyles(colors);
   const { t, i18n } = useTranslation();
   const isZh = i18n.language.startsWith("zh");
   const nav = useNavigation();
+  const layout = useResponsiveLayout();
+  const metricColumns = layout.isTabletLandscape ? 5 : layout.isTablet ? 4 : 3;
+  const metricTileWidth = Math.floor((layout.centeredContentWidth - 8 * (metricColumns - 1)) / metricColumns);
+  const s = makeStyles(colors);
   const saveCurrentSession = useReadingSessionStore((ss) => ss.saveCurrentSession);
   const currentSession = useReadingSessionStore((ss) => ss.currentSession);
 
@@ -421,7 +425,7 @@ export default function StatsScreen() {
   return (
     <SafeAreaView style={s.container} edges={["top"]}>
       {/* Header */}
-      <View style={s.header}>
+      <View style={[s.header, { paddingHorizontal: layout.horizontalPadding }]}>
         <TouchableOpacity
           style={s.backBtn}
           onPress={() => {
@@ -440,11 +444,14 @@ export default function StatsScreen() {
 
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={s.scrollContent}
+        contentContainerStyle={[
+          s.scrollContent,
+          { paddingHorizontal: layout.horizontalPadding, alignItems: "center" },
+        ]}
         stickyHeaderIndices={[0]}
       >
         {/* Dimension tabs — sticky */}
-        <View style={s.dimTabsSticky}>
+        <View style={[s.dimTabsSticky, { width: "100%", maxWidth: layout.centeredContentWidth }]}>
           <View style={s.dimTabs}>
             {DIMENSIONS.map((dim) => (
               <TouchableOpacity
@@ -472,7 +479,7 @@ export default function StatsScreen() {
             icon={<SearchIcon size={24} color={withOpacity(colors.mutedForeground, 0.45)} />}
           />
         ) : (
-          <>
+          <View style={{ width: "100%", maxWidth: layout.centeredContentWidth }}>
             {/* ═══ Streak at risk banner ═══ */}
             {streakStatus?.atRisk && streakStatus.streakCount > 0 && (
               <View
@@ -551,7 +558,15 @@ export default function StatsScreen() {
               {/* Supporting metrics grid */}
               <View style={s.metricsGrid}>
                 {supportMetrics.map((m) => (
-                  <MetricTile key={m.label} label={m.label} value={m.value} sublabel={m.sublabel} delta={m.delta} deltaLabel={m.deltaLabel} />
+                  <MetricTile
+                    key={m.label}
+                    label={m.label}
+                    value={m.value}
+                    sublabel={m.sublabel}
+                    delta={m.delta}
+                    deltaLabel={m.deltaLabel}
+                    style={{ width: metricTileWidth }}
+                  />
                 ))}
               </View>
             </View>
@@ -709,7 +724,7 @@ export default function StatsScreen() {
               </SectionCard>
             )}
 
-          </>
+          </View>
         )}
       </ScrollView>
     </SafeAreaView>

@@ -1,4 +1,5 @@
 import { BookOpenIcon, MessageSquareIcon, NotebookPenIcon, UserIcon } from "@/components/ui/Icon";
+import { useResponsiveLayout } from "@/hooks/use-responsive-layout";
 import { ChatScreen } from "@/screens/ChatScreen";
 import { LibraryScreen } from "@/screens/LibraryScreen";
 import { NotesScreen } from "@/screens/NotesScreen";
@@ -26,11 +27,13 @@ export function TabNavigator() {
   const { t } = useTranslation();
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
+  const layout = useResponsiveLayout();
 
   // Some Android devices (e.g. OnePlus Ace5 Ultra) underreport the bottom
   // safe area inset, causing tab bar labels to be clipped by the gesture
   // navigation bar. Ensure a minimum bottom inset so content stays visible.
   const bottomInset = Platform.OS === "android" ? Math.max(insets.bottom, 28) : insets.bottom;
+  const tabBarHeight = layout.isTabletLandscape ? 72 + bottomInset : layout.isTablet ? 76 + bottomInset : undefined;
 
   return (
     <Tab.Navigator
@@ -40,14 +43,18 @@ export function TabNavigator() {
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.mutedForeground,
         tabBarLabelStyle: {
-          fontSize: 12,
+          fontSize: layout.isTablet ? 13 : 12,
           fontWeight: "500",
+          marginBottom: layout.isTabletLandscape ? 2 : 0,
         },
+        tabBarItemStyle: layout.isTabletLandscape ? { paddingHorizontal: 10 } : undefined,
         tabBarStyle: {
           backgroundColor: colors.background,
           borderTopColor: colors.border,
           borderTopWidth: 0.5,
-          paddingTop: 4,
+          paddingTop: layout.isTabletLandscape ? 8 : 4,
+          paddingBottom: bottomInset,
+          height: tabBarHeight,
         },
       }}
     >
