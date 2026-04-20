@@ -25,6 +25,8 @@ export interface SelectionEvent {
     y: number;
     selectionTop: number;
     selectionBottom: number;
+    anchorTopX?: number;
+    anchorBottomX?: number;
   };
 }
 

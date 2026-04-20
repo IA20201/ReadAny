@@ -161,6 +161,19 @@
     let currentCustomFontFamily = '';
     let tapNavigationInFlight = false;
     let tapNavigationResetTimer = null;
+    let selectionAnimationRestoreToken = 0;
+    let selectionPagingState = {
+      active: false,
+      doc: null,
+      turning: false,
+      scrollCleanup: null,
+      lockedScrollLeft: null,
+      lockedScrollTop: null,
+    };
+    const SELECTION_CHANGE_DEBOUNCE_MS = window.innerWidth < 640 ? 84 : 96;
+    const PHONE_SELECTION_INTERACTION_LOCK_MS = 420;
+    let selectionRefreshTimer = null;
+    let selectionInteractionLockUntil = 0;
     let readerElement = null;
     let bookTextMetricsJobId = 0;
     let bookTextMetricsTimer = null;
@@ -208,6 +221,282 @@
       tapNavigationResetTimer = setTimeout(() => {
         clearTapNavigationLock();
       }, 220);
+    }
+
+    function rendererHasActiveSelection(renderer) {
+      try {
+        if (!renderer || typeof renderer.getContents !== 'function') return false;
+        const contents = renderer.getContents() || [];
+        return contents.some((content) => {
+          const doc = content && content.doc;
+          const sel = doc && doc.getSelection ? doc.getSelection() : null;
+          return !!(sel && !sel.isCollapsed && sel.toString().trim().length > 0);
+        });
+      } catch {
+        return false;
+      }
+    }
+
+    async function withInstantSelectionNavigation(renderer, task) {
+      if (!renderer) return task();
+      const hadAnimated = renderer.hasAttribute && renderer.hasAttribute('animated');
+      if (hadAnimated) renderer.removeAttribute('animated');
+      try {
+        return await task();
+      } finally {
+        if (!hadAnimated) return;
+        const token = ++selectionAnimationRestoreToken;
+        setTimeout(() => {
+          if (token !== selectionAnimationRestoreToken) return;
+          if (!rendererHasActiveSelection(renderer) && !renderer.hasAttribute('animated')) {
+            renderer.setAttribute('animated', '');
+          }
+        }, 60);
+      }
+    }
+
+    function patchSelectionPageTurnAnimation(renderer) {
+      if (!renderer || renderer.__readanySelectionInstantNavPatched) return;
+      renderer.__readanySelectionInstantNavPatched = true;
+
+      ['next', 'prev'].forEach((methodName) => {
+        const original = renderer[methodName];
+        if (typeof original !== 'function') return;
+
+        renderer[methodName] = function (...args) {
+          const shouldSkipAnimation = rendererHasActiveSelection(renderer);
+          if (!shouldSkipAnimation) {
+            return original.apply(renderer, args);
+          }
+          return withInstantSelectionNavigation(renderer, () => original.apply(renderer, args));
+        };
+      });
+    }
+
+    function isPaginatedSelectionMode() {
+      return !!(view && view.renderer && !view.renderer.scrolled);
+    }
+
+    function isPhoneSelectionLayout() {
+      return window.innerWidth < 768;
+    }
+
+    function armSelectionInteractionLock(ms) {
+      if (!isPhoneSelectionLayout()) return;
+      const nextUntil = Date.now() + (typeof ms === 'number' ? ms : PHONE_SELECTION_INTERACTION_LOCK_MS);
+      if (nextUntil > selectionInteractionLockUntil) {
+        selectionInteractionLockUntil = nextUntil;
+      }
+    }
+
+    function isSelectionInteractionLocked() {
+      return isPhoneSelectionLayout() && Date.now() < selectionInteractionLockUntil;
+    }
+
+    function clearSelectionPagingTimer() {
+      // no-op: page turning is handled by foliate's native paginator selection logic
+    }
+
+    function clearSelectionScrollLock() {
+      if (selectionPagingState.scrollCleanup) {
+        try {
+          selectionPagingState.scrollCleanup();
+        } catch {}
+        selectionPagingState.scrollCleanup = null;
+      }
+      selectionPagingState.lockedScrollLeft = null;
+      selectionPagingState.lockedScrollTop = null;
+    }
+
+    function resetSelectionPagingState() {
+      selectionPagingState.active = false;
+      selectionPagingState.doc = null;
+      selectionPagingState.turning = false;
+      if (selectionRefreshTimer) {
+        clearTimeout(selectionRefreshTimer);
+        selectionRefreshTimer = null;
+      }
+      clearSelectionPagingTimer();
+      clearSelectionScrollLock();
+    }
+
+    function getPaginatorContainer() {
+      try {
+        const paginator = view && view.shadowRoot && view.shadowRoot.querySelector('foliate-paginator');
+        return paginator && paginator.shadowRoot
+          ? paginator.shadowRoot.querySelector('#container')
+          : null;
+      } catch {
+        return null;
+      }
+    }
+
+    function getDocSelectionSnapshot(doc) {
+      try {
+        const sel = doc && doc.getSelection ? doc.getSelection() : null;
+        if (!sel || sel.isCollapsed || !sel.toString().trim() || !sel.rangeCount) return null;
+        return { sel, range: sel.getRangeAt(0) };
+      } catch {
+        return null;
+      }
+    }
+
+    function getRangeAnchorPayload(range, doc) {
+      if (!range) return null;
+      const rects = range.getClientRects ? Array.from(range.getClientRects()) : [];
+      const validRects = rects.filter((rect) => rect && rect.width >= 0 && rect.height >= 0);
+      const fallbackRect = range.getBoundingClientRect ? range.getBoundingClientRect() : null;
+      const sourceRects = validRects.length ? validRects : (fallbackRect ? [fallbackRect] : []);
+      if (!sourceRects.length) return null;
+
+      let topRect = sourceRects[0];
+      let bottomRect = sourceRects[0];
+      for (const rect of sourceRects) {
+        if (
+          rect.top < topRect.top ||
+          (Math.abs(rect.top - topRect.top) < 0.5 && rect.left < topRect.left)
+        ) {
+          topRect = rect;
+        }
+        if (
+          rect.bottom > bottomRect.bottom ||
+          (Math.abs(rect.bottom - bottomRect.bottom) < 0.5 && rect.left > bottomRect.left)
+        ) {
+          bottomRect = rect;
+        }
+      }
+
+      const iframe = doc && doc.defaultView && doc.defaultView.frameElement;
+      const iframeRect = iframe ? iframe.getBoundingClientRect() : { left: 0, top: 0 };
+      const topAnchorX = iframeRect.left + topRect.left + Math.max(topRect.width, 0) / 2;
+      const bottomAnchorX =
+        iframeRect.left + bottomRect.left + Math.max(bottomRect.width, 0) / 2;
+
+      return {
+        x: topAnchorX,
+        y: iframeRect.top + topRect.top - 8,
+        selectionTop: iframeRect.top + topRect.top,
+        selectionBottom: iframeRect.top + bottomRect.bottom,
+        anchorTopX: topAnchorX,
+        anchorBottomX: bottomAnchorX,
+      };
+    }
+
+    function rememberSelectionScrollPosition() {
+      if (!isPaginatedSelectionMode()) return;
+      const container = getPaginatorContainer();
+      if (!container) return;
+      selectionPagingState.lockedScrollLeft = container.scrollLeft;
+      selectionPagingState.lockedScrollTop = container.scrollTop;
+    }
+
+    function ensureSelectionScrollLock() {
+      const container = getPaginatorContainer();
+      if (!container || selectionPagingState.scrollCleanup) return;
+
+      if (selectionPagingState.lockedScrollLeft == null) {
+        selectionPagingState.lockedScrollLeft = container.scrollLeft;
+      }
+      if (selectionPagingState.lockedScrollTop == null) {
+        selectionPagingState.lockedScrollTop = container.scrollTop;
+      }
+
+      const preventScroll = () => {
+        const snapshot = getDocSelectionSnapshot(selectionPagingState.doc);
+        const currentRange = snapshot && snapshot.range;
+        const lastRange = view && view.lastLocation && view.lastLocation.range;
+        if (
+          isPhoneSelectionLayout() &&
+          currentRange &&
+          lastRange &&
+          lastRange.startContainer !== currentRange.endContainer
+        ) {
+          return;
+        }
+
+        if (
+          selectionPagingState.lockedScrollLeft != null &&
+          Math.abs(container.scrollLeft - selectionPagingState.lockedScrollLeft) > 1
+        ) {
+          container.scrollLeft = selectionPagingState.lockedScrollLeft;
+        }
+        if (
+          selectionPagingState.lockedScrollTop != null &&
+          Math.abs(container.scrollTop - selectionPagingState.lockedScrollTop) > 1
+        ) {
+          container.scrollTop = selectionPagingState.lockedScrollTop;
+        }
+      };
+
+      container.addEventListener('scroll', preventScroll, { passive: true });
+      selectionPagingState.scrollCleanup = () => {
+        container.removeEventListener('scroll', preventScroll);
+      };
+    }
+
+    function withTimeout(promise, timeoutMs, label) {
+      return Promise.race([
+        promise,
+        new Promise((_, reject) => {
+          setTimeout(() => {
+            reject(new Error(`${label || 'operation'} timed out after ${timeoutMs}ms`));
+          }, timeoutMs);
+        }),
+      ]);
+    }
+
+    function syncSelectionInteraction(doc, snapshot) {
+      const currentSnapshot = snapshot || getDocSelectionSnapshot(doc);
+      const hasSelection = !!currentSnapshot;
+      selectionPagingState.active = hasSelection;
+      selectionPagingState.doc = hasSelection ? doc : null;
+
+      if (!hasSelection) {
+        clearSelectionPagingTimer();
+        clearSelectionScrollLock();
+        selectionPagingState.turning = false;
+        return null;
+      }
+
+      armSelectionInteractionLock();
+
+      if (!isPaginatedSelectionMode()) {
+        clearSelectionPagingTimer();
+        clearSelectionScrollLock();
+        return currentSnapshot;
+      }
+
+      if (!selectionPagingState.turning) {
+        ensureSelectionScrollLock();
+      }
+
+      return currentSnapshot;
+    }
+
+    function emitActiveSelectionFromRenderer() {
+      try {
+        if (!view || !view.renderer || typeof view.renderer.getContents !== 'function') return false;
+        const contents = view.renderer.getContents() || [];
+        for (const content of contents) {
+          const doc = content && content.doc;
+          const snapshot = getDocSelectionSnapshot(doc);
+          if (!snapshot) continue;
+          const synced = syncSelectionInteraction(doc, snapshot) || snapshot;
+          emitSelection(doc, synced.sel, synced.range);
+          return true;
+        }
+      } catch {}
+      return false;
+    }
+
+    function scheduleActiveSelectionRefresh(delay) {
+      if (selectionRefreshTimer) {
+        clearTimeout(selectionRefreshTimer);
+      }
+      selectionRefreshTimer = setTimeout(() => {
+        selectionRefreshTimer = null;
+        emitActiveSelectionFromRenderer();
+      }, typeof delay === 'number' ? delay : 34);
     }
 
     function getPullBookmarkElements() {
@@ -636,18 +925,12 @@
           // Prevent subsequent click / show-annotation
           e.preventDefault && e.preventDefault();
 
-          const rect = hit.range.getBoundingClientRect();
-          const iframe = doc.defaultView && doc.defaultView.frameElement;
-          const iframeRect = iframe ? iframe.getBoundingClientRect() : { left: 0, top: 0 };
+          const position = getRangeAnchorPayload(hit.range, doc);
+          if (!position) return;
           postToRN('note-tooltip', {
             cfi: hit.cfi,
             note: hit.note,
-            position: {
-              x: iframeRect.left + rect.left + rect.width / 2,
-              y: iframeRect.top + rect.top - 8,
-              selectionTop: iframeRect.top + rect.top,
-              selectionBottom: iframeRect.top + rect.bottom,
-            },
+            position,
           });
         }, LONG_PRESS_MS);
       }, { passive: false });
@@ -869,6 +1152,17 @@
           if (ttsHighlightState.cfi) {
             setTTSHighlight(ttsHighlightState.cfi, ttsHighlightState.color);
           }
+          if (!rendererHasActiveSelection(view && view.renderer)) {
+            if (selectionPagingState.active || selectionPagingState.turning) {
+              postToRN('selectionCleared', {});
+            }
+            resetSelectionPagingState();
+          } else {
+            selectionPagingState.active = true;
+            armSelectionInteractionLock(520);
+            ensureSelectionScrollLock();
+            scheduleActiveSelectionRefresh(28);
+          }
         });
 
         var snippetTimer = null;
@@ -879,6 +1173,17 @@
             setTimeout(() => {
               clearTapNavigationLock();
             }, 80);
+          }
+          if (!rendererHasActiveSelection(view && view.renderer)) {
+            if (selectionPagingState.active || selectionPagingState.turning) {
+              postToRN('selectionCleared', {});
+            }
+            resetSelectionPagingState();
+          } else {
+            selectionPagingState.active = true;
+            armSelectionInteractionLock(520);
+            ensureSelectionScrollLock();
+            scheduleActiveSelectionRefresh(20);
           }
           if (detail.section != null) {
             currentSectionIndex = typeof detail.section === 'number'
@@ -963,24 +1268,19 @@
         el.addEventListener('show-annotation', (e) => {
           const { value, index, range } = e.detail;
           if (!value || !range) return;
-          const rect = range.getBoundingClientRect();
-          const iframe = range.startContainer.ownerDocument?.defaultView?.frameElement;
-          const iframeRect = iframe ? iframe.getBoundingClientRect() : { left: 0, top: 0 };
+          const doc = range.startContainer && range.startContainer.ownerDocument;
+          const position = getRangeAnchorPayload(range, doc);
+          if (!position) return;
           postToRN('show-annotation', {
             value,
-            position: {
-              x: iframeRect.left + rect.left + rect.width / 2,
-              y: iframeRect.top + rect.top - 8,
-              selectionTop: iframeRect.top + rect.top,
-              selectionBottom: iframeRect.top + rect.bottom,
-            },
+            position,
           });
         });
 
         container.appendChild(el);
         view = el;
 
-        await el.open(book);
+        await withTimeout(el.open(book), 15000, 'openBook');
 
         if (book.sections) {
           totalSections = book.sections.length;
@@ -999,6 +1299,9 @@
         }
 
         const renderer = el.renderer;
+        if (renderer) {
+          patchSelectionPageTurnAnimation(renderer);
+        }
         if (renderer && !el.isFixedLayout) {
           renderer.setAttribute('max-column-count', '1');
           renderer.setAttribute('max-block-size', '100%');
@@ -1013,15 +1316,16 @@
 
         if (msg.lastLocation) {
           try {
-            await el.init({ lastLocation: msg.lastLocation });
+            await withTimeout(el.init({ lastLocation: msg.lastLocation }), 8000, 'restoreLastLocation');
           } catch (err) {
             console.warn('[WebView] Failed to init with lastLocation, going to start:', err);
-            await el.goToFraction(0);
+            await withTimeout(el.goToFraction(0), 5000, 'fallbackGoToStart');
           }
         } else {
-          await el.goToFraction(0);
+          await withTimeout(el.goToFraction(0), 5000, 'goToStart');
         }
 
+        markLoaded();
         scheduleBookTextMetrics(book);
 
       } catch (err) {
@@ -1305,7 +1609,11 @@ a { color: ${primary} !important; }
       let tapState = null;
 
       doc.addEventListener('touchstart', (e) => {
-        if (bookmarkPullGestureActive) {
+        if (bookmarkPullGestureActive || selectionPagingState.active || selectionPagingState.turning) {
+          tapState = null;
+          return;
+        }
+        if (isSelectionInteractionLocked()) {
           tapState = null;
           return;
         }
@@ -1325,7 +1633,11 @@ a { color: ${primary} !important; }
 
       doc.addEventListener('touchmove', (e) => {
         if (!tapState || e.touches.length !== 1) return;
-        if (bookmarkPullGestureActive) {
+        if (bookmarkPullGestureActive || selectionPagingState.active || selectionPagingState.turning) {
+          tapState = null;
+          return;
+        }
+        if (isSelectionInteractionLocked()) {
           tapState = null;
           return;
         }
@@ -1343,7 +1655,16 @@ a { color: ${primary} !important; }
       }, { passive: true });
 
       doc.addEventListener('touchend', (e) => {
-        if (bookmarkPullGestureActive || tapNavigationInFlight) {
+        if (
+          bookmarkPullGestureActive ||
+          tapNavigationInFlight ||
+          selectionPagingState.active ||
+          selectionPagingState.turning
+        ) {
+          tapState = null;
+          return;
+        }
+        if (isSelectionInteractionLocked()) {
           tapState = null;
           return;
         }
@@ -1519,12 +1840,19 @@ a { color: ${primary} !important; }
       let selTimer = null;
       let iosHackPending = false;
 
+      doc.addEventListener('selectstart', () => {
+        if (!isPaginatedSelectionMode()) return;
+        armSelectionInteractionLock();
+        rememberSelectionScrollPosition();
+      }, { passive: true });
+
       doc.addEventListener('touchend', () => {
+        armSelectionInteractionLock();
         setTimeout(() => {
           if (iosHackPending) return;
-          const sel = doc.getSelection();
-          if (!sel || sel.isCollapsed || !sel.toString().trim() || !sel.rangeCount) return;
-          const range = sel.getRangeAt(0);
+          const snapshot = getDocSelectionSnapshot(doc);
+          if (!snapshot) return;
+          const { sel, range } = snapshot;
           // iOS hack: remove and re-add to dismiss system menu
           iosHackPending = true;
           doc.__readany_isJiggling = true;
@@ -1533,7 +1861,8 @@ a { color: ${primary} !important; }
             sel.addRange(range);
             doc.__readany_isJiggling = false;
             iosHackPending = false;
-            emitSelection(doc, sel, range);
+            const synced = syncSelectionInteraction(doc, { sel, range }) || { sel, range };
+            emitSelection(doc, synced.sel, synced.range);
           }, 30);
         }, 50);
       }, { passive: true });
@@ -1543,25 +1872,23 @@ a { color: ${primary} !important; }
         if (iosHackPending) return;
         if (selTimer) clearTimeout(selTimer);
         selTimer = setTimeout(() => {
-          const sel = doc.getSelection();
-          if (!sel || sel.isCollapsed || !sel.toString().trim()) {
-            postToRN('selectionCleared', {});
+          const snapshot = getDocSelectionSnapshot(doc);
+          if (!snapshot) {
+            syncSelectionInteraction(doc, null);
+            if (!selectionPagingState.turning) postToRN('selectionCleared', {});
             return;
           }
-          if (!sel.rangeCount) return;
-          const range = sel.getRangeAt(0);
+          const { sel, range } = syncSelectionInteraction(doc, snapshot) || snapshot;
           emitSelection(doc, sel, range);
-        }, 300);
+        }, SELECTION_CHANGE_DEBOUNCE_MS);
       });
     }
 
     function emitSelection(doc, sel, range) {
       const text = sel.toString().trim();
       if (!text) return;
-
-      const rect = range.getBoundingClientRect();
-      const iframe = doc.defaultView && doc.defaultView.frameElement;
-      const iframeRect = iframe ? iframe.getBoundingClientRect() : { left: 0, top: 0 };
+      const position = getRangeAnchorPayload(range, doc);
+      if (!position) return;
 
       let cfi = '';
       try {
@@ -1575,12 +1902,7 @@ a { color: ${primary} !important; }
       postToRN('selection', {
         text,
         cfi,
-        position: {
-          x: iframeRect.left + rect.left + rect.width / 2,
-          y: iframeRect.top + rect.top - 8,
-          selectionTop: iframeRect.top + rect.top,
-          selectionBottom: iframeRect.top + rect.bottom,
-        },
+        position,
       });
     }
 

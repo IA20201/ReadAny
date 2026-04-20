@@ -22,15 +22,17 @@ import * as Speech from "expo-speech";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
-  Dimensions,
+  Animated,
   KeyboardAvoidingView,
   Modal,
   Platform,
   StyleSheet,
   Text,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const HIGHLIGHT_COLORS = [
   { key: "yellow", hex: "#facc15" },
@@ -41,8 +43,6 @@ const HIGHLIGHT_COLORS = [
   { key: "pink", hex: "#f472b6" },
 ] as const;
 
-const SCREEN_WIDTH = Dimensions.get("window").width;
-const SCREEN_HEIGHT = Dimensions.get("window").height;
 const POPOVER_MARGIN = 8;
 const POPOVER_PADDING = 4;
 const BUTTON_SIZE = 36;
@@ -50,6 +50,7 @@ const GAP = 2;
 
 interface Props {
   selection: SelectionEvent;
+  viewportOffsetY?: number;
   onHighlight: (color: string) => void;
   onDismiss: () => void;
   onCopy: () => void;
@@ -62,6 +63,7 @@ interface Props {
 
 export function SelectionPopover({
   selection,
+  viewportOffsetY = 0,
   onHighlight,
   onDismiss,
   onCopy,
@@ -74,6 +76,8 @@ export function SelectionPopover({
   const { t } = useTranslation();
   const colors = useColors();
   const s = useMemo(() => makeStyles(colors), [colors]);
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
   const [showNoteModal, setShowNoteModal] = useState(false);
   const [showColors, setShowColors] = useState(!!existingHighlight);
   const [noteContent, setNoteContent] = useState(existingHighlight?.note || "");
@@ -88,37 +92,79 @@ export function SelectionPopover({
   const popoverHeight = 44 + colorRowHeight + POPOVER_PADDING * 2 + GAP;
   const popoverWidth = Math.min(
     buttonCount * (BUTTON_SIZE + GAP) + POPOVER_PADDING * 2,
-    SCREEN_WIDTH - POPOVER_MARGIN * 2,
+    windowWidth - POPOVER_MARGIN * 2,
   );
 
   const position = useMemo(() => {
-    const selTop = selection.position.selectionTop;
-    const selBottom = selection.position.selectionBottom;
-    const selCenterX = selection.position.x;
-    const safeTop = 48;
-    const safeBottom = 48;
-
-    const x = Math.max(
-      POPOVER_MARGIN,
-      Math.min(selCenterX - popoverWidth / 2, SCREEN_WIDTH - popoverWidth - POPOVER_MARGIN),
-    );
+    const selTop = selection.position.selectionTop + viewportOffsetY;
+    const selBottom = selection.position.selectionBottom + viewportOffsetY;
+    const safeTop = insets.top + 6;
+    const safeBottom = insets.bottom + 6;
+    const anchorGap = windowWidth < 520 ? 4 : 6;
 
     let y: number;
-    const yAbove = selTop - popoverHeight - GAP;
-    const yBelow = selBottom + GAP;
+    const yAbove = selTop - popoverHeight - anchorGap;
+    const yBelow = selBottom + anchorGap;
     const aboveValid = yAbove >= safeTop;
-    const belowValid = yBelow + popoverHeight + POPOVER_MARGIN <= SCREEN_HEIGHT - safeBottom;
+    const belowValid = yBelow + popoverHeight + POPOVER_MARGIN <= windowHeight - safeBottom;
+    let anchorX = selection.position.anchorTopX ?? selection.position.x;
 
     if (aboveValid) {
       y = yAbove;
     } else if (belowValid) {
       y = yBelow;
+      anchorX = selection.position.anchorBottomX ?? selection.position.x;
     } else {
-      y = Math.max(safeTop, Math.min(yBelow, SCREEN_HEIGHT - popoverHeight - POPOVER_MARGIN));
+      y = Math.max(safeTop, Math.min(yBelow, windowHeight - popoverHeight - POPOVER_MARGIN));
+      const distanceAbove = Math.abs(y - yAbove);
+      const distanceBelow = Math.abs(y - yBelow);
+      anchorX =
+        distanceAbove <= distanceBelow
+          ? (selection.position.anchorTopX ?? selection.position.x)
+          : (selection.position.anchorBottomX ?? selection.position.x);
     }
 
+    const x = Math.max(
+      POPOVER_MARGIN,
+      Math.min(anchorX - popoverWidth / 2, windowWidth - popoverWidth - POPOVER_MARGIN),
+    );
+
     return { x, y };
-  }, [selection.position, popoverWidth, popoverHeight]);
+  }, [
+    selection.position,
+    viewportOffsetY,
+    insets.top,
+    insets.bottom,
+    popoverWidth,
+    popoverHeight,
+    windowHeight,
+    windowWidth,
+  ]);
+
+  const animatedX = useMemo(() => new Animated.Value(position.x), []);
+  const animatedY = useMemo(() => new Animated.Value(position.y), []);
+  const isPhoneLayout = windowWidth < 768;
+
+  useEffect(() => {
+    if (!isPhoneLayout) {
+      animatedX.setValue(position.x);
+      animatedY.setValue(position.y);
+      return;
+    }
+
+    Animated.parallel([
+      Animated.timing(animatedX, {
+        toValue: position.x,
+        duration: 90,
+        useNativeDriver: true,
+      }),
+      Animated.timing(animatedY, {
+        toValue: position.y,
+        duration: 90,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [animatedX, animatedY, isPhoneLayout, position.x, position.y]);
 
   const handleCopy = useCallback(() => {
     Clipboard.setStringAsync(selection.text);
@@ -163,7 +209,14 @@ export function SelectionPopover({
   return (
     <View style={[s.overlay]} pointerEvents="box-none">
       <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={onDismiss} />
-      <View style={[s.popover, { left: position.x, top: position.y }]}>
+      <Animated.View
+        style={[
+          s.popover,
+          {
+            transform: [{ translateX: animatedX }, { translateY: animatedY }],
+          },
+        ]}
+      >
         {showColors && (
           <View style={s.colorRow}>
             {HIGHLIGHT_COLORS.map((c) => (
@@ -218,7 +271,7 @@ export function SelectionPopover({
             </TouchableOpacity>
           )}
         </View>
-      </View>
+      </Animated.View>
 
       <Modal
         visible={showNoteModal}

@@ -61,6 +61,7 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -130,6 +131,7 @@ export function ReaderScreen({ route, navigation }: Props) {
   const colors = useColors();
   const { mode: themeMode } = useTheme();
   const s = makeStyles(colors);
+  const windowDimensions = useWindowDimensions();
   const { bookId, cfi, highlight: shouldHighlight, openTTS } = route.params;
   const { t, i18n } = useTranslation();
   const isWideLayout = SCREEN_WIDTH >= 768;
@@ -169,9 +171,19 @@ export function ReaderScreen({ route, navigation }: Props) {
   const [noteTooltip, setNoteTooltip] = useState<{
     note: string;
     cfi: string;
-    position: { x: number; y: number; selectionTop: number; selectionBottom: number };
+    position: {
+      x: number;
+      y: number;
+      selectionTop: number;
+      selectionBottom: number;
+      anchorTopX?: number;
+      anchorBottomX?: number;
+    };
   } | null>(null);
+  const [noteTooltipHeight, setNoteTooltipHeight] = useState(92);
   const noteTooltipTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const selectionFrameRef = useRef<number | null>(null);
+  const pendingSelectionRef = useRef<SelectionEvent | null>(null);
   const assetLoadedRef = useRef(false);
   // Mediator ref so onRelocate can fire TTS continuation without direct hook dependency
   const ttsPendingContinueRef = useRef<{
@@ -403,6 +415,124 @@ export function ReaderScreen({ route, navigation }: Props) {
   // Also read ttsPlayState from store for volume paging guard
   const ttsPlayState = useTTSStore((s) => s.playState);
   const ttsConfig = useTTSStore((s) => s.config);
+
+  const layoutTopInset = stableTopInset;
+  const readerTopMargin = !showSearch
+    ? showTopTitleProgress
+      ? layoutTopInset + 30
+      : layoutTopInset
+    : 0;
+  const readerBottomInset =
+    !showSearch && showBottomTimeBattery ? Math.max(insets.bottom, 8) + 14 : 0;
+  const noteTooltipWidth = Math.min(isWideLayout ? 320 : windowDimensions.width - 24, 320);
+  const noteTooltipPosition = useMemo(() => {
+    if (!noteTooltip) return null;
+
+    const horizontalPadding = 12;
+    const tooltipGap = 8;
+    const anchorTop = noteTooltip.position.selectionTop + readerTopMargin;
+    const anchorBottom = noteTooltip.position.selectionBottom + readerTopMargin;
+    const safeTop = insets.top + 8;
+    const safeBottom = insets.bottom + 8;
+
+    const aboveTop = anchorTop - noteTooltipHeight - tooltipGap;
+    const belowTop = anchorBottom + tooltipGap;
+    const canPlaceAbove = aboveTop >= safeTop;
+    const canPlaceBelow = belowTop + noteTooltipHeight <= windowDimensions.height - safeBottom;
+
+    let top: number;
+    let anchorX = noteTooltip.position.anchorTopX ?? noteTooltip.position.x;
+    if (canPlaceAbove) {
+      top = aboveTop;
+    } else if (canPlaceBelow) {
+      top = belowTop;
+      anchorX = noteTooltip.position.anchorBottomX ?? noteTooltip.position.x;
+    } else {
+      top = Math.max(
+        safeTop,
+        Math.min(belowTop, windowDimensions.height - noteTooltipHeight - safeBottom),
+      );
+      const distanceAbove = Math.abs(top - aboveTop);
+      const distanceBelow = Math.abs(top - belowTop);
+      anchorX =
+        distanceAbove <= distanceBelow
+          ? (noteTooltip.position.anchorTopX ?? noteTooltip.position.x)
+          : (noteTooltip.position.anchorBottomX ?? noteTooltip.position.x);
+    }
+
+    const left = Math.max(
+      horizontalPadding,
+      Math.min(
+        anchorX - noteTooltipWidth / 2,
+        windowDimensions.width - noteTooltipWidth - horizontalPadding,
+      ),
+    );
+
+    return { left, top };
+  }, [
+    insets.bottom,
+    insets.top,
+    noteTooltip,
+    noteTooltipHeight,
+    noteTooltipWidth,
+    readerTopMargin,
+    windowDimensions.height,
+    windowDimensions.width,
+  ]);
+
+  const isSameSelectionEvent = useCallback(
+    (a: SelectionEvent | null, b: SelectionEvent | null) => {
+      if (!a || !b) return false;
+      if (a.cfi !== b.cfi || a.text !== b.text) return false;
+
+      const posA = a.position;
+      const posB = b.position;
+      const positionTolerance = windowDimensions.width < 768 ? 5 : 1.5;
+      const anchorTolerance = windowDimensions.width < 768 ? 8 : 1.5;
+      const close = (x?: number, y?: number, tolerance = positionTolerance) =>
+        Math.abs((x || 0) - (y || 0)) < tolerance;
+
+      return (
+        close(posA.x, posB.x) &&
+        close(posA.y, posB.y) &&
+        close(posA.selectionTop, posB.selectionTop) &&
+        close(posA.selectionBottom, posB.selectionBottom) &&
+        close(posA.anchorTopX, posB.anchorTopX, anchorTolerance) &&
+        close(posA.anchorBottomX, posB.anchorBottomX, anchorTolerance)
+      );
+    },
+    [windowDimensions.width],
+  );
+
+  const scheduleSelectionUpdate = useCallback(
+    (detail: SelectionEvent | null) => {
+      pendingSelectionRef.current = detail;
+      if (selectionFrameRef.current != null) return;
+
+      selectionFrameRef.current = requestAnimationFrame(() => {
+        selectionFrameRef.current = null;
+        const nextSelection = pendingSelectionRef.current;
+        pendingSelectionRef.current = null;
+
+        setSelection((prev) => {
+          if (nextSelection == null) return prev == null ? prev : null;
+          return isSameSelectionEvent(prev, nextSelection) ? prev : nextSelection;
+        });
+
+        if (nextSelection?.cfi) {
+          readingContextService.updateSelection({
+            text: nextSelection.text,
+            cfi: nextSelection.cfi,
+            chapterIndex: 0,
+            chapterTitle: "",
+          });
+        } else {
+          readingContextService.clearSelection();
+        }
+      });
+    },
+    [isSameSelectionEvent],
+  );
 
   // Load reader HTML asset
   useEffect(() => {
@@ -645,20 +775,10 @@ export function ReaderScreen({ route, navigation }: Props) {
       setToc(items);
     },
     onSelection: (detail: SelectionEvent) => {
-      setSelection(detail);
-      // Sync selection for AI tools
-      if (detail.cfi) {
-        readingContextService.updateSelection({
-          text: detail.text,
-          cfi: detail.cfi,
-          chapterIndex: 0,
-          chapterTitle: "",
-        });
-      }
+      scheduleSelectionUpdate(detail);
     },
     onSelectionCleared: () => {
-      setSelection(null);
-      readingContextService.clearSelection();
+      scheduleSelectionUpdate(null);
     },
     onTap: () => {
       sendEvent({ type: "activity" });
@@ -698,7 +818,14 @@ export function ReaderScreen({ route, navigation }: Props) {
     },
     onShowAnnotation: (detail: {
       value: string;
-      position: { x: number; y: number; selectionTop: number; selectionBottom: number };
+      position: {
+        x: number;
+        y: number;
+        selectionTop: number;
+        selectionBottom: number;
+        anchorTopX?: number;
+        anchorBottomX?: number;
+      };
     }) => {
       const highlight = highlights.find((h) => h.cfi === detail.value);
       if (!highlight) return;
@@ -880,6 +1007,10 @@ export function ReaderScreen({ route, navigation }: Props) {
   // Save progress immediately on unmount
   useEffect(() => {
     return () => {
+      if (selectionFrameRef.current != null) {
+        cancelAnimationFrame(selectionFrameRef.current);
+        selectionFrameRef.current = null;
+      }
       if (lastCfiRef.current) {
         const db = require("@readany/core/db/database");
         runWithDbRetry(
@@ -1009,13 +1140,6 @@ export function ReaderScreen({ route, navigation }: Props) {
     return () => { cancelled = true; };
   }, [bookId, currentCfi, goToCFISafely, loading, navigation, openTTS, webViewReady]);
 
-  // Lock navigation when selection is active
-  useEffect(() => {
-    if (!webViewReady) return;
-    bridge.setNavigationLocked(!!selection);
-  }, [webViewReady, selection]);
-
-
   if (loading && !webViewReady && !readerHtmlUri) {
     return (
       <SafeAreaView style={[s.container, { backgroundColor: colors.background }]}>
@@ -1054,7 +1178,6 @@ export function ReaderScreen({ route, navigation }: Props) {
     );
   }
 
-  const layoutTopInset = stableTopInset;
   const topToolbarRowHeight = isWideLayout ? 62 : 48;
   const bottomDockIconSize = isWideLayout ? 24 : 22;
   const topToolbarIconSize = isWideLayout ? 24 : 22;
@@ -1088,13 +1211,6 @@ export function ReaderScreen({ route, navigation }: Props) {
   const existingSelectionHighlight = selection
     ? (highlights.find((highlight) => highlight.cfi === selection.cfi) ?? null)
     : null;
-  const readerTopMargin = !showSearch
-    ? showTopTitleProgress
-      ? layoutTopInset + 30
-      : layoutTopInset
-    : 0;
-  const readerBottomInset =
-    !showSearch && showBottomTimeBattery ? Math.max(insets.bottom, 8) + 14 : 0;
   const batteryLabel = batteryLevel == null ? "--%" : `${Math.round(batteryLevel * 100)}%`;
 
   return (
@@ -1229,6 +1345,7 @@ export function ReaderScreen({ route, navigation }: Props) {
       {selection && (
         <SelectionPopover
           selection={selection}
+          viewportOffsetY={readerTopMargin}
           onHighlight={handleHighlight}
           onDismiss={handleDismissSelection}
           onCopy={() => {
@@ -1313,13 +1430,15 @@ export function ReaderScreen({ route, navigation }: Props) {
           <View
             style={[
               s.noteTooltip,
-              {
-                left: Math.max(12, Math.min(noteTooltip.position.x - 150, SCREEN_WIDTH - 312)),
-                ...(noteTooltip.position.selectionTop > 220
-                  ? { bottom: SCREEN_HEIGHT - noteTooltip.position.selectionTop + 8 }
-                  : { top: noteTooltip.position.selectionBottom + 12 }),
-              },
+              noteTooltipPosition,
+              { width: noteTooltipWidth },
             ]}
+            onLayout={(event) => {
+              const nextHeight = Math.round(event.nativeEvent.layout.height);
+              if (Math.abs(nextHeight - noteTooltipHeight) > 2) {
+                setNoteTooltipHeight(nextHeight);
+              }
+            }}
             onStartShouldSetResponder={() => true}
           >
             <View style={s.noteTooltipContent}>
