@@ -1,4 +1,4 @@
-import type { Book } from "../types";
+import type { Book, ReadingStatus } from "../types";
 import { getDB, getLocalDB, getDeviceId, nextSyncVersion, nextUpdatedAt, insertTombstone, parseJSON } from "./db-core";
 
 interface BookRow {
@@ -26,6 +26,9 @@ interface BookRow {
   tags: string;
   file_hash: string | null;
   sync_status: string;
+  reading_status: string | null;
+  rating: number | null;
+  short_review: string | null;
 }
 
 function rowToBook(row: BookRow): Book {
@@ -56,6 +59,9 @@ function rowToBook(row: BookRow): Book {
     tags: parseJSON(row.tags, []),
     fileHash: row.file_hash || undefined,
     syncStatus: (row.sync_status as Book["syncStatus"]) || "local",
+    readingStatus: (row.reading_status as ReadingStatus) || "unread",
+    rating: row.rating || undefined,
+    shortReview: row.short_review || undefined,
   };
 }
 
@@ -79,8 +85,8 @@ export async function insertBook(book: Book): Promise<void> {
   const syncVersion = await nextSyncVersion(database, "books");
   const now = Date.now();
   await database.execute(
-    `INSERT INTO books (id, file_path, format, title, author, publisher, language, isbn, description, cover_url, publish_date, subjects, total_pages, total_chapters, added_at, last_opened_at, updated_at, progress, current_cfi, is_vectorized, vectorize_progress, tags, file_hash, sync_status, sync_version, last_modified_by)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO books (id, file_path, format, title, author, publisher, language, isbn, description, cover_url, publish_date, subjects, total_pages, total_chapters, added_at, last_opened_at, updated_at, progress, current_cfi, is_vectorized, vectorize_progress, tags, file_hash, sync_status, reading_status, rating, short_review, sync_version, last_modified_by)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       book.id,
       book.filePath,
@@ -106,6 +112,9 @@ export async function insertBook(book: Book): Promise<void> {
       JSON.stringify(book.tags),
       book.fileHash || null,
       book.syncStatus || "local",
+      book.readingStatus || "unread",
+      book.rating || null,
+      book.shortReview || null,
       syncVersion,
       deviceId,
     ],
@@ -184,6 +193,18 @@ export async function updateBook(id: string, updates: Partial<Book>): Promise<vo
   if (updates.syncStatus !== undefined) {
     sets.push("sync_status = ?");
     values.push(updates.syncStatus);
+  }
+  if (updates.readingStatus !== undefined) {
+    sets.push("reading_status = ?");
+    values.push(updates.readingStatus);
+  }
+  if (updates.rating !== undefined) {
+    sets.push("rating = ?");
+    values.push(updates.rating || null);
+  }
+  if (updates.shortReview !== undefined) {
+    sets.push("short_review = ?");
+    values.push(updates.shortReview || null);
   }
 
   if (sets.length === 0) return;

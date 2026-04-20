@@ -411,6 +411,7 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
                 vectorizeProgress: 0,
                 tags: [],
                 syncStatus: "local",
+                readingStatus: "unread",
                 addedAt: Date.now(),
                 updatedAt: Date.now(),
                 lastOpenedAt: Date.now(),

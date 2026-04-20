@@ -16,6 +16,8 @@ export interface BookMeta {
 
 export type BookFormat = "epub" | "pdf" | "mobi" | "azw" | "azw3" | "cbz" | "fb2" | "fbz" | "txt";
 
+export type ReadingStatus = "unread" | "reading" | "finished" | "shelved" | "dropped";
+
 export interface Book {
   id: string;
   filePath: string;
@@ -31,6 +33,9 @@ export interface Book {
   tags: string[];
   fileHash?: string;
   syncStatus: "local" | "remote" | "downloading"; // File availability status
+  readingStatus: ReadingStatus;
+  rating?: number; // 1-5, undefined = unrated
+  shortReview?: string; // max 200 chars
 }
 
 export type ViewMode = "paginated" | "scroll";

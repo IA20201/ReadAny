@@ -30,7 +30,10 @@ pub fn initialize(db_path: &Path) -> Result<()> {
             current_cfi TEXT,
             is_vectorized INTEGER DEFAULT 0,
             vectorize_progress REAL DEFAULT 0,
-            tags TEXT DEFAULT '[]'
+            tags TEXT DEFAULT '[]',
+            reading_status TEXT NOT NULL DEFAULT 'unread',
+            rating INTEGER,
+            short_review TEXT
         );
 
         CREATE TABLE IF NOT EXISTS highlights (

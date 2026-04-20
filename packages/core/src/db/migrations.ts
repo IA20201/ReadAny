@@ -60,6 +60,23 @@ const migrations: Migration[] = [
     description: "Add characters_read column to reading_sessions",
     up: "ALTER TABLE reading_sessions ADD COLUMN characters_read INTEGER DEFAULT 0",
   },
+  {
+    version: 8,
+    description: "Add book info fields: reading_status, rating, short_review",
+    up: `
+      ALTER TABLE books ADD COLUMN reading_status TEXT NOT NULL DEFAULT 'unread';
+      ALTER TABLE books ADD COLUMN rating INTEGER;
+      ALTER TABLE books ADD COLUMN short_review TEXT;
+    `,
+  },
+  {
+    version: 9,
+    description: "Backfill reading_status from progress",
+    up: `
+      UPDATE books SET reading_status = 'reading' WHERE progress > 0 AND progress < 1.0 AND reading_status = 'unread';
+      UPDATE books SET reading_status = 'finished' WHERE progress >= 1.0 AND reading_status = 'unread';
+    `,
+  },
 ];
 
 /** Run pending migrations */

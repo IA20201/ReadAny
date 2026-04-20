@@ -20,7 +20,10 @@ CREATE TABLE IF NOT EXISTS books (
   is_vectorized INTEGER DEFAULT 0,
   vectorize_progress REAL DEFAULT 0.0,
   added_at INTEGER NOT NULL,
-  last_opened_at INTEGER
+  last_opened_at INTEGER,
+  reading_status TEXT NOT NULL DEFAULT 'unread',
+  rating INTEGER,
+  short_review TEXT
 );
 
 CREATE TABLE IF NOT EXISTS tags (

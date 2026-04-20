@@ -212,6 +212,13 @@ export function LibraryScreen() {
     [nav, downloadBook],
   );
 
+  const handleBookInfo = useCallback(
+    (book: Book) => {
+      nav.navigate("BookInfo", { bookId: book.id });
+    },
+    [nav],
+  );
+
   const handleManageTags = useCallback((book: Book) => {
     setTagSheetBook(book);
     setTagSheetOpen(true);
@@ -239,6 +246,7 @@ export function LibraryScreen() {
           book={item}
           onOpen={handleOpen}
           onDelete={removeBook}
+          onBookInfo={handleBookInfo}
           onManageTags={handleManageTags}
           onVectorize={handleVectorize}
           isVectorizing={vectorizingBookId === item.id}
@@ -247,7 +255,7 @@ export function LibraryScreen() {
         />
       </View>
     ),
-    [handleOpen, removeBook, handleManageTags, handleVectorize, vectorizingBookId, vectorQueue, vectorProgress],
+    [handleOpen, removeBook, handleBookInfo, handleManageTags, handleVectorize, vectorizingBookId, vectorQueue, vectorProgress],
   );
 
   return (

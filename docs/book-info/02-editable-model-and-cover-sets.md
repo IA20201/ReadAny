@@ -1,8 +1,8 @@
-# Editable Model, Cover Sets, Ratings And Reviews
+# Editable Model, Ratings And Reviews
 
 ## 为什么很多东西都应该可编辑
 
-“书籍信息”如果完全相信导入元数据，体验一定会很僵。
+"书籍信息"如果完全相信导入元数据，体验一定会很僵。
 
 因为用户实际遇到的问题很多：
 
@@ -10,314 +10,195 @@
 - 作者信息不完整
 - 简介缺失
 - 封面不好看
-- 同一本书有多个喜欢的版本
 - 文件来自不同来源，元数据质量不同
 - 用户想为一本书补自己的评价和理解
 
-所以这块必须明确区分三种信息：
+所以这块必须明确区分两种信息：
 
-1. `原始元数据`
-2. `用户修订信息`
-3. `用户附加资产`
+1. `原始元数据`（文件提取 + 导入时的数据）
+2. `用户附加数据`（评分、状态、短评、封面替换、元数据修正）
 
-## 三层模型
+## 两层模型
 
-### 1. 原始元数据
+### 1. 原始元数据（已有）
 
 来源：
 
-- 文件内元数据
-- 在线抓取结果
-- 手动导入结果
+- EPUB/PDF/MOBI 等文件内嵌元数据（通过 `DocumentLoader` / `pdfjs` / `OPF` 解析）
+- 导入时自动提取
 
-特点：
+当前已有字段（`BookMeta` 类型）：
 
-- 保留原值
-- 不随用户编辑直接消失
-- 便于回滚
+- `title` / `author` / `publisher` / `language`
+- `isbn` / `description` / `coverUrl`
+- `publishDate` / `subjects` / `totalPages` / `totalChapters`
 
-### 2. 用户修订信息
+这些字段存在 `books` 表中，保持原值不变。
 
-这是用户对这本书“正式修正”的版本。
+### 2. 用户附加数据（需新增）
 
-适合覆盖：
-
-- 标题
-- 副标题
-- 作者
-- 译者
-- 出版社
-- 出版日期
-- ISBN
-- 语言
-- 标签
-- 简介
-- 系列信息
-- 主封面
-
-### 3. 用户附加资产
-
-这部分不是“修正”，而是用户自己生成的内容。
+这是用户对这本书的修正、评价和个性化标记。
 
 包括：
 
-- 自定义评分
-- 书评
-- 阅读状态
-- 私人标签
-- 高亮 / 笔记 / 书签
-- 封面集
-- 分享卡
-- AI 生成的摘要 / 洞察
+- 元数据修正（标题、作者等覆写）
+- 阅读状态（未读 / 在读 / 读完 / 搁置 / 弃读）
+- 星级评分
+- 一句话短评
+- 主封面替换
 
 ## 建议可编辑字段矩阵
 
-| 模块 | 字段 | 是否可编辑 | 备注 |
-|---|---|---:|---|
-| 基础信息 | 标题 | 是 | 用户修正标题 |
-| 基础信息 | 副标题 | 是 | 常见于出版物 |
-| 基础信息 | 作者 | 是 | 支持多人 |
-| 基础信息 | 译者 | 是 | 当前模型需新增 |
-| 基础信息 | 出版社 | 是 | 当前已有字段 |
-| 基础信息 | 出版日期 | 是 | 当前已有字段 |
-| 基础信息 | ISBN | 是 | 当前已有字段 |
-| 基础信息 | 语言 | 是 | 当前已有字段 |
-| 基础信息 | 简介 | 是 | 当前已有字段 |
-| 基础信息 | 系列 / 卷次 | 是 | 新增 |
-| 分类信息 | 标签 | 是 | 已有 tags，可扩展为系统标签 + 私人标签 |
-| 阅读关系 | 阅读状态 | 是 | 想读、在读、已读、搁置、弃读、重读 |
-| 阅读关系 | 评分 | 是 | 半星或整星 |
-| 阅读关系 | 书评 | 是 | 长短评都支持 |
-| 阅读关系 | 喜欢程度 / 推荐度 | 是 | 可选扩展 |
-| 版本信息 | 主封面 | 是 | 用户指定 |
-| 版本信息 | 封面集 | 是 | 用户挑选、排序、收藏 |
-| 版本信息 | 文件别名 | 是 | 可选 |
-| 版本信息 | 元数据来源优先级 | 是 | 高级用户能力 |
+| 字段 | 是否可编辑 | 优先级 | 备注 |
+|---|---|---|---|
+| 封面 | 是 | P0 | 替换主封面，单张 |
+| 阅读状态 | 是 | P0 | 新增字段，带自动流转 |
+| 评分 | 是 | P0 | 新增字段，1-5 星整星 |
+| 一句话短评 | 是 | P0 | 新增字段 |
+| 标题 | 是 | P1 | 覆写原始值 |
+| 作者 | 是 | P1 | 覆写原始值 |
+| 标签 | 是 | P1 | 已有 tags 字段 |
+| 简介 | 是 | P2 | 覆写原始值 |
+| 出版社 | 是 | P2 | 覆写原始值 |
+| ISBN | 是 | P2 | 覆写原始值 |
+| 语言 | 是 | P2 | 覆写原始值 |
 
-## 封面不该只是单封面
+> P0 = Phase 1 必做，P1 = Phase 2 做，P2 = 后续按需。
 
-这是这次方案里最值得做出特色的一块。
+## 关于封面
 
-## 封面集（Cover Set）是什么
+MVP 阶段只做 **主封面替换**，不做封面集。
 
-它不是简单的“换封面”，而是一套和这本书绑定的封面资源池。
+理由：
 
-封面集可以包含：
+- 绝大多数用户就一个封面，少数用户会换一次
+- "封面集"（多封面管理、分组、排序、不同场景设不同封面）复杂度极高，收益极低
+- 后续如果确实有需求，再扩展为封面列表
 
-- 文件内原始封面
-- 在线抓取封面
-- 用户自己上传的封面
-- 用户从其他版本保存的封面
-- 用户分享导入的封面包
+MVP 封面能力：
 
-## 封面集需要支持的动作
+- 点击封面 → 从相册/文件选择新封面
+- 新封面保存到 `covers/{bookId}.{ext}`，覆盖原封面路径
+- 更新 `books` 表的 `cover_url` 字段
 
-### 基础动作
-
-- 设为主封面
-- 重命名封面
-- 删除封面
-- 调整顺序
-- 标记来源
-
-### 高级动作
-
-- 创建封面分组
-- 一键切换主题封面
-- 为不同场景设默认封面
-  - 书库展示封面
-  - 阅读器顶部小封面
-  - 分享海报封面
-- 导入/导出封面集
-
-## 封面集的体验为什么有意思
-
-用户对同一本书，往往不是只认可一个封面。
-
-常见场景：
-
-- 喜欢外文原版封面
-- 喜欢大陆版标题但更喜欢台版封面
-- 收藏不同版本装帧
-- 分享时希望用更适合社交媒体的封面
-
-所以封面集会让“书籍信息”页变得很有玩味，而不是机械地展示一本书。
-
-## 封面集的产品形态
-
-### 移动端
-
-- Hero 封面点击进入“封面集”
-- 底部弹层展示封面网格
-- 顶部显示：
-  - 当前主封面
-  - 来源
-  - 设为默认按钮
-- 支持长按预览
-
-### 桌面端
-
-- 主封面右下角悬浮“切换封面”
-- 点击后出现侧边抽屉或网格弹窗
-- 支持拖拽排序
-- 支持批量导入
-
-## 评分与书评必须加入
-
-## 评分的意义
-
-如果书籍信息页没有评分与书评，它更像“文件信息”，而不是“阅读记录”。
+## 评分
 
 评分至少应该支持：
 
-- 0.5 星粒度或 1 星粒度
+- 1-5 星整星（不做半星，降低交互复杂度）
 - 可改
-- 可清空
-- 支持“是否推荐”补充标记
+- 可清空（恢复为未评分）
 
-## 书评的层级建议
+评分展示位置：
 
-### 1. 简评
+- 移动端：标题区下方，轻量星级条
+- 桌面端：左栏，紧挨标题
 
-- 一句短评
-- 适合快速记忆和列表展示
+## 书评
 
-### 2. 长评
+MVP 只做 **一句话短评**。
 
-- 更适合读后整理
-- 可带标题
-- 可引用高亮
+理由：
 
-### 3. 标签化评价
+- 长评需要富文本编辑器，投入产出比低
+- 标签化评价（"节奏快/慢"、"易读/难读"）需要有足够多的书被标记后才有聚合价值，单机应用不成立
+- 一句话短评门槛低，大多数用户愿意写
 
-为了让书评可聚合，建议附加可选标签：
+实现：
 
-- 节奏快 / 慢
-- 易读 / 难读
-- 概念密度高
-- 人物塑造强
-- 值得重读
-- 适合入门
-
-## 评分与书评的展示建议
-
-### 移动端
-
-- 评分放在标题区下方，做成轻量星级条
-- “写一条一句话短评”优先，降低门槛
-- 长评放在 `阅读` 或 `洞察` 里
-
-### 桌面端
-
-- 左侧可直接评分
-- 右侧单独一块“我的评价”
-- 支持编辑和历史版本
-
-## 其他建议可编辑的用户层能力
-
-除了评分与书评，建议补这些：
-
-### 1. 自定义一句话定位
-
-例如：
-
-- “关于拖延症与行动力的书”
-- “睡前适合读的小说”
-
-这比只依赖简介更像用户自己的记忆。
-
-### 2. 私人别名
-
-用户可给书起一个私人称呼，例如：
-
-- “拖延症解药”
-- “今年最想读完的那本”
-
-### 3. 阅读目标
-
-按书设置：
-
-- 7 天内读完
-- 本月读完
-- 本书读字数目标
-
-### 4. 阅读心情与推荐对象
-
-用户可以标记：
-
-- 适合心烦时读
-- 适合通勤时读
-- 适合推荐给朋友
+- 一个 `TEXT` 字段，限制 200 字
+- 可编辑、可清空
+- 展示在评分下方
 
 ## 建议的新数据结构
 
-### book_meta_source
+### 方案：扩展现有 books 表
 
-记录：
+考虑到 MVP 新增字段不多，不另建表，直接在 `books` 表上加字段：
 
-- 原始字段
-- 字段来源
-- 抓取时间
+```sql
+ALTER TABLE books ADD COLUMN reading_status TEXT DEFAULT 'unread';
+-- 'unread' | 'reading' | 'finished' | 'shelved' | 'dropped'
 
-### book_meta_override
+ALTER TABLE books ADD COLUMN rating INTEGER;
+-- 1-5, NULL = 未评分
 
-记录用户修订值：
+ALTER TABLE books ADD COLUMN short_review TEXT;
+-- 一句话短评, 限 200 字
+```
 
-- `bookId`
-- `field`
-- `value`
-- `updatedAt`
+理由：
 
-### book_cover_asset
+- 阅读状态、评分、短评是每本书一条记录，和 Book 是 1:1 关系
+- 不需要额外的 `book_review` 表
+- 减少 JOIN 查询开销
+- 与现有 `book-queries.ts` 的 `rowToBook` 映射天然兼容
 
-记录封面资源：
+### 对应 TypeScript 类型变更
 
-- `id`
-- `bookId`
-- `type`：embedded / fetched / uploaded / shared
-- `path`
-- `thumbPath`
-- `label`
-- `isPrimary`
-- `sortOrder`
-- `createdAt`
+```typescript
+// packages/core/src/types/book.ts
 
-### book_review
+// 新增到 Book 接口:
+readingStatus: ReadingStatus;
+rating?: number;        // 1-5, undefined = 未评分
+shortReview?: string;   // 一句话短评
 
-记录评分与书评：
+// 新增类型:
+type ReadingStatus = 'unread' | 'reading' | 'finished' | 'shelved' | 'dropped';
+```
 
-- `bookId`
-- `rating`
-- `shortReview`
-- `fullReview`
-- `recommendation`
-- `updatedAt`
+### 元数据修正方案（Phase 2）
 
-## 当前代码可复用的现实基础
+当实现元数据编辑时，采用 `meta_override` JSON 字段：
 
-当前仓库已有这些基础：
+```sql
+ALTER TABLE books ADD COLUMN meta_override TEXT;
+-- JSON: { "title": "用户修正的标题", "author": "用户修正的作者" }
+```
 
-- [packages/core/src/types/book.ts](/Users/tuntuntutu/Project/ReadAny/packages/core/src/types/book.ts)
-  - 已有 `title / author / publisher / language / isbn / description / coverUrl / publishDate / subjects`
-- [packages/app-expo/src/lib/book/metadata-extractor.ts](/Users/tuntuntutu/Project/ReadAny/packages/app-expo/src/lib/book/metadata-extractor.ts)
-  - 移动端已能从 EPUB 提取标题、作者、封面
-- [packages/app/src/stores/library-store.ts](/Users/tuntuntutu/Project/ReadAny/packages/app/src/stores/library-store.ts)
-  - 桌面端已有封面提取与封面文件落盘逻辑
+UI 层读取时优先取 `meta_override` 中的值，fallback 到原始 `meta` 字段。这样原始元数据不被破坏，用户修正可随时回退。
 
-也就是说：
+## 数据迁移策略
 
-- 第一版就能做“封面编辑”和“主封面切换”
-- 但“封面集”“用户修订字段”“评分/书评”仍需要正式模型
+现有 `books` 表已有数据，加字段时需要注意：
 
-## 最值得优先落地的可编辑能力
+1. **`reading_status`**：默认值 `'unread'`，但对于 `progress > 0` 的书应该迁移为 `'reading'`，`progress >= 1.0` 的书迁移为 `'finished'`
+2. **`rating`** 和 **`short_review`**：默认 `NULL`，无需迁移
+3. **迁移脚本**：在 `packages/core/src/db/migrations.ts` 中新增迁移版本
 
-建议优先级：
+```sql
+-- Migration: add book info fields
+ALTER TABLE books ADD COLUMN reading_status TEXT DEFAULT 'unread';
+ALTER TABLE books ADD COLUMN rating INTEGER;
+ALTER TABLE books ADD COLUMN short_review TEXT;
 
-1. 主封面替换
-2. 封面集
-3. 阅读状态
-4. 评分
-5. 一句话短评
-6. 元数据修正
+-- Backfill reading status from progress
+UPDATE books SET reading_status = 'reading' WHERE progress > 0 AND progress < 1.0;
+UPDATE books SET reading_status = 'finished' WHERE progress >= 1.0;
+```
 
-这六项一旦做完，书籍信息页就会明显从“展示信息”升级成“拥有这本书”。
+## 当前代码可复用的基础
+
+| 已有能力 | 位置 | 复用方式 |
+|---|---|---|
+| Book 类型定义 | `packages/core/src/types/book.ts` | 扩展接口 |
+| BookMeta 元数据 | 同上 | 保持不变 |
+| 封面提取 & 落盘 | `library-store.ts` importBooks | 复用路径逻辑 |
+| 封面显示 | `BookCard.tsx` | 复用 fallback 封面组件 |
+| 标签管理 | `library-store.ts` tag 相关方法 | 直接复用 |
+| 阅读会话 | `session-queries.ts` | 聚合本书数据 |
+| 数据库迁移 | `migrations.ts` | 新增迁移版本 |
+
+## 最值得优先落地的能力
+
+按优先级排序：
+
+1. 阅读状态切换（带自动流转）
+2. 星级评分
+3. 一句话短评
+4. 主封面替换
+5. 元数据查看（只读展示）
+6. 元数据修正（Phase 2）
+
+前四项一旦做完，书籍信息页就会明显从"展示信息"升级成"拥有这本书"。

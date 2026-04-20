@@ -1,4 +1,4 @@
-import { DatabaseIcon, HashIcon, Trash2Icon } from "@/components/ui/Icon";
+import { BookOpenIcon, DatabaseIcon, HashIcon, Trash2Icon } from "@/components/ui/Icon";
 import { type ThemeColors, fontSize, fontWeight, radius, useColors } from "@/styles/theme";
 import type { Book } from "@readany/core/types";
 import { useTranslation } from "react-i18next";
@@ -8,6 +8,7 @@ interface BookCardActionSheetProps {
   visible: boolean;
   book: Book;
   onClose: () => void;
+  onBookInfo?: (book: Book) => void;
   onManageTags?: (book: Book) => void;
   onVectorize?: (book: Book) => void;
   onDelete: (bookId: string) => void;
@@ -17,6 +18,7 @@ export function BookCardActionSheet({
   visible,
   book,
   onClose,
+  onBookInfo,
   onManageTags,
   onVectorize,
   onDelete,
@@ -35,6 +37,16 @@ export function BookCardActionSheet({
           {book.meta.author ? <Text style={s.author}>{book.meta.author}</Text> : null}
         </View>
         <View style={s.divider} />
+
+        {onBookInfo && (
+          <TouchableOpacity
+            style={s.item}
+            onPress={() => { onClose(); onBookInfo(book); }}
+          >
+            <BookOpenIcon size={20} color={colors.mutedForeground} />
+            <Text style={s.label}>{t("bookInfo.title")}</Text>
+          </TouchableOpacity>
+        )}
 
         {onManageTags && (
           <TouchableOpacity

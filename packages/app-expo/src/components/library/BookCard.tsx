@@ -49,6 +49,7 @@ interface BookCardProps {
   book: Book;
   onOpen: (book: Book) => void;
   onDelete: (bookId: string) => void;
+  onBookInfo?: (book: Book) => void;
   onManageTags?: (book: Book) => void;
   onVectorize?: (book: Book) => void;
   isVectorizing?: boolean;
@@ -60,6 +61,7 @@ export const BookCard = memo(function BookCard({
   book,
   onOpen,
   onDelete,
+  onBookInfo,
   onManageTags,
   onVectorize,
   isVectorizing,
@@ -274,6 +276,7 @@ export const BookCard = memo(function BookCard({
         visible={showActions}
         book={book}
         onClose={() => setShowActions(false)}
+        onBookInfo={onBookInfo}
         onManageTags={onManageTags}
         onVectorize={onVectorize}
         onDelete={onDelete}

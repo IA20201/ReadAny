@@ -9,6 +9,7 @@ import { useLibraryStore } from "@/stores/library-store";
 import { useVectorModelStore } from "@/stores/vector-model-store";
 import type { Book, VectorizeProgress } from "@readany/core/types";
 import {
+  BookOpen,
   Check,
   ChevronRight,
   Database,
@@ -339,6 +340,22 @@ export const BookCard = memo(function BookCard({ book }: BookCardProps) {
                 </div>
               )}
             </div>
+            {/* Book Info button */}
+            <button
+              type="button"
+              className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs text-foreground hover:bg-muted"
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowMenu(false);
+                setMenuPos(null);
+                window.dispatchEvent(
+                  new CustomEvent("open-book-info", { detail: { bookId: book.id } }),
+                );
+              }}
+            >
+              <BookOpen className="h-3.5 w-3.5" />
+              {t("bookInfo.title")}
+            </button>
             {/* Delete button */}
             <button
               type="button"

@@ -2,6 +2,7 @@ import { OnboardingNavigator } from "@/components/onboarding/OnboardingNavigator
 import { BookChatScreen } from "@/screens/BookChatScreen";
 import { FullScreenNotesScreen } from "@/screens/FullScreenNotesScreen";
 import { ReaderScreen } from "@/screens/ReaderScreen";
+import BookInfoScreen from "@/screens/BookInfoScreen";
 import SkillsScreen from "@/screens/SkillsScreen";
 import StatsScreen from "@/screens/StatsScreen";
 import BadgesScreen from "@/screens/BadgesScreen";
@@ -24,6 +25,7 @@ export type RootStackParamList = {
   Onboarding: undefined;
   Tabs: undefined;
   Reader: { bookId: string; cfi?: string; highlight?: boolean; openTTS?: boolean };
+  BookInfo: { bookId: string };
   BookChat: { bookId: string; selectedText?: string; chapterTitle?: string };
   Stats: undefined;
   Badges: undefined;
@@ -63,6 +65,11 @@ export function RootNavigator() {
           <Stack.Screen
             name="BookChat"
             component={BookChatScreen}
+            options={{ animation: "slide_from_right" }}
+          />
+          <Stack.Screen
+            name="BookInfo"
+            component={BookInfoScreen}
             options={{ animation: "slide_from_right" }}
           />
           <Stack.Screen

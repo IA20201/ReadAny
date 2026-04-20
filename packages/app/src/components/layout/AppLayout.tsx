@@ -15,6 +15,7 @@
  * Home-type pages (home/chat/notes/skills/stats) share the left sidebar.
  * Reader pages are full-width (no sidebar).
  */
+import { BookInfoPanel } from "@/components/book-info/BookInfoPanel";
 import { ChatPage as ChatPageComponent } from "@/components/chat/ChatPage";
 import { CommandPalette } from "@/components/command-palette/CommandPalette";
 import { HomePage } from "@/components/home/HomePage";
@@ -61,6 +62,20 @@ export function AppLayout() {
   const books = useLibraryStore((s) => s.books);
   const { hasCompletedOnboarding: _hasCompletedOnboarding, _hasHydrated } = useSettingsStore();
   const { t } = useTranslation();
+
+  // Book info panel state
+  const [bookInfoId, setBookInfoId] = useState<string | null>(null);
+  const bookInfoBook = bookInfoId ? books.find((b) => b.id === bookInfoId) : null;
+
+  // Listen for "open-book-info" custom events from BookCard context menu
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.bookId) setBookInfoId(detail.bookId);
+    };
+    window.addEventListener("open-book-info", handler);
+    return () => window.removeEventListener("open-book-info", handler);
+  }, []);
 
   // Inject @font-face / <link> for all custom fonts into the main app document
   const customFonts = useFontStore((s) => s.fonts);
@@ -335,11 +350,20 @@ export function AppLayout() {
                 <div
                   key={id}
                   className="h-full w-full"
-                  style={{ display: homeViewKey === id ? "block" : "none" }}
+                  style={{ display: homeViewKey === id && !bookInfoBook ? "block" : "none" }}
                 >
                   <Component />
                 </div>
               ))}
+              {/* Book Info overlay */}
+              {bookInfoBook && (
+                <div className="h-full w-full">
+                  <BookInfoPanel
+                    book={bookInfoBook}
+                    onBack={() => setBookInfoId(null)}
+                  />
+                </div>
+              )}
             </div>
           </div>
         </div>
