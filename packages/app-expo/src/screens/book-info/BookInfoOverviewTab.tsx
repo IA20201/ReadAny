@@ -147,9 +147,9 @@ export function BookInfoOverviewTab({ book, isEditing, onReviewPress }: Props) {
       </Section>
 
       {/* ─ Sync ─ */}
-      <View style={[styles.syncRow, { backgroundColor: withOpacity(colors.muted, 0.2) }]}>
+      <View style={[styles.syncRow, { backgroundColor: withOpacity(colors.muted, 0.12) }]}>
         <View style={[styles.syncDot, { backgroundColor: book.syncStatus === "local" ? "#10b981" : book.syncStatus === "remote" ? "#3b82f6" : "#f59e0b" }]} />
-        <Text style={[styles.syncText, { color: colors.mutedForeground }]}>
+        <Text style={[styles.syncText, { color: withOpacity(colors.mutedForeground, 0.7) }]}>
           {book.syncStatus === "local" ? t("bookInfo.syncLocal") : book.syncStatus === "remote" ? t("bookInfo.syncRemote") : "Syncing..."}
         </Text>
         {book.fileHash ? <Text style={[styles.syncHash, { color: withOpacity(colors.mutedForeground, 0.3) }]}>{book.fileHash.slice(0, 8)}</Text> : null}
@@ -232,8 +232,8 @@ const styles = StyleSheet.create({
   detailValue: { fontSize: fontSize.sm, marginTop: 1 },
 
   // Sync
-  syncRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm, borderRadius: radius.lg, paddingHorizontal: spacing.md, paddingVertical: spacing.md },
-  syncDot: { width: 7, height: 7, borderRadius: radius.full },
-  syncText: { fontSize: 11, flex: 1 },
+  syncRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm, borderRadius: radius.lg, paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
+  syncDot: { width: 6, height: 6, borderRadius: radius.full },
+  syncText: { fontSize: 10, flex: 1 },
   syncHash: { fontSize: 9, fontFamily: "monospace" },
 });

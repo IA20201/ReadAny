@@ -347,7 +347,10 @@ export async function initDatabase(): Promise<void> {
       current_cfi TEXT,
       is_vectorized INTEGER DEFAULT 0,
       vectorize_progress REAL DEFAULT 0,
-      tags TEXT DEFAULT '[]'
+      tags TEXT DEFAULT '[]',
+      reading_status TEXT NOT NULL DEFAULT 'unread',
+      rating INTEGER,
+      short_review TEXT
     )
   `);
 
@@ -629,6 +632,25 @@ export async function initDatabase(): Promise<void> {
         );
       } catch {
         // Column already exists or table doesn't exist yet
+      }
+
+      // Migration 11: Book info fields — reading_status, rating, short_review
+      try {
+        await database.execute(
+          "ALTER TABLE books ADD COLUMN reading_status TEXT NOT NULL DEFAULT 'unread'",
+        );
+      } catch {
+        // Column already exists
+      }
+      try {
+        await database.execute("ALTER TABLE books ADD COLUMN rating INTEGER");
+      } catch {
+        // Column already exists
+      }
+      try {
+        await database.execute("ALTER TABLE books ADD COLUMN short_review TEXT");
+      } catch {
+        // Column already exists
       }
 
       const platform = getPlatformService();

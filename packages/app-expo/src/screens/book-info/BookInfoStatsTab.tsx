@@ -1,11 +1,11 @@
 /**
- * BookInfoStatsTab — 统计 tab: Progress card + stats grid + timeline
+ * BookInfoStatsTab — 统计 tab: Progress + Pace & Prediction + Stats grid + Timeline
  */
 import { View, Text, StyleSheet } from "react-native";
 import { useColors, spacing, radius, fontSize, fontWeight, withOpacity } from "@/styles/theme";
 import type { Book, ReadingSession } from "@readany/core/types";
 import { getReadingSessions } from "@readany/core/db";
-import { BookOpen, Calendar, Clock, Flame, TrendingUp, Type, Zap } from "lucide-react-native";
+import { BookOpen, Calendar, Clock, Flame, Target, TrendingUp, Type, Zap } from "lucide-react-native";
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -13,8 +13,14 @@ interface Props {
   book: Book;
 }
 
+type PaceStatus =
+  | { kind: "completed"; totalMinutes: number }
+  | { kind: "not-started" }
+  | { kind: "no-recent"; histMins: number; histChars: number }
+  | { kind: "active"; recentMins: number; recentChars: number; daysToFinish: number; finishDate: Date };
+
 export function BookInfoStatsTab({ book }: Props) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const colors = useColors();
   const [sessions, setSessions] = useState<ReadingSession[] | null>(null);
 
@@ -38,6 +44,41 @@ export function BookInfoStatsTab({ book }: Props) {
     }
     return { totalMinutes, totalChars, speed, sessionCount: sessions.length, activeDays: daySet.size, streak };
   }, [sessions]);
+
+  // Reading pace (last 7 days) and finish-date prediction
+  const pace = useMemo((): PaceStatus | null => {
+    if (!sessions || !stats) return null;
+    if (book.progress >= 1) return { kind: "completed", totalMinutes: stats.totalMinutes };
+    if (book.progress <= 0 || stats.totalChars === 0) return { kind: "not-started" };
+
+    const cutoff = Date.now() - 7 * 86400000;
+    const recent = sessions.filter((s) => s.startedAt >= cutoff);
+    const recentDays = new Set<string>();
+    let recentTime = 0;
+    let recentChars = 0;
+    for (const s of recent) {
+      recentDays.add(new Date(s.startedAt).toISOString().slice(0, 10));
+      recentTime += s.totalActiveTime || 0;
+      recentChars += s.charactersRead || 0;
+    }
+
+    // Historical daily averages (all-time, by active days) — used as fallback display
+    const histMins = stats.activeDays > 0 ? Math.round(stats.totalMinutes / stats.activeDays) : 0;
+    const histChars = stats.activeDays > 0 ? Math.round(stats.totalChars / stats.activeDays) : 0;
+
+    if (recentDays.size === 0) return { kind: "no-recent", histMins, histChars };
+
+    const recentMins = Math.round(recentTime / 60000 / recentDays.size);
+    const recentCharsPerDay = Math.round(recentChars / recentDays.size);
+
+    // Estimate total chars in the whole book by reverse-extrapolating from progress
+    const estTotalChars = stats.totalChars / book.progress;
+    const remainingChars = estTotalChars * (1 - book.progress);
+    if (recentCharsPerDay <= 0) return { kind: "no-recent", histMins, histChars };
+    const daysToFinish = Math.max(1, Math.ceil(remainingChars / recentCharsPerDay));
+    const finishDate = new Date(Date.now() + daysToFinish * 86400000);
+    return { kind: "active", recentMins, recentChars: recentCharsPerDay, daysToFinish, finishDate };
+  }, [sessions, stats, book.progress]);
 
   // Timeline data: last 14 days
   const timelineData = useMemo(() => {
@@ -69,6 +110,9 @@ export function BookInfoStatsTab({ book }: Props) {
     return new Date(ts).toLocaleDateString(undefined, { month: "short", day: "numeric" });
   };
 
+  const formatFinishDate = (d: Date) =>
+    d.toLocaleDateString(i18n.language || undefined, { month: "short", day: "numeric" });
+
   const progressPct = Math.round(book.progress * 100);
 
   // ─── Skeleton ───
@@ -80,6 +124,10 @@ export function BookInfoStatsTab({ book }: Props) {
         <View style={[styles.progressCard, { backgroundColor: withOpacity(colors.muted, 0.15), borderColor: "transparent" }]}>
           <View style={{ height: 30, width: 80, borderRadius: 6, backgroundColor: withOpacity(colors.muted, 0.25) }} />
           <View style={{ height: 8, borderRadius: 4, backgroundColor: withOpacity(colors.muted, 0.2), marginTop: 12 }} />
+        </View>
+        {/* Pace skeleton */}
+        <View style={[styles.paceCard, { backgroundColor: withOpacity(colors.muted, 0.12), borderColor: "transparent" }]}>
+          <View style={{ height: 40, borderRadius: 4, backgroundColor: withOpacity(colors.muted, 0.2) }} />
         </View>
         {/* Grid skeleton */}
         <View style={styles.grid}>
@@ -129,6 +177,82 @@ export function BookInfoStatsTab({ book }: Props) {
           <View style={[styles.progressFill, { backgroundColor: colors.primary, width: `${progressPct}%` as `${number}%` }]} />
         </View>
       </View>
+
+      {/* ─── Pace & Prediction Card ─── */}
+      {pace && (
+        <View style={[styles.paceCard, { backgroundColor: withOpacity(colors.card, 0.9), borderColor: withOpacity(colors.border, 0.35), shadowColor: colors.foreground }]}>
+          <View style={styles.paceHeader}>
+            <View style={[styles.paceIconBubble, { backgroundColor: withOpacity("#6366f1", 0.1) }]}>
+              <TrendingUp size={13} color="#6366f1" />
+            </View>
+            <Text style={[styles.paceTitle, { color: colors.foreground }]}>{t("bookInfo.pace")}</Text>
+            <Text style={[styles.paceWindow, { color: withOpacity(colors.mutedForeground, 0.7) }]}> · {t("bookInfo.paceRecent7")}</Text>
+          </View>
+
+          {pace.kind === "completed" && (
+            <View style={styles.paceMessageRow}>
+              <Text style={[styles.paceMessage, { color: colors.foreground }]}>{t("bookInfo.predictCompleted")}</Text>
+              <Text style={[styles.paceMessageSub, { color: colors.mutedForeground }]}>
+                {t("bookInfo.totalTime")}: {formatTime(pace.totalMinutes)}
+              </Text>
+            </View>
+          )}
+
+          {pace.kind === "not-started" && (
+            <Text style={[styles.paceMessage, { color: colors.mutedForeground }]}>{t("bookInfo.predictNeedStart")}</Text>
+          )}
+
+          {pace.kind === "no-recent" && (
+            <>
+              <View style={styles.paceNumbers}>
+                <View style={styles.paceCol}>
+                  <Text style={[styles.paceBig, { color: withOpacity(colors.foreground, 0.5) }]}>{pace.histMins || "—"}</Text>
+                  <Text style={[styles.paceUnit, { color: colors.mutedForeground }]}>{t("bookInfo.paceMinutesPerDay")}</Text>
+                </View>
+                <View style={styles.paceDivider} />
+                <View style={styles.paceCol}>
+                  <Text style={[styles.paceBig, { color: withOpacity(colors.foreground, 0.5) }]}>
+                    {pace.histChars > 0 ? pace.histChars.toLocaleString() : "—"}
+                  </Text>
+                  <Text style={[styles.paceUnit, { color: colors.mutedForeground }]}>{t("bookInfo.paceCharsPerDay")}</Text>
+                </View>
+              </View>
+              <View style={[styles.paceHr, { backgroundColor: withOpacity(colors.border, 0.4) }]} />
+              <Text style={[styles.paceMessage, { color: withOpacity(colors.mutedForeground, 0.9) }]}>
+                {t("bookInfo.predictNoRecent")}
+              </Text>
+            </>
+          )}
+
+          {pace.kind === "active" && (
+            <>
+              <View style={styles.paceNumbers}>
+                <View style={styles.paceCol}>
+                  <Text style={[styles.paceBig, { color: colors.foreground }]}>{pace.recentMins}</Text>
+                  <Text style={[styles.paceUnit, { color: colors.mutedForeground }]}>{t("bookInfo.paceMinutesPerDay")}</Text>
+                </View>
+                <View style={styles.paceDivider} />
+                <View style={styles.paceCol}>
+                  <Text style={[styles.paceBig, { color: colors.foreground }]}>{pace.recentChars.toLocaleString()}</Text>
+                  <Text style={[styles.paceUnit, { color: colors.mutedForeground }]}>{t("bookInfo.paceCharsPerDay")}</Text>
+                </View>
+              </View>
+              <View style={[styles.paceHr, { backgroundColor: withOpacity(colors.border, 0.4) }]} />
+              <View style={styles.paceTargetRow}>
+                <Target size={12} color={colors.primary} />
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.paceTargetText, { color: colors.foreground }]}>
+                    {t("bookInfo.predictFinishIn", { days: pace.daysToFinish })}
+                  </Text>
+                  <Text style={[styles.paceTargetSub, { color: colors.mutedForeground }]}>
+                    {t("bookInfo.predictFinishDate", { date: formatFinishDate(pace.finishDate) })}
+                  </Text>
+                </View>
+              </View>
+            </>
+          )}
+        </View>
+      )}
 
       {/* ─── 3×2 Stats Grid ─── */}
       <View style={styles.grid}>
@@ -195,6 +319,28 @@ const styles = StyleSheet.create({
   streakText: { fontSize: 11, fontWeight: "600", color: "#d97706" },
   progressTrack: { height: 8, borderRadius: radius.full, overflow: "hidden" },
   progressFill: { height: "100%", borderRadius: radius.full },
+
+  // Pace card
+  paceCard: {
+    borderWidth: 1, borderRadius: radius.xxl, padding: spacing.lg, gap: spacing.md,
+    shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 5, elevation: 2,
+  },
+  paceHeader: { flexDirection: "row", alignItems: "center", gap: 6 },
+  paceIconBubble: { width: 22, height: 22, borderRadius: radius.md, alignItems: "center", justifyContent: "center" },
+  paceTitle: { fontSize: fontSize.sm, fontWeight: "700" },
+  paceWindow: { fontSize: 11 },
+  paceNumbers: { flexDirection: "row", alignItems: "center", paddingVertical: 4 },
+  paceCol: { flex: 1, alignItems: "center", gap: 2 },
+  paceDivider: { width: StyleSheet.hairlineWidth, height: 36, backgroundColor: "rgba(128,128,128,0.25)" },
+  paceBig: { fontSize: 24, fontWeight: "800" },
+  paceUnit: { fontSize: 10 },
+  paceHr: { height: StyleSheet.hairlineWidth, marginVertical: 2 },
+  paceTargetRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
+  paceTargetText: { fontSize: fontSize.sm, fontWeight: "600" },
+  paceTargetSub: { fontSize: 11, marginTop: 2 },
+  paceMessage: { fontSize: fontSize.sm, fontWeight: "500" },
+  paceMessageRow: { gap: 4 },
+  paceMessageSub: { fontSize: 11 },
 
   // Stats grid
   grid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },

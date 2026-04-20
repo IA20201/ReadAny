@@ -220,7 +220,19 @@
     "coverChangeFailed": "Failed to change cover",
     "selectCoverImage": "Select cover image",
     "selectFromGallery": "Choose from Gallery",
-    "selectFromFile": "Choose from Files"
+    "selectFromFile": "Choose from Files",
+    "pace": "Reading Pace",
+    "paceRecent7": "Last 7 days",
+    "paceMinutesPerDay": "min/day",
+    "paceCharsPerDay": "chars/day",
+    "predictFinishIn": "At this pace, ~{{days}} days to finish",
+    "predictFinishDate": "Expected: {{date}}",
+    "predictNeedStart": "Start reading to see prediction",
+    "predictNoRecent": "No reading in the last 7 days",
+    "predictCompleted": "Finished 🎉",
+    "uncategorized": "Uncategorized",
+    "expandChapter": "Show {{count}} more",
+    "collapseChapter": "Collapse"
   },
   "home": {
     "library": "Library",

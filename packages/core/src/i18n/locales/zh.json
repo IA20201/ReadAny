@@ -218,7 +218,19 @@
     "coverChangeFailed": "更换封面失败",
     "selectCoverImage": "选择封面图片",
     "selectFromGallery": "从相册选择",
-    "selectFromFile": "从文件选择"
+    "selectFromFile": "从文件选择",
+    "pace": "阅读节奏",
+    "paceRecent7": "最近 7 天",
+    "paceMinutesPerDay": "分钟/天",
+    "paceCharsPerDay": "字/天",
+    "predictFinishIn": "按此速度，约 {{days}} 天后读完",
+    "predictFinishDate": "预计 {{date}} 完成",
+    "predictNeedStart": "开始阅读后可查看预测",
+    "predictNoRecent": "最近 7 天未阅读",
+    "predictCompleted": "已读完 🎉",
+    "uncategorized": "未分组",
+    "expandChapter": "展开 {{count}} 条",
+    "collapseChapter": "收起"
   },
   "home": {
     "library": "书库",
