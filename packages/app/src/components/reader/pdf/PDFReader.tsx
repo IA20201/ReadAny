@@ -545,6 +545,13 @@ export const PDFReader = forwardRef<PDFReaderHandle, PDFReaderProps>(function PD
     }
   }
 
+  function clearSearchHighlights() {
+    for (const [, div] of pageContainersRef.current) {
+      const svgs = div.querySelectorAll(".pdf-search-highlights");
+      for (const svg of svgs) svg.remove();
+    }
+  }
+
   // ─── Build TOC from PDF outline ───
 
   async function buildTOC(pdfDoc: any, outline: any[]): Promise<PDFTOCItem[]> {
@@ -605,17 +612,82 @@ export const PDFReader = forwardRef<PDFReaderHandle, PDFReaderProps>(function PD
         const pdfDoc = pdfDocRef.current;
         if (!pdfDoc || !query) return;
 
+        // Clear previous search highlights
+        clearSearchHighlights();
+
         const results: Array<{ page: number; rects: PdfRect[] }> = [];
         const flags = opts?.matchCase ? "" : "i";
-        const regex = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), flags);
+        const regex = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), flags + "g");
 
         for (let i = 1; i <= pdfDoc.numPages; i++) {
           const page = await pdfDoc.getPage(i);
           const textContent = await page.getTextContent();
-          const fullText = textContent.items.map((item: any) => item.str).join(" ");
 
-          if (regex.test(fullText)) {
-            results.push({ page: i, rects: [] });
+          // Build text with position tracking
+          const items = textContent.items as Array<{ str: string; transform: number[]; width: number; height: number }>;
+          let fullText = "";
+          const charMap: Array<{ itemIdx: number; charIdx: number }> = [];
+
+          for (let idx = 0; idx < items.length; idx++) {
+            const item = items[idx];
+            for (let c = 0; c < item.str.length; c++) {
+              charMap.push({ itemIdx: idx, charIdx: c });
+            }
+            fullText += item.str;
+            // Add space between items
+            if (idx < items.length - 1) {
+              charMap.push({ itemIdx: idx, charIdx: -1 }); // space
+              fullText += " ";
+            }
+          }
+
+          // Find all matches
+          let match: RegExpExecArray | null;
+          const pageRects: PdfRect[] = [];
+          while ((match = regex.exec(fullText)) !== null) {
+            // Get bounding rects for the match from text items
+            const startChar = charMap[match.index];
+            const endChar = charMap[Math.min(match.index + match[0].length - 1, charMap.length - 1)];
+            if (startChar && endChar) {
+              const startItem = items[startChar.itemIdx];
+              const endItem = items[endChar.itemIdx];
+              if (startItem && endItem) {
+                // Transform: [scaleX, skewX, skewY, scaleY, translateX, translateY]
+                const y = Math.min(startItem.transform[5], endItem.transform[5]);
+                const h = Math.max(startItem.height || 12, endItem.height || 12);
+                pageRects.push({
+                  x: startItem.transform[4],
+                  y: (page.getViewport({ scale: 1 }).height) - y - h,
+                  w: (endItem.transform[4] + (endItem.width || 0)) - startItem.transform[4],
+                  h: h,
+                });
+              }
+            }
+          }
+
+          if (pageRects.length > 0) {
+            results.push({ page: i, rects: pageRects });
+
+            // Render search highlights on this page
+            const pageDiv = pageContainersRef.current.get(i);
+            if (pageDiv) {
+              const s = scaleRef.current;
+              const searchSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+              searchSvg.classList.add("pdf-search-highlights");
+              searchSvg.style.cssText = "position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:3;";
+              for (const rect of pageRects) {
+                const el = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+                el.setAttribute("x", String(rect.x * s));
+                el.setAttribute("y", String(rect.y * s));
+                el.setAttribute("width", String(rect.w * s));
+                el.setAttribute("height", String(rect.h * s));
+                el.setAttribute("fill", "#FFEB3B");
+                el.setAttribute("opacity", "0.4");
+                el.setAttribute("rx", "2");
+                searchSvg.appendChild(el);
+              }
+              pageDiv.appendChild(searchSvg);
+            }
           }
         }
 
@@ -628,6 +700,7 @@ export const PDFReader = forwardRef<PDFReaderHandle, PDFReaderProps>(function PD
       },
       clearSearch() {
         searchResultsRef.current = [];
+        clearSearchHighlights();
       },
       addAnnotation(annotation: PDFAnnotation) {
         annotationsRef.current = [...annotationsRef.current, annotation];
@@ -651,8 +724,55 @@ export const PDFReader = forwardRef<PDFReaderHandle, PDFReaderProps>(function PD
         return totalPagesRef.current;
       },
       setZoom(zoom: number | "fit-width" | "fit-page") {
-        // TODO: Implement zoom with re-render
-        console.log("[PDFReader] setZoom:", zoom);
+        const pdfDoc = pdfDocRef.current;
+        const container = containerRef.current;
+        if (!pdfDoc || !container) return;
+
+        (async () => {
+          const firstPage = await pdfDoc.getPage(1);
+          const viewport = firstPage.getViewport({ scale: 1 });
+          const containerWidth = container.clientWidth - 32;
+          const containerHeight = container.clientHeight - 32;
+
+          let newScale: number;
+          if (zoom === "fit-width") {
+            newScale = containerWidth / viewport.width;
+          } else if (zoom === "fit-page") {
+            const scaleW = containerWidth / viewport.width;
+            const scaleH = containerHeight / viewport.height;
+            newScale = Math.min(scaleW, scaleH);
+          } else {
+            newScale = zoom;
+          }
+
+          scaleRef.current = newScale;
+          setScale(newScale);
+
+          // Re-size all page containers
+          for (let i = 1; i <= pdfDoc.numPages; i++) {
+            const page = await pdfDoc.getPage(i);
+            const vp = page.getViewport({ scale: newScale });
+            const pageDiv = pageContainersRef.current.get(i);
+            if (pageDiv) {
+              pageDiv.style.width = `${vp.width}px`;
+              pageDiv.style.height = `${vp.height}px`;
+            }
+          }
+
+          // Re-render visible pages
+          const prevRendered = new Set(renderedPagesRef.current);
+          renderedPagesRef.current.clear();
+          // Clear page contents so they can be re-rendered
+          for (const pageNum of prevRendered) {
+            const pageDiv = pageContainersRef.current.get(pageNum);
+            if (pageDiv) {
+              pageDiv.innerHTML = "";
+            }
+          }
+
+          // Re-setup observer to trigger re-render of visible pages
+          setupIntersectionObserver();
+        })();
       },
       destroy() {
         pdfDocRef.current?.destroy();
