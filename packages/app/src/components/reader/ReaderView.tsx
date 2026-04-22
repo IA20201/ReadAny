@@ -49,6 +49,10 @@ import { SelectionPopover } from "./SelectionPopover";
 import { TOCPanel } from "./TOCPanel";
 import { TTSPage } from "./TTSPage";
 import { TranslationPopover } from "./TranslationPopover";
+import { PDFReader } from "./pdf";
+import type { PDFReaderHandle, PDFSelection, PDFRelocateDetail, PDFAnnotation } from "./pdf";
+import { isPdfLocation, pdfPageLocation } from "@readany/core/utils";
+import { HIGHLIGHT_COLOR_HEX } from "@readany/core/types";
 
 const REFLOWABLE_CHARACTERS_PER_LOCATION = 1500;
 const MAX_TRACKED_LOCATION_DELTA = 20;
@@ -451,6 +455,12 @@ export function ReaderView({ bookId, tabId }: ReaderViewProps) {
   // Ref to FoliateViewer imperative handle
   const foliateRef = useRef<FoliateViewerHandle>(null);
 
+  // Ref to PDFReader imperative handle
+  const pdfReaderRef = useRef<PDFReaderHandle>(null);
+
+  // Whether the current book is a PDF (use dedicated PDFReader)
+  const isPdf = bookFormat === "PDF";
+
   // Current section index for chapter translation
   const [currentSectionIndex, setCurrentSectionIndex] = useState(0);
 
@@ -624,6 +634,7 @@ export function ReaderView({ bookId, tabId }: ReaderViewProps) {
   // Book document state
   const [bookDoc, setBookDoc] = useState<BookDoc | null>(null);
   const [bookFormat, setBookFormat] = useState<BookFormat>("EPUB");
+  const [pdfBytes, setPdfBytes] = useState<Uint8Array | null>(null); // PDF raw bytes for PDFReader
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -861,6 +872,18 @@ export function ReaderView({ bookId, tabId }: ReaderViewProps) {
       try {
         setIsLoading(true);
         setError(null);
+
+        // Check if this is a PDF — load bytes directly for PDFReader
+        const ext = book.filePath!.split(".").pop()?.toLowerCase();
+        if (ext === "pdf") {
+          setBookFormat("PDF");
+          const blob = await getCachedBlob(book.filePath!);
+          const arrayBuffer = await blob.arrayBuffer();
+          setPdfBytes(new Uint8Array(arrayBuffer));
+          // isLoading will be set to false by PDFReader's onDocReady
+          return;
+        }
+
         const { bookDoc, format } = await loadAndParseBook(book.filePath!);
         setBookDoc(bookDoc);
         setBookFormat(format);
@@ -927,6 +950,64 @@ export function ReaderView({ bookId, tabId }: ReaderViewProps) {
       return () => clearTimeout(timer);
     }
   }, [book?.filePath, bookId, t]);
+
+  // --- PDF-specific event handlers ---
+
+  const handlePdfRelocate = useCallback(
+    (detail: PDFRelocateDetail) => {
+      const location = detail.location;
+      setProgress(tabId, detail.fraction, location);
+      setTotalPages(detail.totalPages);
+      setCurrentPage(detail.page);
+
+      // Throttled save to DB
+      throttledSaveProgress(bookId, detail.fraction, location);
+    },
+    [tabId, bookId, setProgress, throttledSaveProgress],
+  );
+
+  const handlePdfSelection = useCallback(
+    (sel: PDFSelection | null) => {
+      if (!sel) {
+        setSelection(null);
+        setSelectedText(tabId, "", null);
+        return;
+      }
+
+      // Convert PDFSelection to BookSelection format
+      const bookSel: BookSelection = {
+        text: sel.text,
+        cfi: sel.location, // PDF location string, stored in same cfi field
+        rects: [new DOMRect(sel.screenRect.x, sel.screenRect.y, sel.screenRect.width, sel.screenRect.height)],
+      };
+
+      setSelection(bookSel);
+      setSelectedText(tabId, sel.text, null);
+
+      // Position popover
+      const containerRect = containerRef.current?.getBoundingClientRect();
+      if (containerRect) {
+        const x = Math.max(16, Math.min(sel.screenRect.x - containerRect.left, containerRect.width - 200));
+        const y = Math.max(16, sel.screenRect.y - containerRect.top - 52);
+        setSelectionPos({ x, y });
+      }
+    },
+    [tabId, setSelectedText],
+  );
+
+  // Convert highlights to PDFAnnotation format for PDFReader
+  const pdfAnnotations = useMemo((): PDFAnnotation[] => {
+    if (!isPdf) return [];
+    return highlights
+      .filter((h) => h.bookId === bookId && isPdfLocation(h.cfi))
+      .map((h) => ({
+        id: h.id,
+        location: h.cfi,
+        color: HIGHLIGHT_COLOR_HEX[h.color as keyof typeof HIGHLIGHT_COLOR_HEX] || h.color,
+        type: "highlight" as const,
+        hasNote: !!h.note,
+      }));
+  }, [isPdf, highlights, bookId]);
 
   // --- Event handlers from FoliateViewer ---
   const handleRelocate = useCallback(
@@ -1226,11 +1307,13 @@ export function ReaderView({ bookId, tabId }: ReaderViewProps) {
 
   // --- Navigation (for toolbar buttons) ---
   const handleNavPrev = useCallback(() => {
-    foliateRef.current?.goPrev();
-  }, []);
+    if (isPdf) pdfReaderRef.current?.prevPage();
+    else foliateRef.current?.goPrev();
+  }, [isPdf]);
   const handleNavNext = useCallback(() => {
-    foliateRef.current?.goNext();
-  }, []);
+    if (isPdf) pdfReaderRef.current?.nextPage();
+    else foliateRef.current?.goNext();
+  }, [isPdf]);
 
   const handleGoToChapter = useCallback((href: string) => {
     goToHrefSafely(href);
@@ -1254,19 +1337,30 @@ export function ReaderView({ bookId, tabId }: ReaderViewProps) {
           updatedAt: Date.now(),
         });
 
-        // Immediately render on page (don't wait for useEffect)
-        foliateRef.current?.addAnnotation({
-          value: selection.cfi,
-          type: "highlight",
-          color,
-        });
+        // Immediately render on page
+        if (isPdf) {
+          // PDF: add annotation via PDFReader handle
+          pdfReaderRef.current?.addAnnotation({
+            id: highlightId,
+            location: selection.cfi,
+            color: HIGHLIGHT_COLOR_HEX[color],
+            type: "highlight",
+          });
+        } else {
+          // EPUB: add annotation via FoliateViewer handle
+          foliateRef.current?.addAnnotation({
+            value: selection.cfi,
+            type: "highlight",
+            color,
+          });
+        }
 
         // Track as rendered
         renderedHighlightsRef.current.set(highlightId, { cfi: selection.cfi, hasNote: false });
       }
       setSelection(null);
     },
-    [selection, bookId, readerTab?.chapterTitle],
+    [selection, bookId, readerTab?.chapterTitle, isPdf],
   );
 
   // Handle note button - open notebook panel with pending note
@@ -1304,13 +1398,17 @@ export function ReaderView({ bookId, tabId }: ReaderViewProps) {
       useAnnotationStore.getState().removeHighlight(selection.highlightId);
 
       // Remove from view
-      foliateRef.current?.deleteAnnotation({ value: selection.cfi });
+      if (isPdf) {
+        pdfReaderRef.current?.removeAnnotation(selection.highlightId);
+      } else {
+        foliateRef.current?.deleteAnnotation({ value: selection.cfi });
+      }
 
       // Remove from rendered tracking
       renderedHighlightsRef.current.delete(selection.highlightId);
     }
     setSelection(null);
-  }, [selection]);
+  }, [selection, isPdf]);
 
   // Handle show-annotation event (user clicked on existing highlight)
   const handleShowAnnotation = useCallback(
@@ -2361,9 +2459,43 @@ export function ReaderView({ bookId, tabId }: ReaderViewProps) {
             </div>
           )}
 
-          {/* Reading area — FoliateViewer */}
+          {/* Reading area — PDFReader for PDF, FoliateViewer for others */}
           <div className="relative flex-1 overflow-hidden" ref={containerRef}>
-            {bookDoc ? (
+            {isPdf && pdfBytes ? (
+              <PDFReader
+                ref={pdfReaderRef}
+                src={pdfBytes}
+                initialLocation={book?.currentCfi || undefined}
+                annotations={pdfAnnotations}
+                onRelocate={handlePdfRelocate}
+                onSelectionChange={handlePdfSelection}
+                onAnnotationClick={(id, _location) => {
+                  const highlight = highlights.find((h) => h.id === id);
+                  if (highlight) {
+                    handleShowAnnotation(highlight.cfi, document.createRange(), 0);
+                  }
+                }}
+                onTocReady={(toc) => {
+                  setTocItems(toc.map((t, i) => ({
+                    id: `toc-${i}`,
+                    title: t.label,
+                    level: 0,
+                    href: `pdf:${t.page}`,
+                    subitems: t.children?.map((c, j) => ({
+                      id: `toc-${i}-${j}`,
+                      title: c.label,
+                      level: 1,
+                      href: `pdf:${c.page}`,
+                    })),
+                  })));
+                }}
+                onDocReady={({ totalPages: tp }) => {
+                  setTotalPages(tp);
+                  setIsLoading(false);
+                }}
+                className="h-full"
+              />
+            ) : bookDoc ? (
               <FoliateViewer
                 ref={foliateRef}
                 bookKey={bookId}
@@ -2440,7 +2572,7 @@ export function ReaderView({ bookId, tabId }: ReaderViewProps) {
                 selectedText={selection.text}
                 annotated={selection.annotated}
                 currentColor={selection.color as HighlightColor | undefined}
-                isPdf={bookFormat === "PDF"}
+                isPdf={false}
                 onHighlight={handleHighlight}
                 onRemoveHighlight={handleRemoveHighlight}
                 onNote={handleNote}

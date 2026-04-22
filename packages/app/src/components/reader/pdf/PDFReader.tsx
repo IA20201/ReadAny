@@ -602,8 +602,29 @@ export const PDFReader = forwardRef<PDFReaderHandle, PDFReaderProps>(function PD
         return null;
       },
       async search(query: string, opts?: { matchCase?: boolean }) {
-        // TODO: Implement search across all pages using page.getTextContent()
-        console.log("[PDFReader] search:", query, opts);
+        const pdfDoc = pdfDocRef.current;
+        if (!pdfDoc || !query) return;
+
+        const results: Array<{ page: number; rects: PdfRect[] }> = [];
+        const flags = opts?.matchCase ? "" : "i";
+        const regex = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), flags);
+
+        for (let i = 1; i <= pdfDoc.numPages; i++) {
+          const page = await pdfDoc.getPage(i);
+          const textContent = await page.getTextContent();
+          const fullText = textContent.items.map((item: any) => item.str).join(" ");
+
+          if (regex.test(fullText)) {
+            results.push({ page: i, rects: [] });
+          }
+        }
+
+        searchResultsRef.current = results;
+
+        // Scroll to first result
+        if (results.length > 0) {
+          scrollToPage(results[0].page);
+        }
       },
       clearSearch() {
         searchResultsRef.current = [];
