@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<title>PDF Reader</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 100%; height: 100%; overflow: hidden; background: #f5f5f5; font-family: system-ui; }
+
+#container {
+  width: 100%; height: 100%;
+  overflow-y: auto; overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  display: flex; flex-direction: column; align-items: center;
+  padding: 8px;
+}
+
+.page-wrap {
+  position: relative;
+  margin-bottom: 6px;
+  background: white;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  overflow: hidden;
+}
+
+.page-wrap canvas { display: block; }
+
+.text-layer {
+  position: absolute; top: 0; left: 0;
+  overflow: clip; opacity: 1;
+  line-height: 1; text-size-adjust: none;
+  transform-origin: 0 0; z-index: 1;
+}
+.text-layer > span {
+  color: transparent; position: absolute;
+  white-space: pre; transform-origin: 0% 0%;
+  pointer-events: all;
+}
+.text-layer ::selection { background: rgba(0,100,255,0.3); }
+
+.annotation-overlay {
+  position: absolute; top: 0; left: 0;
+  pointer-events: none; z-index: 2;
+}
+.annotation-overlay rect,
+.annotation-overlay line {
+  pointer-events: auto; cursor: pointer;
+}
+
+.search-overlay {
+  position: absolute; top: 0; left: 0;
+  pointer-events: none; z-index: 3;
+}
+
+#loading {
+  position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: #f5f5f5; z-index: 100;
+}
+#loading.hidden { display: none; }
+.spinner {
+  width: 32px; height: 32px;
+  border: 3px solid rgba(0,0,0,0.1);
+  border-top-color: #333;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Dark mode */
+body.dark { background: #1c1c1e; }
+body.dark .page-wrap { background: #2c2c2e; box-shadow: 0 1px 3px rgba(0,0,0,0.3); }
+body.dark #loading { background: #1c1c1e; }
+body.dark .spinner { border-color: rgba(255,255,255,0.1); border-top-color: #fff; }
+</style>
+</head>
+<body>
+<div id="loading"><div class="spinner"></div></div>
+<div id="container"></div>
+
+<script type="module">
+// ─── PDF.js CDN import ───
+import * as pdfjsLib from 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.9.155/build/pdf.min.mjs';
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.9.155/build/pdf.worker.min.mjs';
+
+// ─── State ───
+let pdfDoc = null;
+let scale = 1;
+let totalPages = 0;
+let currentPage = 1;
+let annotations = []; // { id, location, color, type }
+const pageContainers = new Map();
+const renderedPages = new Set();
+
+// ─── Bridge: send messages to React Native ───
+function postToRN(type, data = {}) {
+  try {
+    window.ReactNativeWebView?.postMessage(JSON.stringify({ type, ...data }));
+  } catch (e) { /* ignore */ }
+}
+
+// ─── PDF Location helpers ───
+function isPdfLoc(s) { return typeof s === 'string' && s.startsWith('pdf:'); }
+function parsePdfLoc(s) {
+  const body = s.slice(4);
+  const ci = body.indexOf(':');
+  if (ci === -1) return { page: parseInt(body), rects: [] };
+  const page = parseInt(body.slice(0, ci));
+  const rects = body.slice(ci + 1).split(';').map(r => {
+    const [x, y, w, h] = r.split(',').map(Number);
+    return { x, y, w, h };
+  });
+  return { page, rects };
+}
+function fmtPdfLoc(page, rects) {
+  if (!rects || !rects.length) return `pdf:${page}`;
+  return `pdf:${page}:${rects.map(r =>
+    `${r.x.toFixed(2)},${r.y.toFixed(2)},${r.w.toFixed(2)},${r.h.toFixed(2)}`
+  ).join(';')}`;
+}
+
+// ─── Open PDF from base64 ───
+async function openPDF(base64, options = {}) {
+  try {
+    const bytes = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
+    pdfDoc = await pdfjsLib.getDocument({
+      data: bytes,
+      cMapUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.9.155/cmaps/',
+      cMapPacked: true,
+    }).promise;
+
+    totalPages = pdfDoc.numPages;
+    postToRN('docReady', { totalPages });
+
+    // Extract TOC
+    const outline = await pdfDoc.getOutline().catch(() => null);
+    if (outline) {
+      const toc = await buildTOC(outline);
+      postToRN('tocReady', { toc });
+    }
+
+    // Build pages
+    await buildPages();
+
+    document.getElementById('loading').classList.add('hidden');
+
+    // Navigate to initial location
+    if (options.lastLocation && isPdfLoc(options.lastLocation)) {
+      const { page } = parsePdfLoc(options.lastLocation);
+      scrollToPage(page);
+    }
+
+    postToRN('ready');
+  } catch (e) {
+    postToRN('error', { message: e.message });
+  }
+}
+
+// ─── Build page placeholders ───
+async function buildPages() {
+  const container = document.getElementById('container');
+  container.innerHTML = '';
+  pageContainers.clear();
+  renderedPages.clear();
+
+  const firstPage = await pdfDoc.getPage(1);
+  const vp = firstPage.getViewport({ scale: 1 });
+  const containerWidth = window.innerWidth - 16;
+  scale = containerWidth / vp.width;
+
+  for (let i = 1; i <= totalPages; i++) {
+    const page = await pdfDoc.getPage(i);
+    const pageVp = page.getViewport({ scale });
+
+    const wrap = document.createElement('div');
+    wrap.className = 'page-wrap';
+    wrap.dataset.page = i;
+    wrap.style.width = `${pageVp.width}px`;
+    wrap.style.height = `${pageVp.height}px`;
+
+    container.appendChild(wrap);
+    pageContainers.set(i, wrap);
+  }
+
+  // IntersectionObserver for lazy rendering
+  const obs = new IntersectionObserver(entries => {
+    for (const e of entries) {
+      if (e.isIntersecting) {
+        const p = parseInt(e.target.dataset.page);
+        if (!renderedPages.has(p)) renderPage(p);
+      }
+    }
+  }, { root: container, rootMargin: '300px 0px' });
+
+  for (const [, el] of pageContainers) obs.observe(el);
+
+  // Scroll tracking
+  container.addEventListener('scroll', () => {
+    const scrollTop = container.scrollTop;
+    const scrollH = container.scrollHeight - container.clientHeight;
+    const fraction = scrollH > 0 ? scrollTop / scrollH : 0;
+
+    let best = 1, bestVis = 0;
+    const cr = container.getBoundingClientRect();
+    for (const [p, el] of pageContainers) {
+      const r = el.getBoundingClientRect();
+      const vis = Math.max(0, Math.min(r.bottom, cr.bottom) - Math.max(r.top, cr.top));
+      if (vis > bestVis) { bestVis = vis; best = p; }
+    }
+    if (best !== currentPage) {
+      currentPage = best;
+      postToRN('relocate', {
+        page: best, totalPages, fraction: Math.min(1, Math.max(0, fraction)),
+        cfi: `pdf:${best}`,
+      });
+    }
+  }, { passive: true });
+}
+
+// ─── Render single page ───
+async function renderPage(pageNum) {
+  if (renderedPages.has(pageNum)) return;
+  renderedPages.add(pageNum);
+
+  const wrap = pageContainers.get(pageNum);
+  if (!wrap || !pdfDoc) return;
+
+  try {
+    const page = await pdfDoc.getPage(pageNum);
+    const viewport = page.getViewport({ scale });
+
+    // Canvas
+    const canvas = document.createElement('canvas');
+    canvas.width = viewport.width * window.devicePixelRatio;
+    canvas.height = viewport.height * window.devicePixelRatio;
+    canvas.style.width = `${viewport.width}px`;
+    canvas.style.height = `${viewport.height}px`;
+    const ctx = canvas.getContext('2d');
+    ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+    wrap.appendChild(canvas);
+    await page.render({ canvasContext: ctx, viewport }).promise;
+
+    // Text layer
+    const textContent = await page.getTextContent();
+    const textDiv = document.createElement('div');
+    textDiv.className = 'text-layer';
+    textDiv.style.width = `${viewport.width}px`;
+    textDiv.style.height = `${viewport.height}px`;
+    wrap.appendChild(textDiv);
+    const tl = new pdfjsLib.TextLayer({ textContentSource: textContent, container: textDiv, viewport });
+    await tl.render();
+
+    // Annotation overlay
+    const overlay = document.createElement('div');
+    overlay.className = 'annotation-overlay';
+    overlay.style.width = `${viewport.width}px`;
+    overlay.style.height = `${viewport.height}px`;
+    wrap.appendChild(overlay);
+
+    renderAnnotations(pageNum);
+
+    // Selection handling
+    textDiv.addEventListener('touchend', () => setTimeout(() => handleSelection(pageNum), 100));
+    textDiv.addEventListener('mouseup', () => handleSelection(pageNum));
+  } catch (e) {
+    renderedPages.delete(pageNum);
+  }
+}
+
+// ─── Annotation rendering ───
+function renderAnnotations(pageNum) {
+  const wrap = pageContainers.get(pageNum);
+  if (!wrap) return;
+  const overlay = wrap.querySelector('.annotation-overlay');
+  if (!overlay) return;
+  overlay.innerHTML = '';
+
+  const pageAnns = annotations.filter(a => {
+    if (!isPdfLoc(a.location)) return false;
+    return parsePdfLoc(a.location).page === pageNum;
+  });
+  if (!pageAnns.length) return;
+
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.style.cssText = 'width:100%;height:100%;position:absolute;top:0;left:0;pointer-events:none;';
+
+  for (const a of pageAnns) {
+    const { rects } = parsePdfLoc(a.location);
+    for (const r of rects) {
+      if (a.type === 'highlight') {
+        const el = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        el.setAttribute('x', r.x * scale);
+        el.setAttribute('y', r.y * scale);
+        el.setAttribute('width', r.w * scale);
+        el.setAttribute('height', r.h * scale);
+        el.setAttribute('fill', a.color);
+        el.setAttribute('opacity', '0.35');
+        el.style.pointerEvents = 'auto';
+        el.addEventListener('click', () => postToRN('annotationClick', { id: a.id, location: a.location }));
+        svg.appendChild(el);
+      } else if (a.type === 'underline') {
+        const el = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        el.setAttribute('x1', r.x * scale);
+        el.setAttribute('y1', (r.y + r.h) * scale);
+        el.setAttribute('x2', (r.x + r.w) * scale);
+        el.setAttribute('y2', (r.y + r.h) * scale);
+        el.setAttribute('stroke', a.color);
+        el.setAttribute('stroke-width', '2');
+        svg.appendChild(el);
+      }
+    }
+  }
+  overlay.appendChild(svg);
+}
+
+// ─── Text selection ───
+function handleSelection(pageNum) {
+  const sel = window.getSelection();
+  if (!sel || sel.isCollapsed || !sel.rangeCount) {
+    postToRN('selectionCleared');
+    return;
+  }
+  const text = sel.toString().trim();
+  if (!text) { postToRN('selectionCleared'); return; }
+
+  const range = sel.getRangeAt(0);
+  const wrap = pageContainers.get(pageNum);
+  if (!wrap) return;
+
+  const wrapRect = wrap.getBoundingClientRect();
+  const clientRects = range.getClientRects();
+  const rects = [];
+  for (const cr of clientRects) {
+    rects.push({
+      x: (cr.left - wrapRect.left) / scale,
+      y: (cr.top - wrapRect.top) / scale,
+      w: cr.width / scale,
+      h: cr.height / scale,
+    });
+  }
+
+  const bounding = range.getBoundingClientRect();
+  const location = fmtPdfLoc(pageNum, mergeRects(rects));
+
+  postToRN('selection', {
+    text,
+    cfi: location,
+    position: {
+      x: bounding.left + bounding.width / 2,
+      y: bounding.top,
+      selectionTop: bounding.top,
+      selectionBottom: bounding.bottom,
+    },
+  });
+}
+
+// ─── Navigation ───
+function scrollToPage(p) {
+  const el = pageContainers.get(p);
+  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// ─── Search ───
+let searchResults = [];
+async function searchText(query, matchCase) {
+  clearSearchHighlights();
+  searchResults = [];
+  if (!pdfDoc || !query) return;
+
+  const flags = matchCase ? '' : 'i';
+  const regex = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), flags + 'g');
+
+  for (let i = 1; i <= totalPages; i++) {
+    const page = await pdfDoc.getPage(i);
+    const tc = await page.getTextContent();
+    const fullText = tc.items.map(it => it.str).join(' ');
+    if (regex.test(fullText)) {
+      searchResults.push({ page: i });
+      regex.lastIndex = 0;
+    }
+  }
+  postToRN('searchComplete', { count: searchResults.length });
+  if (searchResults.length > 0) scrollToPage(searchResults[0].page);
+}
+
+function clearSearchHighlights() {
+  for (const [, el] of pageContainers) {
+    const s = el.querySelector('.search-overlay');
+    if (s) s.remove();
+  }
+}
+
+function navigateSearchResult(index) {
+  if (index >= 0 && index < searchResults.length) {
+    scrollToPage(searchResults[index].page);
+    postToRN('searchResult', { index, count: searchResults.length });
+  }
+}
+
+// ─── TOC builder ───
+async function buildTOC(outline) {
+  const items = [];
+  for (const item of outline) {
+    let page = 1;
+    try {
+      if (item.dest) {
+        const dest = typeof item.dest === 'string' ? await pdfDoc.getDestination(item.dest) : item.dest;
+        if (dest) { const pi = await pdfDoc.getPageIndex(dest[0]); page = pi + 1; }
+      }
+    } catch {}
+    const tocItem = { label: item.title || '', href: `pdf:${page}`, subitems: null };
+    if (item.items?.length) tocItem.subitems = await buildTOC(item.items);
+    items.push(tocItem);
+  }
+  return items;
+}
+
+// ─── Rect merge utility ───
+function mergeRects(rects) {
+  if (rects.length <= 1) return rects;
+  const sorted = [...rects].sort((a, b) => a.y - b.y || a.x - b.x);
+  const merged = [sorted[0]];
+  for (let i = 1; i < sorted.length; i++) {
+    const prev = merged[merged.length - 1], curr = sorted[i];
+    const overlap = Math.min(prev.y + prev.h, curr.y + curr.h) - Math.max(prev.y, curr.y);
+    if (overlap > Math.min(prev.h, curr.h) * 0.5) {
+      const x = Math.min(prev.x, curr.x), y = Math.min(prev.y, curr.y);
+      merged[merged.length - 1] = { x, y, w: Math.max(prev.x + prev.w, curr.x + curr.w) - x, h: Math.max(prev.y + prev.h, curr.y + curr.h) - y };
+    } else merged.push(curr);
+  }
+  return merged;
+}
+
+// ─── Theme ───
+function setTheme(isDark) {
+  document.body.classList.toggle('dark', isDark);
+}
+
+// ─── Command handler (from RN) ───
+window.handleCommand = function(cmd) {
+  if (typeof cmd === 'string') cmd = JSON.parse(cmd);
+  switch (cmd.type) {
+    case 'openPDF': openPDF(cmd.base64, cmd); break;
+    case 'goToPage': scrollToPage(cmd.page); break;
+    case 'goToCFI':
+      if (isPdfLoc(cmd.cfi)) scrollToPage(parsePdfLoc(cmd.cfi).page);
+      break;
+    case 'goNext': scrollToPage(Math.min(currentPage + 1, totalPages)); break;
+    case 'goPrev': scrollToPage(Math.max(currentPage - 1, 1)); break;
+    case 'search': searchText(cmd.query, cmd.matchCase); break;
+    case 'clearSearch': clearSearchHighlights(); searchResults = []; break;
+    case 'navigateSearch': navigateSearchResult(cmd.index); break;
+    case 'addAnnotation':
+      if (cmd.annotation) {
+        const a = cmd.annotation;
+        annotations.push({ id: a.id || Date.now().toString(), location: a.value || a.location, color: a.color || '#facc15', type: a.type || 'highlight' });
+        if (isPdfLoc(a.value || a.location)) renderAnnotations(parsePdfLoc(a.value || a.location).page);
+      }
+      break;
+    case 'removeAnnotation':
+      if (cmd.annotation) {
+        const loc = cmd.annotation.value || cmd.annotation.location;
+        annotations = annotations.filter(a => a.location !== loc && a.id !== cmd.annotation.id);
+        if (isPdfLoc(loc)) renderAnnotations(parsePdfLoc(loc).page);
+      }
+      break;
+    case 'setAnnotations':
+      annotations = cmd.annotations || [];
+      for (const p of renderedPages) renderAnnotations(p);
+      break;
+    case 'setTheme': setTheme(cmd.isDark); break;
+    default: break;
+  }
+};
+
+// ─── Tap detection (toggle controls) ───
+let touchStartTime = 0;
+let touchStartPos = { x: 0, y: 0 };
+document.addEventListener('touchstart', e => {
+  touchStartTime = Date.now();
+  touchStartPos = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+}, { passive: true });
+document.addEventListener('touchend', e => {
+  const dt = Date.now() - touchStartTime;
+  const dx = Math.abs(e.changedTouches[0].clientX - touchStartPos.x);
+  const dy = Math.abs(e.changedTouches[0].clientY - touchStartPos.y);
+  if (dt < 300 && dx < 10 && dy < 10) {
+    // Check if it's a tap on the center area (not on text)
+    const sel = window.getSelection();
+    if (!sel || sel.isCollapsed) {
+      postToRN('tap');
+    }
+  }
+}, { passive: true });
+
+// Signal ready
+postToRN('pdfReaderReady');
+</script>
+</body>
+</html>

@@ -735,6 +735,26 @@ export function useReaderBridge(callbacks: ReaderBridgeCallbacks) {
         case "continuous-scroll":
           handleContinuousScroll(msg);
           break;
+        // ─── PDF-specific messages from pdf-reader.html ───
+        case "pdfReaderReady":
+          cb.onReady?.();
+          break;
+        case "docReady":
+          cb.onLoaded?.();
+          break;
+        case "tocReady":
+          if (msg.toc) cb.onTocReady?.(msg.toc);
+          break;
+        case "annotationClick":
+          cb.onShowAnnotation?.({
+            value: msg.location || "",
+            range: new Range(),
+            position: { x: 0, y: 0, selectionTop: 0, selectionBottom: 0 },
+          });
+          break;
+        case "searchComplete":
+          cb.onSearchComplete?.(msg.count || 0);
+          break;
         case "debug":
           console.log("[WebView]", msg.message);
           break;

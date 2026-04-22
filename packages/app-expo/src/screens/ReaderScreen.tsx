@@ -93,6 +93,7 @@ import { useReaderTTS } from "./reader/useReaderTTS";
 import { useVolumeButtonPaging } from "./reader/useVolumeButtonPaging";
 
 const READER_HTML_ASSET = Asset.fromModule(require("../../assets/reader/reader.html"));
+const PDF_READER_HTML_ASSET = Asset.fromModule(require("../../assets/reader/pdf-reader.html"));
 
 type Props = NativeStackScreenProps<RootStackParamList, "Reader">;
 type TTSSegment = VisibleTTSSegment;
@@ -534,24 +535,25 @@ export function ReaderScreen({ route, navigation }: Props) {
     [isSameSelectionEvent],
   );
 
-  // Load reader HTML asset
+  // Load reader HTML asset — choose PDF-specific or general reader
+  const isPdf = book?.format === "pdf";
   useEffect(() => {
     if (assetLoadedRef.current) return;
     assetLoadedRef.current = true;
 
     const loadAsset = async () => {
       try {
-        const asset = READER_HTML_ASSET;
+        const asset = isPdf ? PDF_READER_HTML_ASSET : READER_HTML_ASSET;
         await asset.downloadAsync();
         const uri = asset.localUri || asset.uri;
         setReaderHtmlUri(uri);
       } catch (err) {
-        console.error("[ReaderScreen] Failed to load reader.html asset:", err);
+        console.error("[ReaderScreen] Failed to load reader HTML asset:", err);
         setError("Failed to load reader");
       }
     };
     loadAsset();
-  }, []);
+  }, [isPdf]);
 
   // Controls toggle — declared before bridge so onTap can reference it without TS error
   const toggleControls = useCallback(() => {
@@ -1043,12 +1045,20 @@ export function ReaderScreen({ route, navigation }: Props) {
         const base64 = await FileSystem.readAsStringAsync(absPath, {
           encoding: FileSystem.EncodingType.Base64,
         });
-        bridge.openBook({
-          base64,
-          fileName: book.filePath.split("/").pop() || "book.epub",
-          lastLocation,
-          pageMargin: readSettings.pageMargin,
-        });
+
+        if (isPdf) {
+          // PDF: use dedicated pdf-reader.html with openPDF command
+          const msg = JSON.stringify({ type: "openPDF", base64, lastLocation });
+          bridge.webViewRef.current?.injectJavaScript(`handleCommand(${msg}); true;`);
+        } else {
+          // EPUB/MOBI/etc: use foliate-js reader
+          bridge.openBook({
+            base64,
+            fileName: book.filePath.split("/").pop() || "book.epub",
+            lastLocation,
+            pageMargin: readSettings.pageMargin,
+          });
+        }
 
         bridge.setThemeColors({
           background: colors.background,
