@@ -1,0 +1,81 @@
+/* PDF Reader styles */
+
+.pdf-reader-container {
+  scrollbar-width: thin;
+}
+
+/* PDF.js TextLayer styles */
+.pdf-text-layer {
+  position: absolute;
+  text-align: initial;
+  inset: 0;
+  overflow: clip;
+  opacity: 1;
+  line-height: 1;
+  text-size-adjust: none;
+  forced-color-adjust: none;
+  transform-origin: 0 0;
+  caret-color: CanvasText;
+  z-index: 1;
+}
+
+.pdf-text-layer .endOfContent {
+  display: block;
+  position: absolute;
+  inset: 100% 0 0;
+  z-index: -1;
+  cursor: default;
+  user-select: none;
+}
+
+.pdf-text-layer .endOfContent.active {
+  top: 0;
+}
+
+.pdf-text-layer > span {
+  color: transparent;
+  position: absolute;
+  white-space: pre;
+  transform-origin: 0% 0%;
+  pointer-events: all;
+}
+
+.pdf-text-layer ::selection {
+  background: rgba(0, 100, 255, 0.3);
+}
+
+/* Annotation overlay */
+.pdf-annotation-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.pdf-annotation-overlay rect,
+.pdf-annotation-overlay line {
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.pdf-annotation-overlay rect:hover {
+  opacity: 0.5 !important;
+}
+
+/* Page container */
+.pdf-page-container {
+  position: relative;
+  background: white;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+  overflow: hidden;
+}
+
+/* Dark mode adjustments */
+.dark .pdf-reader-container {
+  background-color: hsl(var(--background));
+}
+
+.dark .pdf-page-container {
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+}

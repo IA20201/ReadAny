@@ -29,3 +29,11 @@ export {
   PROVIDER_CONFIGS,
 } from "./api";
 export type { ProviderConfig } from "./api";
+export {
+  isPdfLocation,
+  parsePdfLocation,
+  formatPdfLocation,
+  getPdfPage,
+  pdfPageLocation,
+} from "./pdf-location";
+export type { PdfRect, PdfLocation } from "./pdf-location";
