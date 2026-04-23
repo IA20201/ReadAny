@@ -170,7 +170,7 @@ function CopyMessageButton({ message }: { message: MessageV2 }) {
   return (
     <button
       type="button"
-      className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-foreground group-hover:opacity-100"
+      className="inline-flex w-fit items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-foreground group-hover:opacity-100"
       onClick={() => {
         const text = extractMessageText(message);
         if (text) {
