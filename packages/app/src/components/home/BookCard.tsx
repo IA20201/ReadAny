@@ -428,7 +428,7 @@ export const BookCard = memo(function BookCard({ book }: BookCardProps) {
             </DialogDescription>
           </DialogHeader>
 
-          <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-border/70 bg-muted/20 px-4 py-3">
+          <label className="flex cursor-pointer items-start gap-3 px-1 py-1">
             <input
               type="checkbox"
               className="mt-0.5 h-4 w-4 rounded border-border"
@@ -461,7 +461,8 @@ export const BookCard = memo(function BookCard({ book }: BookCardProps) {
               className="inline-flex h-9 items-center justify-center rounded-md bg-destructive px-4 text-sm font-medium text-destructive-foreground transition-colors hover:bg-destructive/90"
               onClick={async () => {
                 setShowDeleteDialog(false);
-                await removeBook(book.id, { preserveData: preserveDataOnDelete });
+                // Close any open reader tabs BEFORE removing the book from store,
+                // otherwise ReaderView will briefly render an error page.
                 const matchingTabIds = useAppStore
                   .getState()
                   .tabs.filter((tab) => tab.bookId === book.id)
@@ -470,6 +471,7 @@ export const BookCard = memo(function BookCard({ book }: BookCardProps) {
                   closeAppTab(tabId);
                   closeReaderTab(tabId);
                 }
+                await removeBook(book.id, { preserveData: preserveDataOnDelete });
               }}
             >
               {t("common.remove", "删除")}

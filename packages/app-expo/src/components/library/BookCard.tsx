@@ -333,7 +333,6 @@ export const BookCard = memo(function BookCard({
         book={book}
         onClose={() => {
           setShowActions(false);
-          setActionAnchor(null);
         }}
         onManageTags={onManageTags}
         onVectorize={onVectorize}

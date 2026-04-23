@@ -42,6 +42,7 @@ import { throttle } from "@readany/core/utils/throttle";
 import { eventBus } from "@readany/core/utils/event-bus";
 import { Asset } from "expo-asset";
 import * as FileSystem from "expo-file-system/legacy";
+import * as DocumentPicker from "expo-document-picker";
 /**
  * ReaderScreen — WebView-based reader with foliate-js engine.
  */
@@ -75,11 +76,15 @@ const MAX_TRACKED_PAGE_DELTA = 20;
 const MAX_TRACKED_FRACTION_DELTA = 0.08;
 const INITIAL_PROGRESS_RESTORE_GUARD_MS = 1800;
 const PROGRAMMATIC_NAV_GUARD_MS = 1200;
-const BOOK_IMPORT_FILTERS = [
-  {
-    name: "Books",
-    extensions: ["epub", "pdf", "mobi", "azw", "azw3", "cbz", "fb2", "fbz", "txt"],
-  },
+const BOOK_MIME_TYPES = [
+  "application/epub+zip",
+  "application/pdf",
+  "application/x-mobipocket-ebook",
+  "application/vnd.amazon.ebook",
+  "application/vnd.comicbook+zip",
+  "application/x-fictionbook+xml",
+  "text/plain",
+  "application/octet-stream",
 ];
 const NOTE_TOOLTIP_WIDTH = 300;
 const NOTE_TOOLTIP_SIDE_PADDING = 12;
@@ -969,15 +974,15 @@ export function ReaderScreen({ route, navigation }: Props) {
     setIsReimporting(true);
 
     try {
-      const platform = getPlatformService();
-      const picked = await platform.pickFile({
+      const result = await DocumentPicker.getDocumentAsync({
+        type: BOOK_MIME_TYPES,
         multiple: false,
-        filters: BOOK_IMPORT_FILTERS,
+        copyToCacheDirectory: true,
       });
-      const selectedUri = Array.isArray(picked) ? picked[0] : picked;
-      if (!selectedUri) return;
+      if (result.canceled || !result.assets || result.assets.length === 0) return;
+      const selectedUri = result.assets[0].uri;
 
-      const summary = await importBooks([{ uri: selectedUri }]);
+      const summary = await importBooks([{ uri: selectedUri, name: result.assets[0].name }]);
       const restoredBook =
         summary.imported.find((item) => item.id === bookId) ??
         summary.skippedDuplicates.find((item) => item.existingBook.id === bookId)?.existingBook ??

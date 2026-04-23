@@ -275,11 +275,8 @@ const makeStyles = (colors: ThemeColors) =>
       flexDirection: "row",
       alignItems: "flex-start",
       gap: 12,
-      padding: 14,
-      borderRadius: radius.lg,
-      borderWidth: 1,
-      borderColor: colors.border,
-      backgroundColor: colors.background,
+      paddingVertical: 4,
+      paddingHorizontal: 2,
     },
     checkbox: {
       width: 20,

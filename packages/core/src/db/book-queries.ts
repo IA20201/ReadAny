@@ -93,6 +93,31 @@ export async function getDeletedBookByFileHash(fileHash: string): Promise<Book |
   }
 }
 
+export async function getDeletedBookByTitle(title: string): Promise<Book | null> {
+  const database = await getDB();
+  try {
+    // Try exact match first, then LIKE match for slight differences
+    let rows = await database.select<BookRow>(
+      "SELECT * FROM books WHERE title = ? AND deleted_at IS NOT NULL ORDER BY deleted_at DESC LIMIT 1",
+      [title],
+    );
+    if (rows.length === 0) {
+      // Fuzzy: strip non-alphanum and search with LIKE
+      const simplified = title.replace(/[^\p{L}\p{N}]+/gu, "%");
+      rows = await database.select<BookRow>(
+        "SELECT * FROM books WHERE title LIKE ? AND deleted_at IS NOT NULL ORDER BY deleted_at DESC LIMIT 1",
+        [`%${simplified}%`],
+      );
+    }
+    return rows.length > 0 ? rowToBook(rows[0]) : null;
+  } catch (error) {
+    if (isMissingDeletedAtColumnError(error)) {
+      return null;
+    }
+    throw error;
+  }
+}
+
 export async function getBooks(options: GetBooksOptions = {}): Promise<Book[]> {
   const database = await getDB();
   const sql = options.includeDeleted
@@ -282,7 +307,8 @@ export async function deleteBook(id: string, options: DeleteBookOptions = {}): P
     const updatedAt = await nextUpdatedAt(database, "books", id);
     await database.execute(
       `UPDATE books
-       SET deleted_at = ?, updated_at = ?, sync_version = ?, last_modified_by = ?
+       SET deleted_at = ?, is_vectorized = 0, vectorize_progress = 0,
+           updated_at = ?, sync_version = ?, last_modified_by = ?
        WHERE id = ?`,
       [deletedAt, updatedAt, syncVersion, deviceId, id],
     );

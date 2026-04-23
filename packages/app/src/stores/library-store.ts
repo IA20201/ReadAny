@@ -560,9 +560,13 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
             continue;
           }
 
-          const deletedMatch = fileHash
+          let deletedMatch = fileHash
             ? await db.getDeletedBookByFileHash(fileHash).catch(() => null)
             : null;
+          // Fallback: match by title if hash lookup failed (e.g. hash was null on first import)
+          if (!deletedMatch && title) {
+            deletedMatch = await db.getDeletedBookByTitle(title).catch(() => null);
+          }
           const bookId = deletedMatch?.id ?? crypto.randomUUID();
 
           // For TXT files, convert to EPUB first before storing

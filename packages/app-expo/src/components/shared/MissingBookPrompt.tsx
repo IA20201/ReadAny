@@ -7,8 +7,8 @@ import {
   spacing,
   useColors,
 } from "@/styles/theme";
-import { useMemo } from "react";
-import { Modal, Pressable, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { useEffect, useMemo, useRef } from "react";
+import { Animated, BackHandler, Pressable, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 export function MissingBookPrompt() {
   const colors = useColors();
@@ -16,36 +16,57 @@ export function MissingBookPrompt() {
   const { visible, title, description, confirmLabel, cancelLabel, resolvePrompt } =
     useMissingBookPromptStore();
 
+  const opacity = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.timing(opacity, {
+      toValue: visible ? 1 : 0,
+      duration: 200,
+      useNativeDriver: true,
+    }).start();
+  }, [visible, opacity]);
+
+  // Handle Android back button
+  useEffect(() => {
+    if (!visible) return;
+    const sub = BackHandler.addEventListener("hardwareBackPress", () => {
+      resolvePrompt(false);
+      return true;
+    });
+    return () => sub.remove();
+  }, [visible, resolvePrompt]);
+
   if (!visible) return null;
 
   return (
-    <Modal transparent animationType="fade" visible={visible} onRequestClose={() => resolvePrompt(false)}>
-      <Pressable style={styles.overlay} onPress={() => resolvePrompt(false)}>
-        <Pressable style={styles.card} onPress={() => {}}>
-          <Text style={styles.title}>{title}</Text>
-          <Text style={styles.description}>{description}</Text>
-          <View style={styles.actions}>
-            <TouchableOpacity style={styles.secondaryButton} onPress={() => resolvePrompt(false)} activeOpacity={0.8}>
-              <Text style={styles.secondaryText}>{cancelLabel}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.primaryButton} onPress={() => resolvePrompt(true)} activeOpacity={0.85}>
-              <Text style={styles.primaryText}>{confirmLabel}</Text>
-            </TouchableOpacity>
-          </View>
-        </Pressable>
-      </Pressable>
-    </Modal>
+    <Animated.View style={[styles.overlay, { opacity }]} pointerEvents="auto">
+      <Pressable style={StyleSheet.absoluteFill} onPress={() => resolvePrompt(false)} />
+      <View style={styles.card}>
+        <Text style={styles.title}>{title}</Text>
+        <Text style={styles.description}>{description}</Text>
+        <View style={styles.actions}>
+          <TouchableOpacity style={styles.secondaryButton} onPress={() => resolvePrompt(false)} activeOpacity={0.8}>
+            <Text style={styles.secondaryText}>{cancelLabel}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.primaryButton} onPress={() => resolvePrompt(true)} activeOpacity={0.85}>
+            <Text style={styles.primaryText}>{confirmLabel}</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Animated.View>
   );
 }
 
 const makeStyles = (colors: ThemeColors) =>
   StyleSheet.create({
     overlay: {
-      flex: 1,
+      ...StyleSheet.absoluteFillObject,
       backgroundColor: "rgba(0,0,0,0.32)",
       justifyContent: "center",
       alignItems: "center",
       paddingHorizontal: spacing.xl,
+      zIndex: 9999,
+      elevation: 9999,
     },
     card: {
       width: "100%",
@@ -57,6 +78,7 @@ const makeStyles = (colors: ThemeColors) =>
       paddingHorizontal: spacing.lg,
       paddingVertical: spacing.lg,
       gap: spacing.md,
+      zIndex: 1,
     },
     title: {
       fontSize: fontSize.base,
