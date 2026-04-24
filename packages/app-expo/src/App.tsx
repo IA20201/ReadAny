@@ -91,9 +91,21 @@ export default function App() {
         console.log("[App] bootstrap: init react-native-track-player");
         await TrackPlayer.setupPlayer();
         await TrackPlayer.updateOptions({
-          capabilities: [Capability.Play, Capability.Pause, Capability.Stop],
+          capabilities: [
+            Capability.Play,
+            Capability.Pause,
+            Capability.Stop,
+            Capability.SkipToNext,
+            Capability.SkipToPrevious,
+          ],
           compactCapabilities: [Capability.Play, Capability.Pause],
-          notificationCapabilities: [Capability.Play, Capability.Pause, Capability.Stop],
+          notificationCapabilities: [
+            Capability.Play,
+            Capability.Pause,
+            Capability.Stop,
+            Capability.SkipToNext,
+            Capability.SkipToPrevious,
+          ],
         });
 
         // Remote event → TTS store bridge
@@ -106,6 +118,20 @@ export default function App() {
         });
         TrackPlayer.addEventListener(TrackEvent.RemoteStop, () => {
           ttsStore.getState().stop();
+        });
+        TrackPlayer.addEventListener(TrackEvent.RemoteNext, () => {
+          const { jumpToChunk, currentChunkIndex, totalChunks } = ttsStore.getState();
+          const nextIndex = currentChunkIndex + 1;
+          if (nextIndex < totalChunks) {
+            jumpToChunk(nextIndex);
+          }
+        });
+        TrackPlayer.addEventListener(TrackEvent.RemotePrevious, () => {
+          const { jumpToChunk, currentChunkIndex } = ttsStore.getState();
+          const prevIndex = currentChunkIndex - 1;
+          if (prevIndex >= 0) {
+            jumpToChunk(prevIndex);
+          }
         });
 
         console.log("[App] bootstrap: done");

@@ -2,9 +2,11 @@ import { getPlatformService } from "@readany/core/services/platform";
 import type { ITTSPlayer, TTSConfig } from "@readany/core/tts";
 import { splitIntoChunks } from "@readany/core/tts";
 import { File, Paths } from "expo-file-system";
+import { Image } from "react-native";
 import TrackPlayer, { Event, State } from "react-native-track-player";
 
 const CHUNK_MAX_CHARS = 500;
+const DEFAULT_ARTWORK = Image.resolveAssetSource(require("../../assets/icon.png")).uri;
 
 export class TrackPlayerDashScopeTTSPlayer implements ITTSPlayer {
   onStateChange?: (state: "playing" | "paused" | "stopped") => void;
@@ -20,6 +22,13 @@ export class TrackPlayerDashScopeTTSPlayer implements ITTSPlayer {
   private _speakGen = 0;
   private _unsubscribers: (() => void)[] = [];
   private _downloadComplete = false;
+  private _getArtwork: (() => string | undefined) | null = null;
+  private _retryCount = 0;
+  private static readonly MAX_RETRIES = 3;
+
+  setArtworkGetter(getter: () => string | undefined): void {
+    this._getArtwork = getter;
+  }
 
   async speak(text: string | string[], config: TTSConfig): Promise<void> {
     const gen = ++this._speakGen;
@@ -37,6 +46,7 @@ export class TrackPlayerDashScopeTTSPlayer implements ITTSPlayer {
     this._paused = false;
     this._config = config;
     this._downloadComplete = false;
+    this._retryCount = 0;
     this._chunks = Array.isArray(text)
       ? text.filter(Boolean)
       : splitIntoChunks(text, CHUNK_MAX_CHARS);
@@ -80,8 +90,17 @@ export class TrackPlayerDashScopeTTSPlayer implements ITTSPlayer {
       } else if (event.state === State.Paused) {
         this.onStateChange?.("paused");
       } else if (event.state === State.Error) {
-        console.error("[TrackPlayerDashScopeTTSPlayer] RNTP playback error state");
-        this.onStateChange?.("stopped");
+        if (this._retryCount < TrackPlayerDashScopeTTSPlayer.MAX_RETRIES) {
+          this._retryCount++;
+          console.warn(
+            `[TrackPlayerDashScopeTTSPlayer] playback error, retry ${this._retryCount}/${TrackPlayerDashScopeTTSPlayer.MAX_RETRIES}`,
+          );
+          TrackPlayer.retry().catch(() => {});
+        } else {
+          console.error("[TrackPlayerDashScopeTTSPlayer] playback error, max retries reached");
+          this._stopped = true;
+          this.onStateChange?.("stopped");
+        }
       }
     });
 
@@ -93,15 +112,23 @@ export class TrackPlayerDashScopeTTSPlayer implements ITTSPlayer {
       this.onEnd?.();
     });
 
+    const unsubSeek = TrackPlayer.addEventListener(Event.RemoteSeek, (event) => {
+      if (gen !== this._speakGen || this._stopped) return;
+      TrackPlayer.seekTo(event.position);
+    });
+
     this._unsubscribers.push(
       unsubTrackChange.remove,
       unsubStateChange.remove,
       unsubQueueEnded.remove,
+      unsubSeek.remove,
     );
   }
 
   private async _downloadAndPlay(gen: number): Promise<void> {
     try {
+      const artwork = this._getArtwork?.() || DEFAULT_ARTWORK;
+
       for (let i = 0; i < this._chunks.length; i++) {
         if (gen !== this._speakGen || this._stopped) return;
 
@@ -112,6 +139,7 @@ export class TrackPlayerDashScopeTTSPlayer implements ITTSPlayer {
           id: `tts-dashscope-${i}`,
           url: audioUri,
           title: `Segment ${i + 1}`,
+          artwork,
         });
 
         if (i === 0) {

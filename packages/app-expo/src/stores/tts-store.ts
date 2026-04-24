@@ -103,6 +103,16 @@ function startPlayback(
   const player = getPlayerForConfig(config);
   const gen = _sessionGeneration;
 
+  // Set artwork getter for RNTP players
+  if (
+    "setArtworkGetter" in player &&
+    typeof (player as { setArtworkGetter?: unknown }).setArtworkGetter === "function"
+  ) {
+    (player as { setArtworkGetter: (getter: () => string | undefined) => void }).setArtworkGetter(
+      () => get().currentArtwork || undefined,
+    );
+  }
+
   player.onStateChange = (playState) => {
     if (gen !== _sessionGeneration) return;
     set({ playState });
@@ -149,6 +159,7 @@ export interface TTSState {
   currentBookTitle: string;
   currentChapterTitle: string;
   currentBookId: string;
+  currentArtwork: string;
   currentLocationCfi: string;
   currentChunkIndex: number;
   totalChunks: number;
@@ -163,7 +174,7 @@ export interface TTSState {
   updateConfig: (updates: Partial<TTSConfig>) => void;
   setPlayState: (state: TTSPlayState) => void;
   setOnEnd: (cb: (() => void) | null) => void;
-  setCurrentBook: (title: string, chapter: string, bookId?: string) => void;
+  setCurrentBook: (title: string, chapter: string, bookId?: string, artwork?: string) => void;
   setCurrentLocation: (cfi?: string | null) => void;
   setChunkProgress: (index: number, total: number) => void;
   jumpToChunk: (index: number) => void;
@@ -183,6 +194,7 @@ export const useTTSStore = create<TTSState>()(
       currentBookTitle: "",
       currentChapterTitle: "",
       currentBookId: "",
+      currentArtwork: "",
       currentLocationCfi: "",
       currentChunkIndex: 0,
       totalChunks: 0,
@@ -308,8 +320,13 @@ export const useTTSStore = create<TTSState>()(
         set({ onEnd: cb });
       },
 
-      setCurrentBook: (title, chapter, bookId) => {
-        set({ currentBookTitle: title, currentChapterTitle: chapter, currentBookId: bookId ?? "" });
+      setCurrentBook: (title, chapter, bookId, artwork) => {
+        set({
+          currentBookTitle: title,
+          currentChapterTitle: chapter,
+          currentBookId: bookId ?? "",
+          currentArtwork: artwork ?? "",
+        });
         // Sync notification bar metadata
         TrackPlayer.getActiveTrackIndex()
           .then((idx) => {
@@ -317,6 +334,7 @@ export const useTTSStore = create<TTSState>()(
               TrackPlayer.updateMetadataForTrack(idx, {
                 title: chapter || title,
                 artist: title,
+                ...(artwork ? { artwork } : {}),
               }).catch(() => {});
             }
           })

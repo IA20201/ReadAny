@@ -9,11 +9,11 @@
  *  - Cleanup on unmount (clear continuous callback, clear highlight)
  */
 
-import { useTTSStore } from "@/stores";
-import { normalizeTTSConfig, splitNarrationText, type TTSConfig } from "@readany/core/tts";
-import { getPlatformService } from "@readany/core/services";
-import { eventBus } from "@readany/core/utils/event-bus";
 import type { VisibleTTSSegment } from "@/hooks/use-reader-bridge";
+import { useTTSStore } from "@/stores";
+import { getPlatformService } from "@readany/core/services";
+import { type TTSConfig, normalizeTTSConfig, splitNarrationText } from "@readany/core/tts";
+import { eventBus } from "@readany/core/utils/event-bus";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   collectMissingTTSDebugSentences,
@@ -362,8 +362,7 @@ export function useReaderTTS({
     return ttsCurrentLocationCfi || null;
   }, [bookId, currentTTSSegment?.cfi, ttsCurrentBookId, ttsCurrentLocationCfi]);
 
-  const ttsSourceLabel =
-    ttsSourceKind === "selection" ? "来自选中文本" : "从当前页开始";
+  const ttsSourceLabel = ttsSourceKind === "selection" ? "来自选中文本" : "从当前页开始";
 
   // ─── Utility callbacks ──────────────────────────────────────────────────────
   const syncTTSChunkOffset = useCallback((nextOffset: number) => {
@@ -727,7 +726,7 @@ export function useReaderTTS({
           ttsFutureSegmentsRef.current = [];
           syncTTSChunkOffset(0);
           ttsStartChapterRef.current = nextChapterTitle;
-          ttsSetCurrentBook(bookTitle, nextChapterTitle, bookId);
+          ttsSetCurrentBook(bookTitle, nextChapterTitle, bookId, ttsCoverUri);
 
           const firstVisibleCfi = normalizedSegments[0]?.cfi || "";
           const lastVisibleCfi =
@@ -763,6 +762,7 @@ export function useReaderTTS({
       primeTTSLyricContext,
       syncTTSChunkOffset,
       toc,
+      ttsCoverUri,
       ttsPlay,
       ttsSetCurrentBook,
       ttsSetCurrentLocation,
@@ -954,7 +954,10 @@ export function useReaderTTS({
     ttsHandlingPageEndRef.current = true;
     const previousSegments = ttsSegmentsRef.current;
     const previousFirstCfi =
-      previousSegments[0]?.cfi || (currentTTSSegment as TTSSegment | null)?.cfi || currentCfi || null;
+      previousSegments[0]?.cfi ||
+      (currentTTSSegment as TTSSegment | null)?.cfi ||
+      currentCfi ||
+      null;
     const previousLastCfi =
       previousSegments[previousSegments.length - 1]?.cfi ||
       (currentTTSSegment as TTSSegment | null)?.cfi ||
@@ -989,7 +992,11 @@ export function useReaderTTS({
       try {
         if (!ttsContinuousRef.current) return;
         const restartFromCfi = startPageTTSFromCfiRef.current;
-        const context = await getCachedTTSSegmentContext(previousLastCfi, 0, TTS_CONTEXT_WINDOW * 2);
+        const context = await getCachedTTSSegmentContext(
+          previousLastCfi,
+          0,
+          TTS_CONTEXT_WINDOW * 2,
+        );
         const nextSegment =
           (context.after || []).find((segment) => segment.text.trim().length > 0) || null;
         console.log("[ReaderScreen][TTS] continue from context", {
@@ -1008,7 +1015,10 @@ export function useReaderTTS({
           currentSectionIndex >= 0 && currentSectionIndex < toc.length - 1
             ? currentSectionIndex + 1
             : -1;
-        if (nextChapterIndex >= 0 && queueTTSChapterTransition(nextChapterIndex, { autoResume: true })) {
+        if (
+          nextChapterIndex >= 0 &&
+          queueTTSChapterTransition(nextChapterIndex, { autoResume: true })
+        ) {
           return;
         }
 
@@ -1188,7 +1198,7 @@ export function useReaderTTS({
       syncTTSChunkOffset(0);
       ttsContinuousRef.current = continuous;
       ttsSetOnEnd(continuous ? handleTTSPageEnd : null);
-      ttsSetCurrentBook(bookTitle, currentChapter, bookId);
+      ttsSetCurrentBook(bookTitle, currentChapter, bookId, ttsCoverUri);
       ttsSetCurrentLocation(normalizedSegments[0]?.cfi || pageAnchorCfi);
       setShowControls(false);
       setShowTTS(true);
@@ -1218,6 +1228,7 @@ export function useReaderTTS({
       setShowTTS,
       syncTTSChunkOffset,
       ttsContinuousEnabled,
+      ttsCoverUri,
       ttsPlay,
       ttsSetCurrentBook,
       ttsSetCurrentLocation,
@@ -1251,7 +1262,7 @@ export function useReaderTTS({
       ttsContinuousRef.current = false;
       ttsSetOnEnd(null);
       ttsSetCurrentLocation(selectionCfi || currentCfi);
-      ttsSetCurrentBook(bookTitle, currentChapter, bookId);
+      ttsSetCurrentBook(bookTitle, currentChapter, bookId, ttsCoverUri);
       setShowControls(false);
       setShowTTS(true);
       ttsPlay(segments.length > 0 ? segments.map((segment) => segment.text) : normalized);
@@ -1264,6 +1275,7 @@ export function useReaderTTS({
       setShowControls,
       setShowTTS,
       syncTTSChunkOffset,
+      ttsCoverUri,
       ttsPlay,
       ttsSetCurrentBook,
       ttsSetCurrentLocation,
@@ -1366,10 +1378,7 @@ export function useReaderTTS({
 
   const handleAdjustTTSPitch = useCallback(
     (delta: number) => {
-      const nextPitch = Math.max(
-        0.5,
-        Math.min(2, Math.round((ttsConfig.pitch + delta) * 10) / 10),
-      );
+      const nextPitch = Math.max(0.5, Math.min(2, Math.round((ttsConfig.pitch + delta) * 10) / 10));
       ttsUpdateConfig({ pitch: nextPitch });
     },
     [ttsConfig.pitch, ttsUpdateConfig],
@@ -1458,7 +1467,10 @@ export function useReaderTTS({
         const allSegments = [...fromPrev, ...ttsSegments];
         if (allSegments.length === 0) return;
         const newPrev = ttsPrevPageSegments.slice(0, safeIdx);
-        const nextText = allSegments.map((segment) => segment.text).join(" ").trim();
+        const nextText = allSegments
+          .map((segment) => segment.text)
+          .join(" ")
+          .trim();
         const nextCfi = allSegments[0]?.cfi || currentCfi;
         setTtsPrevPageSegments(newPrev);
         setTtsSegments(allSegments);
@@ -1477,7 +1489,10 @@ export function useReaderTTS({
         const sliced = ttsSegments.slice(safeIdx);
         if (sliced.length === 0) return;
         const newPrev = [...ttsPrevPageSegments, ...ttsSegments.slice(0, safeIdx)];
-        const nextText = sliced.map((segment) => segment.text).join(" ").trim();
+        const nextText = sliced
+          .map((segment) => segment.text)
+          .join(" ")
+          .trim();
         const nextCfi = sliced[0]?.cfi || currentCfi;
         setTtsPrevPageSegments(newPrev);
         setTtsSegments(sliced);
@@ -1521,7 +1536,10 @@ export function useReaderTTS({
         const allSegments = [...fromPrev, ...ttsSegments, ...ttsFutureSegments];
         if (allSegments.length === 0) return;
         const newPrev = ttsPrevPageSegments.slice(0, safeIdx);
-        const nextText = allSegments.map((s) => s.text).join(" ").trim();
+        const nextText = allSegments
+          .map((s) => s.text)
+          .join(" ")
+          .trim();
         const nextCfi = allSegments[0]?.cfi || currentCfi;
         setTtsPrevPageSegments(newPrev);
         setTtsSegments(allSegments);
@@ -1545,7 +1563,10 @@ export function useReaderTTS({
         const skippedFuture = ttsFutureSegments.slice(0, futureOffset);
         const remainingFuture = ttsFutureSegments.slice(futureOffset);
         const newPrev = [...ttsPrevPageSegments, ...consumedCurrent, ...skippedFuture];
-        const nextText = remainingFuture.map((s) => s.text).join(" ").trim();
+        const nextText = remainingFuture
+          .map((s) => s.text)
+          .join(" ")
+          .trim();
         const nextCfi = remainingFuture[0]?.cfi || currentCfi;
         setTtsPrevPageSegments(newPrev);
         setTtsSegments(remainingFuture);
@@ -2021,7 +2042,7 @@ export function useReaderTTS({
     if (segments.length === 0) return;
     const localIndex = Math.max(0, ttsCurrentChunkIndexRef.current - ttsChunkOffset);
     const remaining = segments.length - 1 - localIndex;
-    if (remaining > 3) return;                // not near the end yet
+    if (remaining > 3) return; // not near the end yet
     const lastCfi = segments[segments.length - 1]?.cfi;
     if (!lastCfi) return;
     // Fire-and-forget: result goes into LRU cache
@@ -2029,7 +2050,7 @@ export function useReaderTTS({
   }, [
     getCachedTTSSegmentContext,
     ttsChunkOffset,
-    ttsCurrentChunkIndex,   // intentional: re-check on every chunk advance
+    ttsCurrentChunkIndex, // intentional: re-check on every chunk advance
     ttsPlayState,
     ttsSourceKind,
     ttsSegments.length,
