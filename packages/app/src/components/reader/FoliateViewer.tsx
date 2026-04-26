@@ -1856,7 +1856,9 @@ export const FoliateViewer = forwardRef<FoliateViewerHandle, FoliateViewerProps>
           // This is critical: foliate-js FixedLayout.#spread() reads rendition.spread
           // during open(), so it must be set before view.open()
           if (isFixedLayout && bookDoc.rendition) {
-            bookDoc.rendition.spread = "auto";
+            const fixedLayoutSpread =
+              (viewSettings.paginatedLayout ?? "double") === "single" ? "none" : "auto";
+            bookDoc.rendition.spread = fixedLayoutSpread;
             // Set first section as cover page (single page, not part of spread)
             const sections = bookDoc.sections as
               | Array<{ id?: string; pageSpread?: string }>
@@ -1976,11 +1978,13 @@ export const FoliateViewer = forwardRef<FoliateViewerHandle, FoliateViewerProps>
     useEffect(() => {
       const view = viewRef.current;
       if (!view?.renderer) return;
-      // Fixed layout doesn't support scroll mode
-      if (isFixedLayout) return;
+      if (isFixedLayout) {
+        applyRendererSettings(view, viewSettings, true, appTheme);
+        return;
+      }
 
       applyReflowLayoutSettings(view, viewSettings);
-    }, [viewSettings.viewMode, viewSettings.paginatedLayout, isFixedLayout]);
+    }, [viewSettings.viewMode, viewSettings.paginatedLayout, isFixedLayout, appTheme]);
 
     useEffect(() => {
       const handleMessage = (event: MessageEvent) => {
@@ -2122,9 +2126,16 @@ function applyRendererSettings(
   if (!renderer) return;
 
   if (isFixedLayout) {
-    // Fixed layout: zoom, spread
+    const isSinglePage = (settings.paginatedLayout ?? "double") === "single";
+    const spreadMode = isSinglePage ? "none" : "auto";
+    // Fixed layout: respect single/double spread while keeping page-fit zoom.
+    // Image-heavy EPUBs still need fit-page here, otherwise single-page mode can
+    // stretch the canvas to full width and break viewport self-adaptation.
     renderer.setAttribute("zoom", "fit-page");
-    renderer.setAttribute("spread", "auto");
+    if (view.book?.rendition) {
+      view.book.rendition.spread = spreadMode;
+    }
+    renderer.setAttribute("spread", spreadMode);
   } else {
     // Reflowable: columns, sizes, margins
     const isSinglePage = (settings.paginatedLayout ?? "double") === "single";
