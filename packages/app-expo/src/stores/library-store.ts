@@ -135,12 +135,22 @@ function bytesToBase64(bytes: Uint8Array): string {
   return btoa(binary);
 }
 
+/**
+ * Hash bytes using SHA-256. Uses Crypto.digest() which accepts ArrayBuffer directly,
+ * avoiding the 1.33x memory overhead of base64 encoding for large files.
+ */
 async function hashBytes(bytes: Uint8Array): Promise<string> {
-  return Crypto.digestStringAsync(
+  const arrayBuffer = await Crypto.digest(
     Crypto.CryptoDigestAlgorithm.SHA256,
-    bytesToBase64(bytes),
-    { encoding: Crypto.CryptoEncoding.HEX },
+    bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer,
   );
+  // Convert ArrayBuffer to hex string
+  const hashArray = new Uint8Array(arrayBuffer);
+  let hex = "";
+  for (let i = 0; i < hashArray.length; i++) {
+    hex += hashArray[i].toString(16).padStart(2, "0");
+  }
+  return hex;
 }
 
 /**
@@ -227,20 +237,36 @@ function ensureUtf8Bytes(bytes: Uint8Array): Uint8Array {
   }
 }
 
+/**
+ * Copy book to app data directory. Uses OS-level file copy when possible
+ * to avoid loading the full file into JS memory.
+ * Falls back to readFile+writeFile only when sourceBytes are already available.
+ */
 async function copyBookToAppData(
   bookId: string,
   ext: string,
   srcPath: string,
   sourceBytes?: Uint8Array,
-): Promise<{ relativePath: string; fileBytes: Uint8Array }> {
+): Promise<{ relativePath: string; absPath: string }> {
   const platform = getPlatformService();
   await ensureAppSubDir("books");
   const relativePath = `books/${bookId}.${ext}`;
   const absPath = await resolveAppPath(relativePath);
 
-  const fileBytes = sourceBytes ?? (await platform.readFile(srcPath));
-  await platform.writeFile(absPath, fileBytes);
-  return { relativePath, fileBytes };
+  if (sourceBytes) {
+    // If bytes are already in memory (e.g. from hash calculation), just write them
+    await platform.writeFile(absPath, sourceBytes);
+  } else {
+    // Use expo-file-system File.copy() for OS-level copy (no JS memory)
+    const ExpoFS = await import("expo-file-system");
+    const srcFile = new ExpoFS.File(srcPath);
+    const destFile = new ExpoFS.File(absPath);
+    if (destFile.exists) {
+      destFile.delete();
+    }
+    srcFile.copy(destFile);
+  }
+  return { relativePath, absPath };
 }
 
 async function persistBookUpdate(bookId: string, updates: Partial<Book>): Promise<void> {
@@ -337,7 +363,7 @@ async function restoreDeletedMobileBook(
     };
   }
 
-  const { relativePath, fileBytes } = await copyBookToAppData(
+  const { relativePath } = await copyBookToAppData(
     bookId,
     ext || "epub",
     filePath,
@@ -349,7 +375,8 @@ async function restoreDeletedMobileBook(
   let coverUrl = originalBook.meta.coverUrl;
 
   try {
-    const meta = await extractBookMetadata(fileBytes, format, fileName);
+    // sourceBytes already in memory from hash calculation, reuse for metadata
+    const meta = await extractBookMetadata(sourceBytes, format, fileName);
     if (meta.title) title = meta.title;
     if (meta.author) author = meta.author;
 
@@ -771,24 +798,25 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
             }
           }
 
-          const { relativePath, fileBytes } = await copyBookToAppData(
+          const { relativePath } = await copyBookToAppData(
             bookId,
             ext || "epub",
             filePath,
             sourceBytes,
           );
           console.log(
-            `[importBooks] File copied. Bytes length: ${fileBytes.length}, relativePath: ${relativePath}`,
+            `[importBooks] File copied. relativePath: ${relativePath}`,
           );
 
           // Extract metadata (title, author, cover) from book content
+          // Reuse sourceBytes already in memory from hash calculation
           let title = fileName.replace(/\.\w+$/i, "") || "Untitled";
           let author = "";
           let coverUrl: string | undefined;
 
           try {
             console.log(`[importBooks] Extracting metadata for format=${format}...`);
-            const meta = await extractBookMetadata(fileBytes, format, fileName);
+            const meta = await extractBookMetadata(sourceBytes, format, fileName);
             console.log(
               `[importBooks] Metadata result: title="${meta.title}", author="${meta.author}", hasCover=${!!meta.coverBytes}, coverSize=${meta.coverBytes?.length ?? 0}`,
             );
@@ -870,7 +898,7 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
           try {
             const vmState = useVectorModelStore.getState();
             if (vmState.vectorModelEnabled && vmState.hasVectorCapability()) {
-              const base64 = bytesToBase64(fileBytes);
+              const base64 = bytesToBase64(sourceBytes);
               const mimeTypes: Record<string, string> = {
                 epub: "application/epub+zip",
                 pdf: "application/pdf",
