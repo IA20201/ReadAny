@@ -19,7 +19,7 @@ import { useResizablePanel } from "@/hooks/use-resizable-panel";
 import { useResolvedSrc } from "@/hooks/use-resolved-src";
 import { DocumentLoader } from "@/lib/reader/document-loader";
 import type { BookDoc, BookFormat } from "@/lib/reader/document-loader";
-import { isFixedLayoutBook, isFixedLayoutFormat } from "@/lib/reader/document-loader";
+import { isFixedLayoutBook } from "@/lib/reader/document-loader";
 import { resolveDesktopDataPath } from "@/lib/storage/desktop-library-root";
 import { useAnnotationStore } from "@/stores/annotation-store";
 import { useAppStore } from "@/stores/app-store";
@@ -642,7 +642,6 @@ export function ReaderView({ bookId, tabId }: ReaderViewProps) {
   const [bookDoc, setBookDoc] = useState<BookDoc | null>(null);
   const [bookFormat, setBookFormat] = useState<BookFormat>("EPUB");
   const isFixedLayout = isFixedLayoutBook(bookFormat, bookDoc);
-  const shouldDisableReadSettings = isFixedLayoutFormat(bookFormat);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -2750,7 +2749,7 @@ export function ReaderView({ bookId, tabId }: ReaderViewProps) {
             onChapterTranslationReset={chapterTranslation.reset}
             isChatOpen={showChat}
             isTTSActive={showTTS || ttsPlayState !== "stopped"}
-            isFixedLayout={shouldDisableReadSettings}
+            isFixedLayout={isFixedLayout}
             isPinned={isToolbarPinned}
             onTogglePinned={() => setIsToolbarPinned((prev) => !prev)}
             onMouseEnter={handleMouseEnter}
