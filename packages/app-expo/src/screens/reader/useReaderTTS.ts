@@ -15,6 +15,7 @@ import { getPlatformService } from "@readany/core/services";
 import { type TTSConfig, normalizeTTSConfig, splitNarrationText } from "@readany/core/tts";
 import { eventBus } from "@readany/core/utils/event-bus";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { AppState, type AppStateStatus } from "react-native";
 import {
   collectMissingTTSDebugSentences,
   findTTSDebugSentenceIndex,
@@ -2147,6 +2148,42 @@ export function useReaderTTS({
     ttsSourceKind,
     webViewReady,
     bookId,
+  ]);
+
+  // ─── Foreground resync: force highlight update after returning from background ──
+  // When iOS suspends the app, React effects don't run but native audio continues.
+  // On return to foreground, force-resync the WebView highlight to current TTS position.
+  useEffect(() => {
+    const handleAppStateChange = (nextState: AppStateStatus) => {
+      if (nextState !== "active") return;
+      if (!webViewReady || !bridgeRef.current) return;
+      if (ttsCurrentBookId !== bookId) return;
+      if (ttsPlayState !== "playing" && ttsPlayState !== "paused") return;
+      if (ttsSourceKind !== "page") return;
+
+      const targetCfi = resolvedTTSSegmentCfi;
+      if (!targetCfi) return;
+
+      // Small delay to let WebView fully resume before injecting JS
+      setTimeout(() => {
+        bridgeRef.current?.setTTSHighlight(targetCfi, ttsHighlightColor, true);
+        // Also navigate to the current TTS position if user scrolled away
+        bridgeRef.current?.goToCFI(targetCfi);
+      }, 300);
+    };
+
+    const subscription = AppState.addEventListener("change", handleAppStateChange);
+    return () => subscription.remove();
+  }, [
+    bookId,
+    bridgeRef,
+    resolvedTTSSegmentCfi,
+    showTTS,
+    ttsCurrentBookId,
+    ttsHighlightColor,
+    ttsPlayState,
+    ttsSourceKind,
+    webViewReady,
   ]);
 
   useEffect(() => {
