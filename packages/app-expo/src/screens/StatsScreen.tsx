@@ -553,7 +553,7 @@ export default function StatsScreen() {
                     sublabel={m.sublabel}
                     delta={m.delta}
                     deltaLabel={m.deltaLabel}
-                    style={layout.isTablet ? { width: metricTileWidth } : s.metricTileHalf}
+                    style={{ width: metricTileWidth }}
                   />
                 ))}
               </View>

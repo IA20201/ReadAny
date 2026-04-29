@@ -283,6 +283,12 @@ export function ProfileScreen() {
   const s = makeStyles(colors);
   const { t, i18n } = useTranslation();
   const layout = useResponsiveLayout();
+  const statsGridGap = 12;
+  const statsGridColumns = layout.isTabletLandscape ? 4 : 2;
+  const statsGridContentWidth = Math.max(0, layout.width - 32);
+  const statCardWidth = Math.floor(
+    (statsGridContentWidth - statsGridGap * (statsGridColumns - 1)) / statsGridColumns,
+  );
   const nav = useNavigation<Nav>();
   const [overall, setOverall] = useState<OverallStats | null>(null);
   const [dailyStats, setDailyStats] = useState<DailyStats[]>([]);
@@ -402,7 +408,6 @@ export function ProfileScreen() {
     ? formatCharactersPerMinute(liveOverall.avgCharactersPerMinute ?? 0, isZh)
     : formatCharactersPerMinute(0, isZh);
   const longestStreak = liveOverall?.longestStreak ?? 0;
-  const statCardWidth = layout.isTabletLandscape ? "23.2%" : "48.2%";
   const overviewCards = [
     {
       key: "time",
@@ -458,7 +463,7 @@ export function ProfileScreen() {
               <ActivityIndicator size="small" color={colors.mutedForeground} />
             </View>
           ) : (
-            <View style={s.statsGrid}>
+            <View style={[s.statsGrid, { gap: statsGridGap }]}>
               {overviewCards.map((card) => (
                 <StatCard
                   key={card.key}
@@ -545,7 +550,7 @@ const makeStyles = (colors: ThemeColors) =>
     // Stats
     statsSection: { paddingHorizontal: 16, paddingTop: 16 },
     statsLoading: { alignItems: "center", justifyContent: "center", paddingVertical: 32 },
-    statsGrid: { flexDirection: "row", flexWrap: "wrap", gap: 12 },
+    statsGrid: { flexDirection: "row", flexWrap: "wrap" },
     statCard: {
       backgroundColor: colors.card,
       borderRadius: radius.xl,
