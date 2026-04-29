@@ -1,14 +1,14 @@
 import type { ITTSPlayer, TTSConfig } from "@readany/core/tts";
 import { fetchEdgeTTSAudio, splitIntoChunks } from "@readany/core/tts";
 import { File, Paths } from "expo-file-system";
-import { Image } from "react-native";
+import { AppState, type AppStateStatus, Image } from "react-native";
 import TrackPlayer, { Event, State } from "react-native-track-player";
 
 const CHUNK_MAX_CHARS = 500;
 const DEFAULT_ARTWORK = Image.resolveAssetSource(require("../../../assets/icon.png")).uri;
 
 export class TrackPlayerEdgeTTSPlayer implements ITTSPlayer {
-  private static readonly INITIAL_BUFFER_CHUNKS = 4;
+  private static readonly INITIAL_BUFFER_CHUNKS = 8;
   private static readonly FETCH_CONCURRENCY = 8;
   private static readonly STARVE_RESUME_BUFFER_CHUNKS = 2;
   private static readonly MAX_RETRIES = 3;
@@ -154,6 +154,19 @@ export class TrackPlayerEdgeTTSPlayer implements ITTSPlayer {
       unsubQueueEnded.remove,
       unsubSeek.remove,
     );
+
+    // Resume chunk fetching when app returns to foreground.
+    // iOS suspends JS in background, so the producer/fetch may stall.
+    // On foreground, restart producer and recover from starvation if needed.
+    const appStateSub = AppState.addEventListener("change", (state: AppStateStatus) => {
+      if (state !== "active") return;
+      if (gen !== this._speakGen || this._stopped) return;
+      this._ensureProducerRunning(gen);
+      if (this._queueStarved) {
+        this._recoverFromStarvation(gen);
+      }
+    });
+    this._unsubscribers.push(() => appStateSub.remove());
   }
 
   private _ensureProducerRunning(gen: number): void {
@@ -403,6 +416,19 @@ export class TrackPlayerEdgeTTSPlayer implements ITTSPlayer {
       nextChunkToAdd: this._nextChunkToAdd,
       total: this._chunks.length,
     });
+  }
+
+  /**
+   * Called when app returns to foreground after being suspended.
+   * Restarts the producer (which may have stalled due to JS suspension)
+   * and attempts to resume playback if queue was starved.
+   */
+  private _recoverFromStarvation(gen: number): void {
+    if (gen !== this._speakGen || this._stopped) return;
+    console.log("[TrackPlayerEdgeTTSPlayer] recovering from background starvation");
+    this._ensureProducerRunning(gen);
+    // The producer will call _addFetchedChunk which checks _queueStarved
+    // and calls _resumeStarvedQueue when enough chunks are buffered.
   }
 
   private _isAtFinalTrack(index = this._currentIndex): boolean {

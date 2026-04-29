@@ -2,14 +2,14 @@ import { getPlatformService } from "@readany/core/services";
 import type { ITTSPlayer, TTSConfig } from "@readany/core/tts";
 import { splitIntoChunks } from "@readany/core/tts";
 import { File, Paths } from "expo-file-system";
-import { Image } from "react-native";
+import { AppState, type AppStateStatus, Image } from "react-native";
 import TrackPlayer, { Event, State } from "react-native-track-player";
 
 const CHUNK_MAX_CHARS = 500;
 const DEFAULT_ARTWORK = Image.resolveAssetSource(require("../../../assets/icon.png")).uri;
 
 export class TrackPlayerDashScopeTTSPlayer implements ITTSPlayer {
-  private static readonly INITIAL_BUFFER_CHUNKS = 4;
+  private static readonly INITIAL_BUFFER_CHUNKS = 8;
   private static readonly FETCH_CONCURRENCY = 8;
   private static readonly STARVE_RESUME_BUFFER_CHUNKS = 2;
   private static readonly MAX_RETRIES = 3;
@@ -161,6 +161,17 @@ export class TrackPlayerDashScopeTTSPlayer implements ITTSPlayer {
       unsubQueueEnded.remove,
       unsubSeek.remove,
     );
+
+    // Resume chunk fetching when app returns to foreground.
+    const appStateSub = AppState.addEventListener("change", (state: AppStateStatus) => {
+      if (state !== "active") return;
+      if (gen !== this._speakGen || this._stopped) return;
+      this._ensureProducerRunning(gen);
+      if (this._queueStarved) {
+        this._recoverFromStarvation(gen);
+      }
+    });
+    this._unsubscribers.push(() => appStateSub.remove());
   }
 
   private _ensureProducerRunning(gen: number): void {
@@ -417,6 +428,16 @@ export class TrackPlayerDashScopeTTSPlayer implements ITTSPlayer {
         total: this._chunks.length,
       },
     );
+  }
+
+  /**
+   * Called when app returns to foreground after being suspended.
+   * Restarts the producer and attempts to resume playback if queue was starved.
+   */
+  private _recoverFromStarvation(gen: number): void {
+    if (gen !== this._speakGen || this._stopped) return;
+    console.log("[TrackPlayerDashScopeTTSPlayer] recovering from background starvation");
+    this._ensureProducerRunning(gen);
   }
 
   private _isAtFinalTrack(index = this._currentIndex): boolean {
