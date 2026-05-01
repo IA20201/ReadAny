@@ -60,9 +60,7 @@ export function TabBar() {
   const isFullscreen = useIsFullscreen();
   const headerRef = useRef<HTMLDivElement | null>(null);
 
-  const activeTab = tabs.find((t) => t.id === activeTabId);
   const visibleTabs = tabs.filter((t) => t.type !== "home");
-  const isReaderActive = activeTab?.type === "reader";
 
   const handleTabClose = (tabId: string) => {
     const closingTab = tabs.find((t) => t.id === tabId);
@@ -82,7 +80,7 @@ export function TabBar() {
       className="flex h-8 shrink-0 select-none items-center border-neutral-200 bg-muted"
     >
       {/* macOS: space for native traffic lights (hidden in reader mode) */}
-      <div className="flex h-full shrink-0 items-center" style={{ paddingLeft: (isMac && !isFullscreen && !isReaderActive) ? 68 : 4 }}>
+      <div className="flex h-full shrink-0 items-center" style={{ paddingLeft: (isMac && !isFullscreen) ? 68 : 4 }}>
         <button
           type="button"
           className="flex items-center justify-center rounded-md p-1 text-neutral-500 transition-colors hover:bg-neutral-200/60 hover:text-neutral-800"
