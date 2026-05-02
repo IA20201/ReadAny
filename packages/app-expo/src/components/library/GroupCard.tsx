@@ -1,10 +1,11 @@
-import { FolderIcon } from "@/components/ui/Icon";
-import { type ThemeColors, fontSize, fontWeight, radius, useColors } from "@/styles/theme";
+import { FolderIcon, MoreVerticalIcon } from "@/components/ui/Icon";
+import { type ThemeColors, radius, useColors } from "@/styles/theme";
 import { getPlatformService } from "@readany/core/services";
 import type { Book, BookGroup } from "@readany/core/types";
 import { memo, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Image, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { makeStyles as makeBookCardStyles } from "./book-card-styles";
 
 interface GroupCardProps {
   group: BookGroup;
@@ -19,11 +20,13 @@ function GroupCoverLayer({
   index,
   total,
   colors,
+  bookStyles,
 }: {
   book: Book;
   index: number;
   total: number;
   colors: ThemeColors;
+  bookStyles: ReturnType<typeof makeBookCardStyles>;
 }) {
   const [uri, setUri] = useState<string | undefined>();
   const [error, setError] = useState(false);
@@ -91,17 +94,44 @@ function GroupCoverLayer({
       ]}
     >
       {uri && !error ? (
-        <Image
-          source={{ uri }}
-          style={styles.coverImage}
-          resizeMode="cover"
-          onError={() => setError(true)}
-        />
+        <>
+          <Image
+            source={{ uri }}
+            style={styles.coverImage}
+            resizeMode="cover"
+            onError={() => setError(true)}
+          />
+          <View style={bookStyles.spineOverlay} pointerEvents="none">
+            <View style={bookStyles.spineStrip1} />
+            <View style={bookStyles.spineStrip2} />
+            <View style={bookStyles.spineStrip3} />
+            <View style={bookStyles.spineStrip4} />
+            <View style={bookStyles.spineStrip5} />
+            <View style={bookStyles.spineStrip6} />
+            <View style={bookStyles.spineStrip7} />
+          </View>
+          <View style={bookStyles.spineTopHighlight} pointerEvents="none" />
+          <View style={bookStyles.spineBottomShadow} pointerEvents="none" />
+        </>
       ) : (
-        <View style={styles.fallbackCover}>
-          <Text style={[styles.fallbackTitle, { color: colors.mutedForeground }]} numberOfLines={3}>
-            {book.meta.title}
-          </Text>
+        <View style={bookStyles.fallbackCover}>
+          <View style={bookStyles.fallbackGradientTop} />
+          <View style={bookStyles.fallbackGradientBottom} />
+          <View style={bookStyles.fallbackContentOverlay}>
+            <View style={bookStyles.fallbackTitleWrap}>
+              <Text style={bookStyles.fallbackTitle} numberOfLines={3}>
+                {book.meta.title}
+              </Text>
+            </View>
+            <View style={bookStyles.fallbackDivider} />
+            {book.meta.author ? (
+              <View style={bookStyles.fallbackAuthorWrap}>
+                <Text style={bookStyles.fallbackAuthor} numberOfLines={1}>
+                  {book.meta.author}
+                </Text>
+              </View>
+            ) : null}
+          </View>
         </View>
       )}
     </View>
@@ -117,6 +147,7 @@ export const GroupCard = memo(function GroupCard({
 }: GroupCardProps) {
   const colors = useColors();
   const { t } = useTranslation();
+  const bookStyles = makeBookCardStyles(colors, cardWidth);
   const previewBooks = useMemo(
     () =>
       [...books]
@@ -125,17 +156,16 @@ export const GroupCard = memo(function GroupCard({
         .reverse(),
     [books],
   );
-  const coverHeight = Math.round((cardWidth * 41) / 28);
 
   return (
     <TouchableOpacity
-      style={{ width: cardWidth }}
+      style={bookStyles.container}
       activeOpacity={0.76}
       onPress={() => onOpen(group.id)}
       onLongPress={() => onLongPress?.(group)}
       delayLongPress={450}
     >
-      <View style={[styles.stackWrap, { height: coverHeight, backgroundColor: colors.muted }]}>
+      <View style={[bookStyles.coverWrap, { backgroundColor: colors.muted }]}>
         {previewBooks.length > 0 ? (
           previewBooks.map((book, index) => (
             <GroupCoverLayer
@@ -144,6 +174,7 @@ export const GroupCard = memo(function GroupCard({
               index={index}
               total={previewBooks.length}
               colors={colors}
+              bookStyles={bookStyles}
             />
           ))
         ) : (
@@ -151,49 +182,55 @@ export const GroupCard = memo(function GroupCard({
             <FolderIcon size={40} color={colors.mutedForeground} />
           </View>
         )}
+        {onLongPress ? (
+          <View style={[bookStyles.moreButtonWrap, styles.moreButtonWrap]} pointerEvents="box-none">
+            <TouchableOpacity
+              style={bookStyles.moreButton}
+              activeOpacity={0.85}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              onPress={(event) => {
+                event.stopPropagation();
+                onLongPress(group);
+              }}
+            >
+              <MoreVerticalIcon size={14} color="#fff" />
+            </TouchableOpacity>
+          </View>
+        ) : null}
       </View>
-      <View style={styles.infoWrap}>
-        <Text style={[styles.title, { color: colors.foreground }]} numberOfLines={1}>
+      <View style={bookStyles.infoWrap}>
+        <Text style={bookStyles.bookTitle} numberOfLines={1}>
           {group.name}
         </Text>
-        <Text style={[styles.count, { color: colors.mutedForeground }]} numberOfLines={1}>
+        <Text style={bookStyles.bookAuthor} numberOfLines={1}>
           {t("library.groupBookCount", { count: books.length, defaultValue: `${books.length} 本` })}
         </Text>
+        <View style={bookStyles.tagsRow}>
+          <View style={bookStyles.newBadge}>
+            <Text style={bookStyles.newText}>{t("library.group", "分组")}</Text>
+          </View>
+        </View>
+        <View style={bookStyles.statusRow} />
       </View>
     </TouchableOpacity>
   );
 });
 
 const styles = StyleSheet.create({
-  stackWrap: {
-    width: "100%",
-    borderRadius: radius.lg,
-    overflow: "hidden",
-  },
   coverLayer: {
     position: "absolute",
     borderRadius: radius.sm,
     overflow: "hidden",
     shadowColor: "#000",
-    shadowOffset: { width: 1, height: 3 },
-    shadowOpacity: 0.25,
-    shadowRadius: 6,
-    elevation: 4,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 3,
   },
   coverImage: {
     width: "100%",
     height: "100%",
-  },
-  fallbackCover: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 8,
-  },
-  fallbackTitle: {
-    textAlign: "center",
-    fontSize: 11,
-    lineHeight: 15,
+    borderRadius: radius.sm,
   },
   emptyIcon: {
     flex: 1,
@@ -201,16 +238,8 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     opacity: 0.45,
   },
-  infoWrap: {
-    paddingTop: 8,
-  },
-  title: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.semibold,
-  },
-  count: {
-    marginTop: 2,
-    fontSize: fontSize.xs,
-    fontWeight: fontWeight.medium,
+  moreButtonWrap: {
+    zIndex: 80,
+    elevation: 12,
   },
 });

@@ -41,7 +41,7 @@ function CoverLayer({ book, index, total }: { book: Book; index: number; total: 
 
   return (
     <div
-      className="absolute aspect-[28/41] overflow-hidden rounded-md shadow-[1px_3px_6px_rgba(0,0,0,0.25)]"
+      className="book-cover-shadow absolute aspect-[28/41] overflow-hidden rounded transition-all duration-200"
       style={{
         right: offset.right,
         bottom: offset.bottom,
@@ -51,10 +51,30 @@ function CoverLayer({ book, index, total }: { book: Book; index: number; total: 
       }}
     >
       {coverSrc ? (
-        <img src={coverSrc} alt="" className="h-full w-full object-cover" loading="lazy" />
+        <>
+          <img
+            src={coverSrc}
+            alt=""
+            className="h-full w-full rounded object-cover"
+            loading="lazy"
+          />
+          <div className="book-spine absolute inset-0 rounded" />
+        </>
       ) : (
-        <div className="flex h-full items-center justify-center bg-gradient-to-br from-stone-200 to-stone-300 p-2 text-center font-serif text-[11px] leading-snug text-stone-500">
-          {book.meta.title}
+        <div className="flex h-full w-full flex-col items-center rounded bg-gradient-to-b from-stone-100 to-stone-200 p-2">
+          <div className="flex flex-1 items-center justify-center">
+            <span className="line-clamp-3 text-center font-serif text-[11px] font-medium leading-snug text-stone-500">
+              {book.meta.title}
+            </span>
+          </div>
+          <div className="h-px w-8 bg-stone-300/60" />
+          {book.meta.author && (
+            <div className="flex h-1/4 items-center justify-center">
+              <span className="line-clamp-1 text-center font-serif text-[9px] text-stone-400">
+                {book.meta.author}
+              </span>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -70,6 +90,7 @@ export const GroupCard = memo(function GroupCard({
 }: GroupCardProps) {
   const { t } = useTranslation();
   const [showMenu, setShowMenu] = useState(false);
+  const [menuPos, setMenuPos] = useState<{ x: number; y: number } | null>(null);
   const [isRenaming, setIsRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
@@ -87,6 +108,7 @@ export const GroupCard = memo(function GroupCard({
     setRenameValue(group.name);
     setIsRenaming(true);
     setShowMenu(false);
+    setMenuPos(null);
     requestAnimationFrame(() => inputRef.current?.focus());
   }, [group.name]);
 
@@ -98,45 +120,65 @@ export const GroupCard = memo(function GroupCard({
 
   return (
     <div className="group/card relative flex h-full cursor-pointer flex-col justify-end">
-      <button
-        type="button"
-        className="book-cover-shadow relative aspect-[28/41] w-full overflow-hidden rounded-lg bg-muted/70 transition-all duration-200 group-hover/card:book-cover-shadow"
-        onClick={() => {
-          if (!isRenaming) onOpen(group.id);
-        }}
-      >
-        {previewBooks.length > 0 ? (
-          previewBooks.map((book, index) => (
-            <CoverLayer key={book.id} book={book} index={index} total={previewBooks.length} />
-          ))
-        ) : (
-          <div className="absolute inset-0 flex items-center justify-center bg-muted/70">
-            <Folder className="h-10 w-10 text-muted-foreground/30" />
-          </div>
-        )}
-      </button>
+      <div className="relative aspect-[28/41] w-full">
+        <button
+          type="button"
+          className="book-cover-shadow relative h-full w-full overflow-hidden rounded bg-muted/70 transition-all duration-200 group-hover/card:book-cover-shadow"
+          onClick={() => {
+            if (!isRenaming) onOpen(group.id);
+          }}
+        >
+          {previewBooks.length > 0 ? (
+            previewBooks.map((book, index) => (
+              <CoverLayer key={book.id} book={book} index={index} total={previewBooks.length} />
+            ))
+          ) : (
+            <div className="absolute inset-0 flex items-center justify-center bg-muted/70">
+              <Folder className="h-10 w-10 text-muted-foreground/30" />
+            </div>
+          )}
+        </button>
 
-      <button
-        type="button"
-        className="absolute right-1.5 bottom-[5.75rem] z-40 rounded-md bg-black/40 p-1 opacity-0 backdrop-blur-sm transition-opacity hover:bg-black/60 group-hover/card:opacity-100"
-        onClick={(event) => {
-          event.stopPropagation();
-          setShowMenu((value) => !value);
-        }}
-      >
-        <MoreVertical className="h-3.5 w-3.5 text-white" />
-      </button>
+        <button
+          type="button"
+          className="absolute right-1 bottom-1 z-20 rounded-md bg-black/30 p-0.5 opacity-0 backdrop-blur-sm transition-opacity group-hover/card:opacity-100"
+          onClick={(event) => {
+            event.stopPropagation();
+            if (showMenu) {
+              setShowMenu(false);
+              setMenuPos(null);
+            } else {
+              const rect = event.currentTarget.getBoundingClientRect();
+              setMenuPos({ x: rect.right, y: rect.top });
+              setShowMenu(true);
+            }
+          }}
+        >
+          <MoreVertical className="h-3.5 w-3.5 text-white" />
+        </button>
+      </div>
 
-      {showMenu && (
+      {showMenu && menuPos && (
         <>
           <div
-            className="fixed inset-0 z-40"
-            onClick={() => setShowMenu(false)}
+            className="fixed inset-0 z-50"
+            onClick={() => {
+              setShowMenu(false);
+              setMenuPos(null);
+            }}
             onKeyDown={(event) => {
-              if (event.key === "Escape") setShowMenu(false);
+              if (event.key === "Escape") {
+                setShowMenu(false);
+                setMenuPos(null);
+              }
             }}
           />
-          <div className="absolute right-0 bottom-14 z-50 min-w-32 rounded-lg border bg-popover p-1 shadow-lg">
+          <div
+            className="fixed z-50 min-w-36 rounded-lg border bg-popover p-1 shadow-lg"
+            style={{ bottom: window.innerHeight - menuPos.y + 4, left: menuPos.x - 152 }}
+            onClick={(event) => event.stopPropagation()}
+            onKeyDown={(event) => event.stopPropagation()}
+          >
             <button
               type="button"
               className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs text-foreground hover:bg-muted"
@@ -150,6 +192,7 @@ export const GroupCard = memo(function GroupCard({
               className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs text-destructive hover:bg-destructive/10"
               onClick={() => {
                 setShowMenu(false);
+                setMenuPos(null);
                 onDelete(group);
               }}
             >
