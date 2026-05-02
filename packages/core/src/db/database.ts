@@ -45,6 +45,13 @@ export {
 } from "./book-queries";
 
 export {
+  getGroups,
+  insertGroup,
+  updateGroup,
+  deleteGroup,
+} from "./group-queries";
+
+export {
   getHighlights,
   getAllHighlights,
   getAllHighlightsWithBooks,

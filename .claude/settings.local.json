@@ -45,7 +45,8 @@
       "WebFetch(domain:docs.expo.dev)",
       "WebFetch(domain:crates.io)",
       "WebFetch(domain:expo.dev)",
-      "WebFetch(domain:codepen.io)"
+      "WebFetch(domain:codepen.io)",
+      "Bash(xxd)"
     ]
   }
 }

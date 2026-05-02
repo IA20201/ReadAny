@@ -114,6 +114,28 @@ export const ChevronRightIcon = icon(() => <Path d="m9 18 6-6-6-6" />);
 
 export const ChevronLeftIcon = icon(() => <Path d="m15 18-6-6 6-6" />);
 
+export const FolderIcon = icon(() => (
+  <>
+    <Path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.7-.9L9.6 4A2 2 0 0 0 7.9 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z" />
+  </>
+));
+
+export const FolderPlusIcon = icon(() => (
+  <>
+    <Path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.7-.9L9.6 4A2 2 0 0 0 7.9 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z" />
+    <Path d="M12 10v6" />
+    <Path d="M9 13h6" />
+  </>
+));
+
+export const FolderInputIcon = icon(() => (
+  <>
+    <Path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.7-.9L9.6 4A2 2 0 0 0 7.9 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z" />
+    <Path d="M12 10v6" />
+    <Path d="m9 13 3 3 3-3" />
+  </>
+));
+
 export const MoreVerticalIcon = icon(() => (
   <>
     <Circle cx="12" cy="5" r="1.5" fill="currentColor" stroke="none" />
@@ -748,5 +770,20 @@ export const GlobeIcon = icon(() => (
     <Circle cx="12" cy="12" r="10" />
     <Path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20" />
     <Path d="M2 12h20" />
+  </>
+));
+
+export const LayersIcon = icon(() => (
+  <>
+    <Polygon points="12 2 2 7 12 12 22 7 12 2" />
+    <Polyline points="2 17 12 22 22 17" />
+    <Polyline points="2 12 12 17 22 12" />
+  </>
+));
+
+export const FolderMinusIcon = icon(() => (
+  <>
+    <Path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z" />
+    <Line x1="9" y1="13" x2="15" y2="13" />
   </>
 ));

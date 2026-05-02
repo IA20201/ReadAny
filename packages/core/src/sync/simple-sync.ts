@@ -41,6 +41,7 @@ export interface SimpleSyncOptions {
 
 /** Tables included in sync, with their primary key and timestamp column */
 const SYNC_TABLES: SyncTableConfig[] = [
+  { name: "book_groups", pk: "id", timestampCol: "updated_at" },
   // is_vectorized and vectorize_progress are local-only (chunks live in readany_local.db)
   {
     name: "books",

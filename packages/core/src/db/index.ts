@@ -28,6 +28,11 @@ export {
   updateBook,
   setBookSyncStatus,
   deleteBook,
+  // Group queries
+  getGroups,
+  insertGroup,
+  updateGroup,
+  deleteGroup,
   // Highlight queries
   getHighlights,
   getAllHighlights,

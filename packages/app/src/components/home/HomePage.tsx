@@ -2,14 +2,33 @@
  * HomePage — library page
  */
 import { DesktopImportActions } from "@/components/home/DesktopImportActions";
+import { GroupPickerPopover } from "@/components/home/GroupPickerPopover";
 import { SyncButton } from "@/components/ui/SyncButton";
 import { triggerVectorizeBook } from "@/lib/rag/vectorize-trigger";
 import { useLibraryStore } from "@/stores/library-store";
-import type { SortField } from "@readany/core/types";
-import { ArrowDownAZ, ArrowUpAZ, CheckCheck, Database, Hash, Loader2, Plus, SortAsc, Trash2, X } from "lucide-react";
+import type { BookGroup, SortField } from "@readany/core/types";
+import {
+  ArrowDownAZ,
+  ArrowLeft,
+  ArrowUpAZ,
+  CheckCheck,
+  Database,
+  FolderInput,
+  FolderMinus,
+  Hash,
+  Layers,
+  Loader2,
+  MoreHorizontal,
+  Plus,
+  SortAsc,
+  Trash2,
+  X,
+} from "lucide-react";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { BookCard } from "./BookCard";
 import { BookGrid } from "./BookGrid";
+import { GroupCard } from "./GroupCard";
 import { ImportDropZone } from "./ImportDropZone";
 
 const SORT_OPTIONS: { field: SortField; labelKey: string }[] = [
@@ -22,19 +41,44 @@ const SORT_OPTIONS: { field: SortField; labelKey: string }[] = [
 
 export function HomePage() {
   const { t } = useTranslation();
-  const { books, filter, activeTag, isImporting, removeBook, addTagToBook, addTag, allTags, setFilter } = useLibraryStore();
+  const {
+    books,
+    groups,
+    filter,
+    activeTag,
+    activeGroupId,
+    isGroupView,
+    isImporting,
+    removeBook,
+    addTagToBook,
+    addTag,
+    allTags,
+    setFilter,
+    setGroupView,
+    setActiveGroupId,
+    addGroup,
+    renameGroup,
+    removeGroup,
+    moveBooksToGroup,
+  } = useLibraryStore();
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedBookIds, setSelectedBookIds] = useState<Set<string>>(new Set());
   const [showBatchTagMenu, setShowBatchTagMenu] = useState(false);
   const [batchNewTagInput, setBatchNewTagInput] = useState("");
   const [showSortMenu, setShowSortMenu] = useState(false);
+  const [showBatchGroupPicker, setShowBatchGroupPicker] = useState(false);
+  const [showGroupMenu, setShowGroupMenu] = useState(false);
   const sortBtnRef = useRef<HTMLButtonElement>(null);
+  const groupBtnRef = useRef<HTMLButtonElement>(null);
 
   const filtered = useMemo(() => {
     let result = books.filter((b) => {
       if (activeTag === "__uncategorized__") {
         if (b.tags.length > 0) return false;
       } else if (activeTag && !b.tags.includes(activeTag)) {
+        return false;
+      }
+      if (activeGroupId && b.groupId !== activeGroupId) {
         return false;
       }
       if (filter.search) {
@@ -47,25 +91,92 @@ export function HomePage() {
     result = [...result].sort((a, b) => {
       let cmp = 0;
       switch (sortField) {
-        case "title": cmp = a.meta.title.localeCompare(b.meta.title); break;
-        case "author": cmp = (a.meta.author || "").localeCompare(b.meta.author || ""); break;
-        case "addedAt": cmp = (a.addedAt || 0) - (b.addedAt || 0); break;
-        case "lastOpenedAt": cmp = (a.lastOpenedAt || 0) - (b.lastOpenedAt || 0); break;
-        case "progress": cmp = a.progress - b.progress; break;
+        case "title":
+          cmp = a.meta.title.localeCompare(b.meta.title);
+          break;
+        case "author":
+          cmp = (a.meta.author || "").localeCompare(b.meta.author || "");
+          break;
+        case "addedAt":
+          cmp = (a.addedAt || 0) - (b.addedAt || 0);
+          break;
+        case "lastOpenedAt":
+          cmp = (a.lastOpenedAt || 0) - (b.lastOpenedAt || 0);
+          break;
+        case "progress":
+          cmp = a.progress - b.progress;
+          break;
       }
       return sortOrder === "desc" ? -cmp : cmp;
     });
     return result;
-  }, [books, filter, activeTag]);
+  }, [books, filter, activeTag, activeGroupId]);
 
-  const handleSortChange = useCallback((field: SortField) => {
-    if (filter.sortField === field) {
-      setFilter({ sortOrder: filter.sortOrder === "asc" ? "desc" : "asc" });
-    } else {
-      setFilter({ sortField: field, sortOrder: field === "title" || field === "author" ? "asc" : "desc" });
+  const activeGroup = useMemo(
+    () => groups.find((group) => group.id === activeGroupId) ?? null,
+    [groups, activeGroupId],
+  );
+
+  const groupedEntries = useMemo(() => {
+    const query = filter.search.toLowerCase().trim();
+    return groups
+      .map((group) => {
+        const groupBooks = filtered.filter((book) => book.groupId === group.id);
+        return { group, books: groupBooks };
+      })
+      .filter(
+        ({ group, books }) =>
+          books.length > 0 && (!query || group.name.toLowerCase().includes(query)),
+      );
+  }, [filtered, filter.search, groups]);
+
+  const visibleBooks = useMemo(
+    () => (isGroupView && !activeGroupId ? filtered.filter((book) => !book.groupId) : filtered),
+    [activeGroupId, filtered, isGroupView],
+  );
+  const visibleItemCount =
+    isGroupView && !activeGroupId
+      ? groupedEntries.length + visibleBooks.length
+      : visibleBooks.length;
+
+  type MixedItem =
+    | { type: "group"; group: BookGroup; books: import("@readany/core/types").Book[] }
+    | { type: "book"; book: import("@readany/core/types").Book };
+
+  const mixedItems = useMemo((): MixedItem[] => {
+    if (!isGroupView || activeGroupId) return [];
+    const items: MixedItem[] = [];
+    for (const { group, books: groupBooks } of groupedEntries) {
+      items.push({ type: "group", group, books: groupBooks });
     }
-    setShowSortMenu(false);
-  }, [filter, setFilter]);
+    for (const book of visibleBooks) {
+      items.push({ type: "book", book });
+    }
+    return items;
+  }, [isGroupView, activeGroupId, groupedEntries, visibleBooks]);
+
+  const handleSortChange = useCallback(
+    (field: SortField) => {
+      if (filter.sortField === field) {
+        setFilter({ sortOrder: filter.sortOrder === "asc" ? "desc" : "asc" });
+      } else {
+        setFilter({
+          sortField: field,
+          sortOrder: field === "title" || field === "author" ? "asc" : "desc",
+        });
+      }
+      setShowSortMenu(false);
+    },
+    [filter, setFilter],
+  );
+
+
+  const handleDeleteGroup = useCallback(
+    async (group: BookGroup) => {
+      await removeGroup(group.id);
+    },
+    [removeGroup],
+  );
 
   const toggleBookSelection = useCallback((bookId: string) => {
     setSelectedBookIds((prev) => {
@@ -82,19 +193,48 @@ export function HomePage() {
     setShowBatchTagMenu(false);
   }, []);
 
-  const isAllSelected = filtered.length > 0 && selectedBookIds.size === filtered.length;
+  const handleBatchMoveGroup = useCallback(() => {
+    if (selectedBookIds.size === 0) return;
+    setShowBatchGroupPicker(true);
+  }, [selectedBookIds]);
+
+  const handleBatchGroupSelect = useCallback(
+    (groupId: string | undefined) => {
+      moveBooksToGroup([...selectedBookIds], groupId);
+      exitSelectionMode();
+      setShowBatchGroupPicker(false);
+    },
+    [exitSelectionMode, moveBooksToGroup, selectedBookIds],
+  );
+
+  const handleBatchGroupCreate = useCallback(
+    async (name: string) => {
+      const group = await addGroup(name);
+      if (group) {
+        moveBooksToGroup([...selectedBookIds], group.id);
+        exitSelectionMode();
+      }
+      setShowBatchGroupPicker(false);
+    },
+    [addGroup, exitSelectionMode, moveBooksToGroup, selectedBookIds],
+  );
+
+  const isAllSelected = visibleBooks.length > 0 && selectedBookIds.size === visibleBooks.length;
 
   const toggleSelectAll = useCallback(() => {
     if (isAllSelected) {
       setSelectedBookIds(new Set());
     } else {
-      setSelectedBookIds(new Set(filtered.map((b) => b.id)));
+      setSelectedBookIds(new Set(visibleBooks.map((b) => b.id)));
     }
-  }, [filtered, isAllSelected]);
+  }, [visibleBooks, isAllSelected]);
 
   const handleBatchDelete = useCallback(async () => {
     if (selectedBookIds.size === 0) return;
-    if (!confirm(t("library.batchDeleteConfirm", `确定要删除选中的 ${selectedBookIds.size} 本书吗？`))) return;
+    if (
+      !confirm(t("library.batchDeleteConfirm", `确定要删除选中的 ${selectedBookIds.size} 本书吗？`))
+    )
+      return;
     for (const id of selectedBookIds) {
       await removeBook(id);
     }
@@ -110,11 +250,20 @@ export function HomePage() {
     exitSelectionMode();
   }, [selectedBookIds, books, exitSelectionMode]);
 
-  const handleBatchAddTag = useCallback((tag: string) => {
-    for (const id of selectedBookIds) {
-      addTagToBook(id, tag);
-    }
-  }, [selectedBookIds, addTagToBook]);
+  const handleBatchRemoveFromGroup = useCallback(() => {
+    if (selectedBookIds.size === 0) return;
+    moveBooksToGroup([...selectedBookIds], undefined);
+    exitSelectionMode();
+  }, [exitSelectionMode, moveBooksToGroup, selectedBookIds]);
+
+  const handleBatchAddTag = useCallback(
+    (tag: string) => {
+      for (const id of selectedBookIds) {
+        addTagToBook(id, tag);
+      }
+    },
+    [selectedBookIds, addTagToBook],
+  );
 
   if (books.length === 0) {
     return <ImportDropZone />;
@@ -135,7 +284,10 @@ export function HomePage() {
                 <X className="size-5" />
               </button>
               <h1 className="text-lg font-semibold text-foreground">
-                {t("library.selectedCount", { count: selectedBookIds.size, defaultValue: `已选 ${selectedBookIds.size} 本` })}
+                {t("library.selectedCount", {
+                  count: selectedBookIds.size,
+                  defaultValue: `已选 ${selectedBookIds.size} 本`,
+                })}
               </h1>
             </div>
             <div className="flex items-center gap-1">
@@ -158,7 +310,13 @@ export function HomePage() {
                 </button>
                 {showBatchTagMenu && (
                   <>
-                    <div className="fixed inset-0 z-40" onClick={() => setShowBatchTagMenu(false)} />
+                    <div
+                      className="fixed inset-0 z-40"
+                      onClick={() => setShowBatchTagMenu(false)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Escape") setShowBatchTagMenu(false);
+                      }}
+                    />
                     <div className="absolute right-0 top-full z-50 mt-1 min-w-36 max-h-52 overflow-y-auto rounded-lg border bg-popover p-1 shadow-lg">
                       {allTags.map((tag) => (
                         <button
@@ -196,6 +354,25 @@ export function HomePage() {
                 )}
               </div>
               <button
+                ref={groupBtnRef}
+                type="button"
+                className="rounded-lg p-2 text-muted-foreground hover:bg-muted"
+                title={t("library.moveToGroup", "移入分组")}
+                onClick={handleBatchMoveGroup}
+              >
+                <FolderInput className="size-4" />
+              </button>
+              {activeGroupId && (
+                <button
+                  type="button"
+                  className="rounded-lg p-2 text-muted-foreground hover:bg-muted"
+                  title={t("library.removeFromGroup", "移出分组")}
+                  onClick={handleBatchRemoveFromGroup}
+                >
+                  <FolderMinus className="size-4" />
+                </button>
+              )}
+              <button
                 type="button"
                 className="rounded-lg p-2 text-muted-foreground hover:bg-muted"
                 title={t("home.vec_vectorize", "向量化")}
@@ -216,11 +393,55 @@ export function HomePage() {
         ) : (
           <>
             <div className="flex items-center gap-2">
+              {activeGroup && (
+                <button
+                  type="button"
+                  className="rounded-full p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                  onClick={() => setActiveGroupId("")}
+                  title={t("common.back", "返回")}
+                >
+                  <ArrowLeft className="size-5" />
+                </button>
+              )}
               <h1 className="text-3xl font-bold text-foreground">
-                {activeTag === "__uncategorized__"
-                  ? t("sidebar.uncategorized")
-                  : activeTag || t("home.library")}
+                {activeGroup
+                  ? activeGroup.name
+                  : activeTag === "__uncategorized__"
+                    ? t("sidebar.uncategorized")
+                    : activeTag || t("home.library")}
               </h1>
+              {activeGroup && (
+                <div className="relative">
+                  <button
+                    type="button"
+                    className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                    onClick={() => setShowGroupMenu((v) => !v)}
+                  >
+                    <MoreHorizontal className="size-4" />
+                  </button>
+                  {showGroupMenu && (
+                    <>
+                      <div
+                        className="fixed inset-0 z-40"
+                        onClick={() => setShowGroupMenu(false)}
+                      />
+                      <div className="absolute left-0 top-full z-50 mt-1 min-w-32 rounded-lg border bg-popover p-1 shadow-lg">
+                        <button
+                          type="button"
+                          className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs text-destructive hover:bg-destructive/10"
+                          onClick={() => {
+                            setShowGroupMenu(false);
+                            handleDeleteGroup(activeGroup);
+                          }}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                          {t("common.delete", "删除")}
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
               <SyncButton />
             </div>
             <div className="flex items-center gap-2">
@@ -238,7 +459,13 @@ export function HomePage() {
                     </button>
                     {showSortMenu && (
                       <>
-                        <div className="fixed inset-0 z-40" onClick={() => setShowSortMenu(false)} />
+                        <div
+                          className="fixed inset-0 z-40"
+                          onClick={() => setShowSortMenu(false)}
+                          onKeyDown={(event) => {
+                            if (event.key === "Escape") setShowSortMenu(false);
+                          }}
+                        />
                         <div className="absolute right-0 top-full z-50 mt-1 min-w-40 rounded-lg border bg-popover p-1 shadow-lg">
                           {SORT_OPTIONS.map(({ field, labelKey }) => (
                             <button
@@ -252,7 +479,11 @@ export function HomePage() {
                               onClick={() => handleSortChange(field)}
                             >
                               {filter.sortField === field ? (
-                                filter.sortOrder === "asc" ? <ArrowUpAZ className="size-3.5" /> : <ArrowDownAZ className="size-3.5" />
+                                filter.sortOrder === "asc" ? (
+                                  <ArrowUpAZ className="size-3.5" />
+                                ) : (
+                                  <ArrowDownAZ className="size-3.5" />
+                                )
                               ) : (
                                 <span className="size-3.5" />
                               )}
@@ -263,6 +494,21 @@ export function HomePage() {
                       </>
                     )}
                   </div>
+                  <button
+                    type="button"
+                    className={`rounded-lg p-2 transition-colors ${
+                      isGroupView
+                        ? "bg-muted text-foreground"
+                        : "text-muted-foreground hover:bg-muted"
+                    }`}
+                    title={t("library.groupView", "分组")}
+                    onClick={() => {
+                      setActiveGroupId("");
+                      setGroupView(!isGroupView);
+                    }}
+                  >
+                    <Layers className="size-4" />
+                  </button>
                   <button
                     type="button"
                     className="rounded-lg px-3 py-1.5 text-sm text-muted-foreground hover:bg-muted"
@@ -279,7 +525,11 @@ export function HomePage() {
                   disabled={isImporting}
                   className="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
                 >
-                  {isImporting ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}
+                  {isImporting ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : (
+                    <Plus className="size-4" />
+                  )}
                   {isImporting ? t("library.importing", "导入中...") : t("home.addBook")}
                 </button>
               </DesktopImportActions>
@@ -291,9 +541,9 @@ export function HomePage() {
       {/* Search result hint */}
       {filter.search && (
         <div className="px-6 pb-2">
-          {filtered.length > 0 ? (
+          {visibleItemCount > 0 ? (
             <p className="text-sm text-muted-foreground">
-              {t("home.foundBooks", { count: filtered.length, query: filter.search })}
+              {t("home.foundBooks", { count: visibleItemCount, query: filter.search })}
             </p>
           ) : (
             <div className="py-8 text-center">
@@ -308,13 +558,48 @@ export function HomePage() {
 
       {/* Book display */}
       <div id="tour-book-list" className="flex-1 overflow-y-auto px-6 pb-4">
-        <BookGrid
-          books={filtered}
-          selectionMode={selectionMode}
-          selectedBookIds={selectedBookIds}
-          onToggleSelect={toggleBookSelection}
-        />
+        {isGroupView && !activeGroupId && mixedItems.length > 0 ? (
+          <div className="grid grid-cols-3 gap-x-5 gap-y-6 sm:grid-cols-4 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7">
+            {mixedItems.map((item) =>
+              item.type === "group" ? (
+                <GroupCard
+                  key={item.group.id}
+                  group={item.group}
+                  books={item.books}
+                  onOpen={setActiveGroupId}
+                  renameGroup={renameGroup}
+                  onDelete={handleDeleteGroup}
+                />
+              ) : (
+                <BookCard
+                  key={item.book.id}
+                  book={item.book}
+                  isSelectionMode={selectionMode}
+                  isSelected={selectedBookIds.has(item.book.id)}
+                  onSelect={toggleBookSelection}
+                />
+              ),
+            )}
+          </div>
+        ) : (
+          <BookGrid
+            books={visibleBooks}
+            selectionMode={selectionMode}
+            selectedBookIds={selectedBookIds}
+            onToggleSelect={toggleBookSelection}
+          />
+        )}
       </div>
+
+      {showBatchGroupPicker && (
+        <GroupPickerPopover
+          groups={groups}
+          onSelect={handleBatchGroupSelect}
+          onCreateGroup={handleBatchGroupCreate}
+          onClose={() => setShowBatchGroupPicker(false)}
+          anchorRef={groupBtnRef}
+        />
+      )}
     </div>
   );
 }
