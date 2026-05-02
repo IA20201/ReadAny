@@ -59,6 +59,7 @@ export const BookCard = memo(function BookCard({ book, isSelectionMode, isSelect
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [preserveDataOnDelete, setPreserveDataOnDelete] = useState(true);
   const coverRef = useRef<HTMLDivElement>(null);
+  const imageRef = useRef<HTMLImageElement>(null);
   const menuBtnRef = useRef<HTMLButtonElement>(null);
   const [menuPos, setMenuPos] = useState<{ x: number; y: number } | null>(null);
   const suppressOpenUntilRef = useRef(0);
@@ -68,6 +69,12 @@ export const BookCard = memo(function BookCard({ book, isSelectionMode, isSelect
 
   useEffect(() => {
     setImageError(false);
+    const image = imageRef.current;
+    if (coverSrc && image?.complete) {
+      setImageLoaded(image.naturalWidth > 0);
+      setImageError(image.naturalWidth === 0);
+      return;
+    }
     setImageLoaded(false);
   }, [coverSrc, syncVersion]);
 
@@ -126,8 +133,8 @@ export const BookCard = memo(function BookCard({ book, isSelectionMode, isSelect
     [book.id, book.filePath, vectorizing],
   );
 
-  const handleImageLoad = () => {
-    setImageLoaded(true);
+  const handleImageLoad = (event: React.SyntheticEvent<HTMLImageElement>) => {
+    setImageLoaded(event.currentTarget.naturalWidth > 0);
     setImageError(false);
   };
 
@@ -136,7 +143,7 @@ export const BookCard = memo(function BookCard({ book, isSelectionMode, isSelect
     setImageError(true);
   };
 
-  const hasCover = coverSrc && !imageError;
+  const hasVisibleCover = Boolean(coverSrc && imageLoaded && !imageError);
 
   // Vectorize progress percentage for display
   const vecPct = vectorProgress
@@ -173,11 +180,12 @@ export const BookCard = memo(function BookCard({ book, isSelectionMode, isSelect
         {/* Actual cover image */}
         {coverSrc && (
           <img
+            ref={imageRef}
             key={`${coverSrc}-${syncVersion}`}
             src={coverSrc}
             alt={book.meta.title}
             className={`absolute inset-0 h-full w-full rounded object-cover transition-opacity duration-300 ${
-              imageLoaded && !imageError ? "opacity-100" : "opacity-0"
+              hasVisibleCover ? "opacity-100" : "opacity-0"
             }`}
             loading="lazy"
             onLoad={handleImageLoad}
@@ -186,10 +194,10 @@ export const BookCard = memo(function BookCard({ book, isSelectionMode, isSelect
         )}
 
         {/* Book spine overlay — only when image loaded */}
-        {imageLoaded && !imageError && <div className="book-spine absolute inset-0 rounded" />}
+        {hasVisibleCover && <div className="book-spine absolute inset-0 rounded" />}
 
         {/* Fallback cover — serif title + author */}
-        {!hasCover && (
+        {!hasVisibleCover && (
           <div className="absolute inset-0 flex flex-col items-center rounded bg-gradient-to-b from-stone-100 to-stone-200 p-3">
             <div className="flex flex-1 items-center justify-center">
               <span className="line-clamp-3 text-center font-serif text-base font-medium leading-snug text-stone-500">

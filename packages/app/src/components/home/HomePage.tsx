@@ -5,32 +5,67 @@ import { DesktopImportActions } from "@/components/home/DesktopImportActions";
 import { SyncButton } from "@/components/ui/SyncButton";
 import { triggerVectorizeBook } from "@/lib/rag/vectorize-trigger";
 import { useLibraryStore } from "@/stores/library-store";
-import { CheckCheck, Database, Hash, Loader2, Plus, Trash2, X } from "lucide-react";
-import { useCallback, useState } from "react";
+import type { SortField } from "@readany/core/types";
+import { ArrowDownAZ, ArrowUpAZ, CheckCheck, Database, Hash, Loader2, Plus, SortAsc, Trash2, X } from "lucide-react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { BookGrid } from "./BookGrid";
 import { ImportDropZone } from "./ImportDropZone";
 
+const SORT_OPTIONS: { field: SortField; labelKey: string }[] = [
+  { field: "lastOpenedAt", labelKey: "library.sortRecent" },
+  { field: "addedAt", labelKey: "library.sortAdded" },
+  { field: "title", labelKey: "library.sortTitle" },
+  { field: "author", labelKey: "library.sortAuthor" },
+  { field: "progress", labelKey: "library.sortProgress" },
+];
+
 export function HomePage() {
   const { t } = useTranslation();
-  const { books, filter, activeTag, isImporting, removeBook, addTagToBook, addTag, allTags } = useLibraryStore();
+  const { books, filter, activeTag, isImporting, removeBook, addTagToBook, addTag, allTags, setFilter } = useLibraryStore();
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedBookIds, setSelectedBookIds] = useState<Set<string>>(new Set());
   const [showBatchTagMenu, setShowBatchTagMenu] = useState(false);
   const [batchNewTagInput, setBatchNewTagInput] = useState("");
+  const [showSortMenu, setShowSortMenu] = useState(false);
+  const sortBtnRef = useRef<HTMLButtonElement>(null);
 
-  const filtered = books.filter((b) => {
-    if (activeTag === "__uncategorized__") {
-      if (b.tags.length > 0) return false;
-    } else if (activeTag && !b.tags.includes(activeTag)) {
-      return false;
+  const filtered = useMemo(() => {
+    let result = books.filter((b) => {
+      if (activeTag === "__uncategorized__") {
+        if (b.tags.length > 0) return false;
+      } else if (activeTag && !b.tags.includes(activeTag)) {
+        return false;
+      }
+      if (filter.search) {
+        const q = filter.search.toLowerCase();
+        return b.meta.title.toLowerCase().includes(q) || b.meta.author?.toLowerCase().includes(q);
+      }
+      return true;
+    });
+    const { sortField, sortOrder } = filter;
+    result = [...result].sort((a, b) => {
+      let cmp = 0;
+      switch (sortField) {
+        case "title": cmp = a.meta.title.localeCompare(b.meta.title); break;
+        case "author": cmp = (a.meta.author || "").localeCompare(b.meta.author || ""); break;
+        case "addedAt": cmp = (a.addedAt || 0) - (b.addedAt || 0); break;
+        case "lastOpenedAt": cmp = (a.lastOpenedAt || 0) - (b.lastOpenedAt || 0); break;
+        case "progress": cmp = a.progress - b.progress; break;
+      }
+      return sortOrder === "desc" ? -cmp : cmp;
+    });
+    return result;
+  }, [books, filter, activeTag]);
+
+  const handleSortChange = useCallback((field: SortField) => {
+    if (filter.sortField === field) {
+      setFilter({ sortOrder: filter.sortOrder === "asc" ? "desc" : "asc" });
+    } else {
+      setFilter({ sortField: field, sortOrder: field === "title" || field === "author" ? "asc" : "desc" });
     }
-    if (filter.search) {
-      const q = filter.search.toLowerCase();
-      return b.meta.title.toLowerCase().includes(q) || b.meta.author?.toLowerCase().includes(q);
-    }
-    return true;
-  });
+    setShowSortMenu(false);
+  }, [filter, setFilter]);
 
   const toggleBookSelection = useCallback((bookId: string) => {
     setSelectedBookIds((prev) => {
@@ -190,13 +225,52 @@ export function HomePage() {
             </div>
             <div className="flex items-center gap-2">
               {books.length > 0 && (
-                <button
-                  type="button"
-                  className="rounded-lg px-3 py-1.5 text-sm text-muted-foreground hover:bg-muted"
-                  onClick={() => setSelectionMode(true)}
-                >
-                  {t("library.select", "选择")}
-                </button>
+                <>
+                  <div className="relative">
+                    <button
+                      ref={sortBtnRef}
+                      type="button"
+                      className="rounded-lg p-2 text-muted-foreground hover:bg-muted"
+                      title={t("library.sort", "排序")}
+                      onClick={() => setShowSortMenu(!showSortMenu)}
+                    >
+                      <SortAsc className="size-4" />
+                    </button>
+                    {showSortMenu && (
+                      <>
+                        <div className="fixed inset-0 z-40" onClick={() => setShowSortMenu(false)} />
+                        <div className="absolute right-0 top-full z-50 mt-1 min-w-40 rounded-lg border bg-popover p-1 shadow-lg">
+                          {SORT_OPTIONS.map(({ field, labelKey }) => (
+                            <button
+                              key={field}
+                              type="button"
+                              className={`flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-xs transition-colors ${
+                                filter.sortField === field
+                                  ? "bg-primary/10 text-primary font-medium"
+                                  : "text-foreground hover:bg-muted"
+                              }`}
+                              onClick={() => handleSortChange(field)}
+                            >
+                              {filter.sortField === field ? (
+                                filter.sortOrder === "asc" ? <ArrowUpAZ className="size-3.5" /> : <ArrowDownAZ className="size-3.5" />
+                              ) : (
+                                <span className="size-3.5" />
+                              )}
+                              {t(labelKey)}
+                            </button>
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    className="rounded-lg px-3 py-1.5 text-sm text-muted-foreground hover:bg-muted"
+                    onClick={() => setSelectionMode(true)}
+                  >
+                    {t("library.select", "选择")}
+                  </button>
+                </>
               )}
               <DesktopImportActions align="end">
                 <button
