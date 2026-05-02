@@ -46,7 +46,8 @@
       "WebFetch(domain:crates.io)",
       "WebFetch(domain:expo.dev)",
       "WebFetch(domain:codepen.io)",
-      "Bash(xxd)"
+      "Bash(xxd)",
+      "Bash(gh issue *)"
     ]
   }
 }

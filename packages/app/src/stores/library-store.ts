@@ -1075,7 +1075,7 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
 
   // ── Tag management ──
 
-  setActiveTag: (tag) => set({ activeTag: tag, activeGroupId: "", isGroupView: false }),
+  setActiveTag: (tag) => set({ activeTag: tag, activeGroupId: "" }),
 
   addTag: (tag) => {
     const trimmed = tag.trim();
