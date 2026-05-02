@@ -5,7 +5,7 @@ import { DesktopImportActions } from "@/components/home/DesktopImportActions";
 import { SyncButton } from "@/components/ui/SyncButton";
 import { triggerVectorizeBook } from "@/lib/rag/vectorize-trigger";
 import { useLibraryStore } from "@/stores/library-store";
-import { CheckCheck, Cpu, Hash, Loader2, Plus, Trash2, X } from "lucide-react";
+import { CheckCheck, Database, Hash, Loader2, Plus, Trash2, X } from "lucide-react";
 import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { BookGrid } from "./BookGrid";
@@ -166,7 +166,7 @@ export function HomePage() {
                 title={t("home.vec_vectorize", "向量化")}
                 onClick={handleBatchVectorize}
               >
-                <Cpu className="size-4" />
+                <Database className="size-4" />
               </button>
               <button
                 type="button"

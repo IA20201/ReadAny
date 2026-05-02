@@ -6,11 +6,11 @@ import {
   ArrowUpAZIcon,
   CheckCheckIcon,
   ClockIcon,
-  CpuIcon,
+  DatabaseIcon,
+  HashIcon,
   PlusIcon,
   SearchIcon,
   SortAscIcon,
-  TagIcon,
   Trash2Icon,
   XIcon,
 } from "@/components/ui/Icon";
@@ -570,10 +570,10 @@ export function LibraryScreen() {
                   <CheckCheckIcon size={18} color={isAllSelected ? colors.primary : colors.mutedForeground} />
                 </TouchableOpacity>
                 <TouchableOpacity style={s.headerBtn} onPress={handleBatchTag}>
-                  <TagIcon size={18} color={colors.mutedForeground} />
+                  <HashIcon size={18} color={colors.mutedForeground} />
                 </TouchableOpacity>
                 <TouchableOpacity style={s.headerBtn} onPress={handleBatchVectorize}>
-                  <CpuIcon size={18} color={colors.mutedForeground} />
+                  <DatabaseIcon size={18} color={colors.mutedForeground} />
                 </TouchableOpacity>
                 <TouchableOpacity style={s.headerBtn} onPress={handleBatchDelete}>
                   <Trash2Icon size={18} color={colors.destructive} />
