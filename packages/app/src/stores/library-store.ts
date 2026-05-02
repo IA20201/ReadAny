@@ -271,6 +271,53 @@ async function saveCoverToAppData(bookId: string, coverBlob: Blob): Promise<stri
   return relativePath;
 }
 
+export async function repairMissingCovers(): Promise<number> {
+  const { exists, readFile } = await import("@tauri-apps/plugin-fs");
+  const { convertFileSrc } = await import("@tauri-apps/api/core");
+
+  const books = useLibraryStore.getState().books;
+  let repaired = 0;
+
+  for (const book of books) {
+    const coverUrl = book.meta.coverUrl;
+    if (!coverUrl || !isDesktopManagedRelativePath(coverUrl)) continue;
+
+    const coverAbsPath = await resolveAppPath(coverUrl);
+    if (await exists(coverAbsPath)) continue;
+
+    if (!book.filePath || !isDesktopManagedRelativePath(book.filePath)) continue;
+    const bookAbsPath = await resolveAppPath(book.filePath);
+    if (!(await exists(bookAbsPath))) continue;
+
+    try {
+      let coverBlob: Blob | null = null;
+
+      if (book.format === "epub" || book.filePath.endsWith(".epub")) {
+        const epubBytes = await readFile(bookAbsPath);
+        const blob = new Blob([epubBytes]);
+        const meta = await extractEpubMetadata(blob);
+        coverBlob = meta.coverBlob;
+      } else if (book.format === "pdf") {
+        const pdfUrl = convertFileSrc(bookAbsPath);
+        coverBlob = await generatePdfCover(pdfUrl);
+      }
+
+      if (coverBlob) {
+        await saveCoverToAppData(book.id, coverBlob);
+        repaired++;
+        console.log(`[repairMissingCovers] Extracted cover for "${book.meta.title}"`);
+      }
+    } catch (err) {
+      console.warn(`[repairMissingCovers] Failed for "${book.meta.title}":`, err);
+    }
+  }
+
+  if (repaired > 0) {
+    console.log(`[repairMissingCovers] Repaired ${repaired} cover(s)`);
+  }
+  return repaired;
+}
+
 export type LibraryViewMode = "grid" | "list";
 export interface RemoveBookOptions {
   preserveData?: boolean;
@@ -635,14 +682,16 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
     // Clean up files from app data dir (only for relative paths)
     if (book) {
       try {
-        const { remove } = await import("@tauri-apps/plugin-fs");
+        const { exists, remove } = await import("@tauri-apps/plugin-fs");
 
         // Delete book file if it's a relative path (in app data dir)
         if (book.filePath && isDesktopManagedRelativePath(book.filePath)) {
           try {
             const bookAbsPath = await resolveAppPath(book.filePath);
-            await remove(bookAbsPath);
-            console.log("[removeBook] Deleted book file:", book.filePath);
+            if (await exists(bookAbsPath)) {
+              await remove(bookAbsPath);
+              console.log("[removeBook] Deleted book file:", book.filePath);
+            }
           } catch (err) {
             console.warn("[removeBook] Failed to delete book file:", err);
           }
@@ -651,8 +700,10 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
         if (!preserveData && book.meta.coverUrl && isDesktopManagedRelativePath(book.meta.coverUrl)) {
           try {
             const coverAbsPath = await resolveAppPath(book.meta.coverUrl);
-            await remove(coverAbsPath);
-            console.log("[removeBook] Deleted cover file:", book.meta.coverUrl);
+            if (await exists(coverAbsPath)) {
+              await remove(coverAbsPath);
+              console.log("[removeBook] Deleted cover file:", book.meta.coverUrl);
+            }
           } catch (err) {
             console.warn("[removeBook] Failed to delete cover file:", err);
           }

@@ -166,6 +166,7 @@ import { useReaderSearch } from "./reader/useReaderSearch";
 import { useReaderSystemInfo } from "./reader/useReaderSystemInfo";
 import { useReaderTTS } from "./reader/useReaderTTS";
 import { useVolumeButtonPaging } from "./reader/useVolumeButtonPaging";
+import { SyncButton } from "@/components/ui/SyncButton";
 
 const READER_HTML_ASSET = Asset.fromModule(require("../../assets/reader/reader.html"));
 
@@ -1005,6 +1006,8 @@ export function ReaderScreen({ route, navigation }: Props) {
           { attempts: 10, initialDelayMs: 150 },
         ).catch((err: Error) => console.error("Failed to save progress on unmount:", err));
       }
+      const { useSyncStore } = require("@readany/core/stores/sync-store");
+      useSyncStore.getState().syncNow?.();
     };
   }, [bookId]);
 
@@ -1436,7 +1439,8 @@ export function ReaderScreen({ route, navigation }: Props) {
                   {currentChapter || bookTitle}
                 </Text>
               </View>
-              <View style={[s.topToolbarSideSlot, s.topToolbarMetaWrap]}>
+              <View style={[s.topToolbarSideSlot, s.topToolbarMetaWrap, { flexDirection: "row", alignItems: "center", gap: 6 }]}>
+                <SyncButton size={16} color={colors.foreground} />
                 <Text style={s.topToolbarMetaText}>
                   {currentPage > 0 && totalPages > 0
                     ? `${currentPage}/${totalPages}`

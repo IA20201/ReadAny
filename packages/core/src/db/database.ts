@@ -23,7 +23,7 @@ export {
   getDeviceId,
   initDatabase,
   initLocalDatabase,
-  // Shared utilities (used by sync-engine, etc.)
+  // Shared utilities
   nextSyncVersion,
   nextUpdatedAt,
   insertTombstone,

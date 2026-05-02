@@ -1,12 +1,17 @@
 import { BookCard } from "@/components/library/BookCard";
 import { type ExtractorRef, ExtractorWebView } from "@/components/rag/ExtractorWebView";
+import { SyncButton } from "@/components/ui/SyncButton";
 import {
   ArrowDownAZIcon,
   ArrowUpAZIcon,
+  CheckCheckIcon,
   ClockIcon,
+  CpuIcon,
   PlusIcon,
   SearchIcon,
   SortAscIcon,
+  TagIcon,
+  Trash2Icon,
   XIcon,
 } from "@/components/ui/Icon";
 import { setCallback, setExtractorRef } from "@/lib/rag/auto-vectorize-service";
@@ -154,6 +159,9 @@ export function LibraryScreen() {
   const [temporaryWebDavOpen, setTemporaryWebDavOpen] = useState(false);
   const [isPickingImport, setIsPickingImport] = useState(false);
   const [pendingLocalImport, setPendingLocalImport] = useState(false);
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedBookIds, setSelectedBookIds] = useState<Set<string>>(new Set());
+  const [batchTagBookIds, setBatchTagBookIds] = useState<string[]>([]);
   const importButtonAnchorRef = useRef<View>(null);
   const emptyImportAnchorRef = useRef<View>(null);
   const localImportInFlightRef = useRef(false);
@@ -440,6 +448,73 @@ export function LibraryScreen() {
   const isEmpty = filteredBooks.length === 0;
   const hasBooks = books.length > 0;
 
+  const toggleBookSelection = useCallback((book: Book) => {
+    setSelectedBookIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(book.id)) next.delete(book.id);
+      else next.add(book.id);
+      return next;
+    });
+  }, []);
+
+  const enterSelectionMode = useCallback((book: Book) => {
+    setSelectionMode(true);
+    setSelectedBookIds(new Set([book.id]));
+  }, []);
+
+  const exitSelectionMode = useCallback(() => {
+    setSelectionMode(false);
+    setSelectedBookIds(new Set());
+  }, []);
+
+  const isAllSelected = filteredBooks.length > 0 && selectedBookIds.size === filteredBooks.length;
+
+  const toggleSelectAll = useCallback(() => {
+    if (isAllSelected) {
+      setSelectedBookIds(new Set());
+    } else {
+      setSelectedBookIds(new Set(filteredBooks.map((b) => b.id)));
+    }
+  }, [filteredBooks, isAllSelected]);
+
+  const handleBatchDelete = useCallback(() => {
+    if (selectedBookIds.size === 0) return;
+    Alert.alert(
+      t("common.confirm", "确认"),
+      t("library.batchDeleteConfirm", `确定要删除选中的 ${selectedBookIds.size} 本书吗？`),
+      [
+        { text: t("common.cancel", "取消"), style: "cancel" },
+        {
+          text: t("common.delete", "删除"),
+          style: "destructive",
+          onPress: async () => {
+            for (const id of selectedBookIds) {
+              await removeBook(id);
+            }
+            exitSelectionMode();
+          },
+        },
+      ],
+    );
+  }, [selectedBookIds, removeBook, exitSelectionMode, t]);
+
+  const handleBatchTag = useCallback(() => {
+    if (selectedBookIds.size === 0) return;
+    const selectedBooks = books.filter((b) => selectedBookIds.has(b.id));
+    setTagSheetBook(selectedBooks[0] ?? null);
+    setBatchTagBookIds([...selectedBookIds]);
+    setTagSheetOpen(true);
+  }, [selectedBookIds, books]);
+
+  const handleBatchVectorize = useCallback(() => {
+    if (selectedBookIds.size === 0) return;
+    const selectedBooks = books.filter((b) => selectedBookIds.has(b.id));
+    for (const book of selectedBooks) {
+      handleVectorize(book);
+    }
+    exitSelectionMode();
+  }, [selectedBookIds, books, handleVectorize, exitSelectionMode]);
+
   const renderBookCard = useCallback(
     ({ item }: { item: Book }) => (
       <View style={s.gridItem}>
@@ -453,10 +528,14 @@ export function LibraryScreen() {
           isVectorizing={vectorizingBookId === item.id}
           isQueued={vectorQueue.some((b) => b.id === item.id)}
           vectorProgress={vectorizingBookId === item.id ? vectorProgress : null}
+          isSelectionMode={selectionMode}
+          isSelected={selectedBookIds.has(item.id)}
+          onSelect={toggleBookSelection}
+          onLongPress={selectionMode ? undefined : enterSelectionMode}
         />
       </View>
     ),
-    [gridItemWidth, handleOpen, removeBook, handleManageTags, handleVectorize, vectorizingBookId, vectorQueue, vectorProgress],
+    [gridItemWidth, handleOpen, removeBook, handleManageTags, handleVectorize, vectorizingBookId, vectorQueue, vectorProgress, selectionMode, selectedBookIds, toggleBookSelection, enterSelectionMode],
   );
 
   return (
@@ -476,9 +555,36 @@ export function LibraryScreen() {
       {/* Header */}
       <View style={[s.header, { zIndex: 20 }]}>
         <View style={s.headerInner}>
+          {selectionMode ? (
+            <View style={s.headerRow}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                <TouchableOpacity style={s.headerBtn} onPress={exitSelectionMode}>
+                  <XIcon size={18} color={colors.foreground} />
+                </TouchableOpacity>
+                <Text style={s.headerTitle}>
+                  {t("library.selectedCount", { count: selectedBookIds.size, defaultValue: `已选 ${selectedBookIds.size} 本` })}
+                </Text>
+              </View>
+              <View style={s.headerActions}>
+                <TouchableOpacity style={s.headerBtn} onPress={toggleSelectAll}>
+                  <CheckCheckIcon size={18} color={isAllSelected ? colors.primary : colors.mutedForeground} />
+                </TouchableOpacity>
+                <TouchableOpacity style={s.headerBtn} onPress={handleBatchTag}>
+                  <TagIcon size={18} color={colors.mutedForeground} />
+                </TouchableOpacity>
+                <TouchableOpacity style={s.headerBtn} onPress={handleBatchVectorize}>
+                  <CpuIcon size={18} color={colors.mutedForeground} />
+                </TouchableOpacity>
+                <TouchableOpacity style={s.headerBtn} onPress={handleBatchDelete}>
+                  <Trash2Icon size={18} color={colors.destructive} />
+                </TouchableOpacity>
+              </View>
+            </View>
+          ) : (
           <View style={s.headerRow}>
             <Text style={s.headerTitle}>{t("sidebar.library", "书库")}</Text>
             <View style={s.headerActions}>
+              <SyncButton size={18} color={colors.mutedForeground} />
               {hasBooks && (
                 <Animated.View
                   style={[
@@ -541,6 +647,7 @@ export function LibraryScreen() {
               </View>
             </View>
           </View>
+          )}
 
           {hasBooks && allTags.length > 0 && (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.tagScroll} contentContainerStyle={s.tagScrollContent}>
@@ -658,7 +765,11 @@ export function LibraryScreen() {
         visible={tagSheetOpen}
         book={tagSheetBook}
         allTags={allTags}
-        onClose={() => setTagSheetOpen(false)}
+        batchBookIds={batchTagBookIds.length > 0 ? batchTagBookIds : undefined}
+        onClose={() => {
+          setTagSheetOpen(false);
+          setBatchTagBookIds([]);
+        }}
         onAddTag={addTag}
         onAddTagToBook={addTagToBook}
         onRemoveTagFromBook={removeTagFromBook}

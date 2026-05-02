@@ -34,7 +34,7 @@ const factoryMocks = vi.hoisted(() => ({
 
 const syncMocks = vi.hoisted(() => ({
   runSimpleSync: vi.fn(),
-  runSync: vi.fn(),
+  syncFiles: vi.fn(),
 }));
 
 const libraryEventMocks = vi.hoisted(() => ({
@@ -55,7 +55,7 @@ vi.mock("../services/platform", () => ({
 
 vi.mock("../sync/sync-backend-factory", () => factoryMocks);
 vi.mock("../sync/simple-sync", () => syncMocks);
-vi.mock("../sync/sync-engine", () => syncMocks);
+vi.mock("../sync/sync-files", () => syncMocks);
 vi.mock("../events/library-events", () => libraryEventMocks);
 vi.mock("./reading-session-store", () => readingSessionMocks);
 
@@ -119,12 +119,9 @@ describe("useSyncStore", () => {
       filesUploaded: 2,
       filesDownloaded: 1,
     });
-    syncMocks.runSync.mockResolvedValue({
-      success: true,
-      direction: "upload",
-      filesUploaded: 3,
+    syncMocks.syncFiles.mockResolvedValue({
+      filesUploaded: 0,
       filesDownloaded: 0,
-      durationMs: 0,
     });
   });
 
@@ -324,7 +321,6 @@ describe("useSyncStore", () => {
       expect.any(Function),
       { receiveOnly: true },
     );
-    expect(syncMocks.runSync).not.toHaveBeenCalled();
     expect(result).toMatchObject({
       success: true,
       direction: "download",
@@ -341,6 +337,43 @@ describe("useSyncStore", () => {
       "sync:completed",
       expect.objectContaining({ timestamp: expect.any(Number) }),
     );
+  });
+
+  it("forceFullSync download keeps file transfer receive-only", async () => {
+    useSyncStore.setState({
+      config: baseConfig,
+      isConfigured: true,
+      backendType: "webdav",
+    });
+    mockPlatformService.kvGetItem.mockImplementation(async (key: string) =>
+      key === "sync_webdav_password" ? "secret" : null,
+    );
+    syncMocks.runSimpleSync.mockResolvedValue({
+      success: true,
+      changes: 2,
+      filesUploaded: 0,
+      filesDownloaded: 3,
+    });
+
+    const result = await useSyncStore.getState().forceFullSync("download");
+
+    expect(syncMocks.runSimpleSync).toHaveBeenCalledWith(
+      mockBackend,
+      expect.any(Function),
+      {
+        receiveOnly: true,
+        forceApply: true,
+        fileSyncOptions: {
+        },
+      },
+    );
+    expect(syncMocks.syncFiles).not.toHaveBeenCalled();
+    expect(result).toMatchObject({
+      success: true,
+      direction: "download",
+      filesUploaded: 0,
+      filesDownloaded: 3,
+    });
   });
 
   it("syncNow returns a connection error when backend test fails", async () => {

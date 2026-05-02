@@ -7,7 +7,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { useResolvedSrc } from "@/hooks/use-resolved-src";
+import { useResolvedSrc, useSyncVersion } from "@/hooks/use-resolved-src";
 import { openDesktopBook } from "@/lib/library/open-book";
 /**
  * BookCard — Readest-inspired book card with realistic cover rendering
@@ -28,14 +28,17 @@ import {
   Plus,
   Trash2,
 } from "lucide-react";
-import { memo, useCallback, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 interface BookCardProps {
   book: Book;
+  isSelectionMode?: boolean;
+  isSelected?: boolean;
+  onSelect?: (bookId: string) => void;
 }
 
-export const BookCard = memo(function BookCard({ book }: BookCardProps) {
+export const BookCard = memo(function BookCard({ book, isSelectionMode, isSelected, onSelect }: BookCardProps) {
   const { t } = useTranslation();
   const removeBook = useLibraryStore((s) => s.removeBook);
   const closeAppTab = useAppStore((s) => s.removeTab);
@@ -61,8 +64,18 @@ export const BookCard = memo(function BookCard({ book }: BookCardProps) {
   const suppressOpenUntilRef = useRef(0);
   const progressPct = Math.round(book.progress * 100);
   const coverSrc = useResolvedSrc(book.meta.coverUrl);
+  const syncVersion = useSyncVersion();
+
+  useEffect(() => {
+    setImageError(false);
+    setImageLoaded(false);
+  }, [coverSrc, syncVersion]);
 
   const handleOpen = async () => {
+    if (isSelectionMode) {
+      onSelect?.(book.id);
+      return;
+    }
     if (
       showMenu ||
       showDeleteDialog ||
@@ -142,9 +155,25 @@ export const BookCard = memo(function BookCard({ book }: BookCardProps) {
         ref={coverRef}
         className="book-cover-shadow relative flex aspect-[28/41] w-full items-end justify-center overflow-hidden rounded transition-all duration-200 group-hover:book-cover-shadow"
       >
+        {/* Selection checkbox overlay */}
+        {isSelectionMode && (
+          <div
+            className={`absolute left-1.5 top-1.5 z-20 flex h-5 w-5 items-center justify-center rounded-full border-2 ${
+              isSelected
+                ? "border-primary bg-primary"
+                : "border-white bg-black/40"
+            }`}
+          >
+            {isSelected && <Check className="h-3 w-3 text-white" />}
+          </div>
+        )}
+        {isSelectionMode && isSelected && (
+          <div className="absolute inset-0 z-10 rounded bg-black/15" />
+        )}
         {/* Actual cover image */}
         {coverSrc && (
           <img
+            key={`${coverSrc}-${syncVersion}`}
             src={coverSrc}
             alt={book.meta.title}
             className={`absolute inset-0 h-full w-full rounded object-cover transition-opacity duration-300 ${

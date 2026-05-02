@@ -180,6 +180,15 @@ export const PaletteIcon = icon(() => (
   </>
 ));
 
+export const RefreshCwIcon = icon(() => (
+  <>
+    <Path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
+    <Path d="M21 3v5h-5" />
+    <Path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
+    <Path d="M3 21v-5h5" />
+  </>
+));
+
 export const CloudIcon = icon(() => (
   <Path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z" />
 ));
@@ -362,6 +371,20 @@ export const Trash2Icon = icon(() => (
     <Path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
     <Line x1="10" x2="10" y1="11" y2="17" />
     <Line x1="14" x2="14" y1="11" y2="17" />
+  </>
+));
+
+export const TagIcon = icon(() => (
+  <>
+    <Path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z" />
+    <Circle cx="7.5" cy="7.5" r="1.5" />
+  </>
+));
+
+export const CheckCheckIcon = icon(() => (
+  <>
+    <Path d="M18 6 7 17l-5-5" />
+    <Path d="m22 10-7.5 7.5L13 16" />
   </>
 ));
 

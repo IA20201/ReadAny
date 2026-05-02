@@ -8,6 +8,7 @@ import { DesktopWindowControls } from "@/components/layout/DesktopWindowControls
 import { type Tab, useAppStore } from "@/stores/app-store";
 import { useLibraryStore } from "@/stores/library-store";
 import { useReaderStore } from "@/stores/reader-store";
+import { useSyncStore } from "@/stores/sync-store";
 import { BookOpen, Home, MessageSquare, NotebookPen, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
@@ -64,6 +65,7 @@ export function TabBar() {
 
   const handleTabClose = (tabId: string) => {
     const closingTab = tabs.find((t) => t.id === tabId);
+    const isBookTab = !!closingTab?.bookId;
     if (closingTab?.bookId) {
       const book = books.find((b) => b.id === closingTab.bookId);
       if (book?.filePath) evictBlobCache(book.filePath);
@@ -72,6 +74,9 @@ export function TabBar() {
     removeReaderTab(tabId);
     const remainingNonHome = tabs.filter((t) => t.type !== "home" && t.id !== tabId);
     if (remainingNonHome.length === 0) setActiveTab("home");
+    if (isBookTab) {
+      useSyncStore.getState().syncNow?.();
+    }
   };
 
   return (
