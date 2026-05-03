@@ -18,7 +18,8 @@
  * Run: node scripts/edge-tts-bookmark-spike.mjs
  */
 
-import { WebSocket } from "ws";
+// `ws` is a CommonJS module that exports the WebSocket class as default.
+import WebSocket from "ws";
 import crypto from "node:crypto";
 
 // ── Constants (kept in sync with packages/core/src/tts/edge-tts.ts) ──
@@ -52,23 +53,28 @@ function randomHex(len) {
   return crypto.randomBytes(len).toString("hex");
 }
 
-// ── Test SSML with bookmarks ──
+// ── Test SSML variants ──
 
-function buildBookmarkSSML() {
-  // Three sentences, each preceded by a bookmark. If Edge supports the
-  // Microsoft `<bookmark>` extension, we should see exactly three Bookmark
-  // events with names "s0", "s1", "s2" — and their timestamps should match
-  // the start of each spoken sentence.
-  return `<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="en-US">
-<voice name="en-US-AriaNeural">
-<prosody rate="+0%" pitch="+0Hz">
-<bookmark mark="s0"/>The quick brown fox jumps over the lazy dog.
-<bookmark mark="s1"/>Pack my box with five dozen liquor jugs.
-<bookmark mark="s2"/>How vexingly quick daft zebras jump.
-</prosody>
-</voice>
-</speak>`;
-}
+const SSML_VARIANTS = {
+  /**
+   * Baseline: plain text only. Same shape as production `genSSML`.
+   * Used to confirm auth + WS + audio path works at all.
+   */
+  baseline: () =>
+    `<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="en-US"><voice name="en-US-AriaNeural"><prosody rate="+0%" pitch="+0Hz">The quick brown fox jumps over the lazy dog. Pack my box with five dozen liquor jugs. How vexingly quick daft zebras jump.</prosody></voice></speak>`,
+
+  /** W3C SSML standard mark element. */
+  w3cMark: () =>
+    `<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="en-US"><voice name="en-US-AriaNeural"><prosody rate="+0%" pitch="+0Hz"><mark name="s0"/>The quick brown fox jumps over the lazy dog. <mark name="s1"/>Pack my box with five dozen liquor jugs. <mark name="s2"/>How vexingly quick daft zebras jump.</prosody></voice></speak>`,
+
+  /** Microsoft `<bookmark>` extension (Azure docs syntax). */
+  msBookmark: () =>
+    `<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="en-US"><voice name="en-US-AriaNeural"><prosody rate="+0%" pitch="+0Hz"><bookmark mark="s0"/>The quick brown fox jumps over the lazy dog. <bookmark mark="s1"/>Pack my box with five dozen liquor jugs. <bookmark mark="s2"/>How vexingly quick daft zebras jump.</prosody></voice></speak>`,
+
+  /** Microsoft `<bookmark>` with `mstts` namespace (alternative documented form). */
+  mstssBookmark: () =>
+    `<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xmlns:mstts="https://www.w3.org/2001/mstts" xml:lang="en-US"><voice name="en-US-AriaNeural"><prosody rate="+0%" pitch="+0Hz"><mstts:bookmark mark="s0"/>The quick brown fox jumps over the lazy dog. <mstts:bookmark mark="s1"/>Pack my box with five dozen liquor jugs. <mstts:bookmark mark="s2"/>How vexingly quick daft zebras jump.</prosody></voice></speak>`,
+};
 
 function genMessage(headers, content) {
   let header = "";
@@ -76,9 +82,9 @@ function genMessage(headers, content) {
   return `${header}\r\n${content}`;
 }
 
-// ── Main spike ──
+// ── Run one variant ──
 
-async function main() {
+async function runVariant(name, ssml) {
   const connectId = randomHex(16);
   const secMsGec = await generateSecMsGec();
   const params = new URLSearchParams({
@@ -102,7 +108,6 @@ async function main() {
   });
 
   const date = new Date().toString();
-  const ssml = buildBookmarkSSML();
 
   const configMsg = genMessage(
     {
@@ -115,7 +120,7 @@ async function main() {
         synthesis: {
           audio: {
             metadataoptions: {
-              sentenceBoundaryEnabled: true, // turn on so we see what's available
+              sentenceBoundaryEnabled: true,
               wordBoundaryEnabled: true,
             },
             outputFormat: "audio-24khz-48kbitrate-mono-mp3",
@@ -135,132 +140,173 @@ async function main() {
     ssml,
   );
 
-  let totalAudioBytes = 0;
-  const observedPaths = new Map(); // path -> count
-  const bookmarkEvents = [];
-  const wordBoundaryEvents = [];
-  const sentenceBoundaryEvents = [];
-  const otherMetadata = [];
+  return new Promise((resolve) => {
+    let totalAudioBytes = 0;
+    const observedPaths = new Map();
+    const bookmarkEvents = [];
+    const wordBoundaryEvents = [];
+    const sentenceBoundaryEvents = [];
+    const otherFrames = [];
+    let closeCode;
+    let closeReason;
+    let settled = false;
 
-  ws.on("open", () => {
-    console.log("[spike] WS open");
-    ws.send(configMsg);
-    ws.send(ssmlMsg);
-  });
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      try {
+        ws.close();
+      } catch {}
+      resolve({
+        name,
+        totalAudioBytes,
+        observedPaths,
+        bookmarkEvents,
+        wordBoundaryEvents,
+        sentenceBoundaryEvents,
+        otherFrames,
+        closeCode,
+        closeReason,
+      });
+    };
 
-  ws.on("message", (data, isBinary) => {
-    if (!isBinary) {
-      const raw = data.toString();
-      const sep = raw.indexOf("\r\n\r\n");
-      const headerBlock = sep >= 0 ? raw.slice(0, sep) : raw;
-      const body = sep >= 0 ? raw.slice(sep + 4) : "";
-      const pathLine = headerBlock.split("\r\n").find((l) => /^path:/i.test(l));
+    ws.on("open", () => {
+      ws.send(configMsg);
+      ws.send(ssmlMsg);
+    });
+
+    ws.on("message", (data) => {
+      // Edge TTS framing:
+      //   - Text frames: HTTP-style "headers\r\n\r\nbody" (UTF-8).
+      //   - Binary audio frames: 2-byte BE header length, then UTF-8 headers
+      //     including `Path:audio`, then binary audio body.
+      // We don't trust the ws-library `isBinary` flag (in practice all frames
+      // arrive as Buffer here); instead we sniff the 2-byte length prefix.
+      const buf = Buffer.isBuffer(data) ? data : Buffer.from(data);
+
+      let isEdgeBinary = false;
+      let headerText = "";
+      let bodyBuf = null;
+
+      if (buf.length >= 2) {
+        const candidate = (buf[0] << 8) | buf[1];
+        if (candidate > 0 && candidate <= buf.length - 2) {
+          const slice = buf.slice(2, 2 + candidate).toString("utf-8");
+          if (/Path:/i.test(slice)) {
+            headerText = slice;
+            bodyBuf = buf.slice(2 + candidate);
+            isEdgeBinary = true;
+          }
+        }
+      }
+
+      if (!isEdgeBinary) {
+        const raw = buf.toString("utf-8");
+        const sep = raw.indexOf("\r\n\r\n");
+        headerText = sep >= 0 ? raw.slice(0, sep) : raw;
+        bodyBuf = sep >= 0 ? Buffer.from(raw.slice(sep + 4), "utf-8") : Buffer.alloc(0);
+      }
+
+      const pathLine = headerText.split("\r\n").find((l) => /^Path:/i.test(l));
       const path = pathLine ? pathLine.slice(pathLine.indexOf(":") + 1).trim() : "(none)";
       observedPaths.set(path, (observedPaths.get(path) ?? 0) + 1);
 
-      if (/^audio\.metadata/i.test(path) && body) {
+      if (isEdgeBinary && /^audio$/i.test(path)) {
+        totalAudioBytes += bodyBuf.length;
+      } else if (/^audio\.metadata$/i.test(path)) {
         try {
-          const parsed = JSON.parse(body);
+          const parsed = JSON.parse(bodyBuf.toString("utf-8"));
           for (const ev of parsed.Metadata ?? []) {
             const t = ev.Type;
             const offset = ev.Data?.Offset;
             if (t === "Bookmark") {
               bookmarkEvents.push({ name: ev.Data?.Name, offsetTicks: offset });
             } else if (t === "WordBoundary") {
-              wordBoundaryEvents.push({
-                text: ev.Data?.text?.Text,
-                offsetTicks: offset,
-              });
+              wordBoundaryEvents.push({ text: ev.Data?.text?.Text, offsetTicks: offset });
             } else if (t === "SentenceBoundary") {
-              sentenceBoundaryEvents.push({
-                text: ev.Data?.text?.Text,
-                offsetTicks: offset,
-              });
-            } else {
-              otherMetadata.push({ type: t, data: ev.Data });
+              sentenceBoundaryEvents.push({ text: ev.Data?.text?.Text, offsetTicks: offset });
             }
           }
-        } catch (err) {
-          console.warn("[spike] metadata parse failed:", err.message);
-        }
-      } else if (/^turn\.end/i.test(path)) {
-        // print summary then close
-        printSummary();
-        ws.close();
+        } catch {}
+      } else if (/^turn\.end$/i.test(path)) {
+        finish();
+      } else if (!/^turn\.start$|^response$/i.test(path)) {
+        otherFrames.push({ path, body: bodyBuf.toString("utf-8").slice(0, 200) });
       }
-    } else {
-      // binary audio frame — count payload bytes only (skip the 2-byte header
-      // length field + the header itself, same as edge-tts.ts).
-      const bytes = new Uint8Array(data);
-      if (bytes.length >= 2) {
-        const headerLen = (bytes[0] << 8) | bytes[1];
-        if (bytes.length > headerLen + 2) {
-          totalAudioBytes += bytes.length - headerLen - 2;
-        }
-      }
-    }
+    });
+
+    ws.on("error", () => finish());
+    ws.on("close", (code, reason) => {
+      closeCode = code;
+      closeReason = reason ? reason.toString() : "";
+      finish();
+    });
+
+    setTimeout(finish, 15_000);
   });
+}
 
-  ws.on("error", (err) => {
-    console.error("[spike] WS error:", err.message);
-    process.exit(1);
-  });
+function describeResult(r) {
+  const paths = [...r.observedPaths.entries()]
+    .map(([p, n]) => `${p}×${n}`)
+    .join(", ");
+  return [
+    `── ${r.name} ──`,
+    `audio bytes: ${r.totalAudioBytes}`,
+    `frame paths: ${paths || "(none)"}`,
+    `Bookmark events: ${r.bookmarkEvents.length}${r.bookmarkEvents.length ? "  " + r.bookmarkEvents.map((b) => `"${b.name}"@${(b.offsetTicks / 10_000).toFixed(0)}ms`).join(" ") : ""}`,
+    `WordBoundary events: ${r.wordBoundaryEvents.length}`,
+    `SentenceBoundary events: ${r.sentenceBoundaryEvents.length}`,
+    r.otherFrames.length ? `other frames: ${r.otherFrames.map((f) => f.path).join(", ")}` : "",
+    `close: code=${r.closeCode} reason=${r.closeReason || "(empty)"}`,
+  ]
+    .filter(Boolean)
+    .join("\n  ");
+}
 
-  ws.on("close", () => {
-    console.log("[spike] WS closed");
-  });
+// ── Main: run all variants and report ──
 
-  function printSummary() {
-    console.log("\n──────── EDGE TTS BOOKMARK SPIKE ────────");
-    console.log("Audio bytes received:", totalAudioBytes);
-
-    console.log("\nObserved frame Paths:");
-    for (const [p, n] of observedPaths) console.log(`  ${p}: ${n}`);
-
-    console.log("\nBookmark events:", bookmarkEvents.length);
-    for (const b of bookmarkEvents) {
-      console.log(`  name="${b.name}"  offset=${b.offsetTicks} ticks (${b.offsetTicks / 10_000} ms)`);
-    }
-
-    console.log("\nWordBoundary events:", wordBoundaryEvents.length);
-    for (const w of wordBoundaryEvents.slice(0, 6)) {
-      console.log(`  "${w.text}"  offset=${w.offsetTicks} ticks (${w.offsetTicks / 10_000} ms)`);
-    }
-    if (wordBoundaryEvents.length > 6) {
-      console.log(`  … (${wordBoundaryEvents.length - 6} more)`);
-    }
-
-    console.log("\nSentenceBoundary events:", sentenceBoundaryEvents.length);
-    for (const s of sentenceBoundaryEvents) {
-      console.log(`  "${s.text}"  offset=${s.offsetTicks} ticks (${s.offsetTicks / 10_000} ms)`);
-    }
-
-    if (otherMetadata.length) {
-      console.log("\nOther metadata types:");
-      for (const m of otherMetadata) console.log(`  ${m.type}:`, JSON.stringify(m.data));
-    }
-
-    console.log("\n──────── VERDICT ────────");
-    if (bookmarkEvents.length === 3) {
-      console.log("✅ Edge TTS DOES emit Bookmark events for <bookmark mark=\"...\"/>.");
-      console.log("   Phase 1 design is viable as planned.");
-    } else if (bookmarkEvents.length > 0) {
-      console.log(`⚠️  Got ${bookmarkEvents.length} Bookmark events, expected 3.`);
-      console.log("   Server accepts <bookmark> partially — investigate timing/dedup.");
-    } else {
-      console.log("❌ NO Bookmark events received.");
-      console.log("   Server ignores the <bookmark> tag. Need fallback strategy:");
-      console.log("   1) Use WordBoundary offsets and pre-compute a mark→offset table, OR");
-      console.log("   2) Send each bookmark-segment as a separate WS request.");
-    }
-    console.log();
+async function main() {
+  const results = [];
+  for (const [name, build] of Object.entries(SSML_VARIANTS)) {
+    process.stdout.write(`Running ${name}…\n`);
+    const r = await runVariant(name, build());
+    results.push(r);
+    process.stdout.write(`  ${describeResult(r).split("\n").join("\n  ")}\n\n`);
   }
 
-  setTimeout(() => {
-    console.error("[spike] timeout (30s)");
-    printSummary();
-    process.exit(2);
-  }, 30_000);
+  console.log("──────── VERDICT ────────");
+  const baseline = results.find((r) => r.name === "baseline");
+  const w3cMark = results.find((r) => r.name === "w3cMark");
+  const msBookmark = results.find((r) => r.name === "msBookmark");
+  const mstssBookmark = results.find((r) => r.name === "mstssBookmark");
+
+  if (!baseline?.totalAudioBytes) {
+    console.log("❌ Baseline failed — script/auth/WS issue, not a bookmark question.");
+    return;
+  }
+  console.log("✅ Baseline works (auth + WS path OK).");
+
+  for (const [label, r] of [
+    ["W3C  <mark>          ", w3cMark],
+    ["MS   <bookmark>      ", msBookmark],
+    ["MS   <mstts:bookmark>", mstssBookmark],
+  ]) {
+    if (!r) continue;
+    if (r.bookmarkEvents.length === 3 && r.totalAudioBytes > 0) {
+      console.log(`✅ ${label}: 3/3 bookmark events received — VIABLE`);
+    } else if (r.bookmarkEvents.length > 0) {
+      console.log(
+        `⚠️  ${label}: ${r.bookmarkEvents.length} events, ${r.totalAudioBytes}B audio — partial`,
+      );
+    } else if (r.totalAudioBytes > 0) {
+      console.log(
+        `⚠️  ${label}: audio plays but no bookmark events — server silently ignores tag`,
+      );
+    } else {
+      console.log(`❌ ${label}: server rejected SSML (no audio, no events)`);
+    }
+  }
 }
 
 main().catch((err) => {

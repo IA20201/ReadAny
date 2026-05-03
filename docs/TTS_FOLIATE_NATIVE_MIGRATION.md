@@ -94,3 +94,56 @@ useReaderTTS.ts 现在 2699 行，需要拆：
 1. 写 `EdgeTTSMetadata` 解析 spike，确认 mark 事件能稳定到手。
 2. 写 `<bookmark>` vs `<mark>` 试探，确认 Edge 端语法。
 3. 没问题再开 Phase 0 的接口扩展。
+
+---
+
+## Phase 1 spike 结论（已验证）
+
+`scripts/edge-tts-bookmark-spike.mjs` 测了 4 个 SSML 变体，结果：
+
+| Variant | Audio | Events | Close |
+|---|---|---|---|
+| baseline（纯文本） | ✅ 62KB | 23 WordBoundary + 3 SentenceBoundary | 正常 |
+| `<mark name="..."/>` | ❌ 0 | 0 | 1007 SSML invalid |
+| `<bookmark mark="..."/>` | ❌ 0 | 0 | 1007 SSML invalid |
+| `<mstts:bookmark mark="..."/>` | ❌ 0 | 0 | 1007 SSML invalid |
+
+**Edge consumer readaloud 端点（`speech.platform.bing.com/.../readaloud/edge/v1`）不接受任何 mark 元素**。
+但它**默认发 SentenceBoundary 事件**——这正是我们需要的句子级颗粒度。
+
+### 方案修订
+
+原计划 Phase 1 想用 `<bookmark>` SSML 做引擎层的 cursor 同步——**作废**。
+新方案：放弃 SSML 内嵌 mark，改用现有"逐句拆分送 WS"+foliate.tts 内部 `setMark` 的组合：
+
+```
+React 侧 useReaderTTS                    WebView 侧 foliate.view.tts
+─────────────────────────────────        ──────────────────────────────
+foliate.tts.collectDetails(N)
+  ↓ → [{text, cfi}, …]
+EdgeTTSPlayer.speak([texts])
+  播放第 i 段开始
+  ↓ onChunkChange(i)
+                                  ───→  foliate.view.tts.highlightCfi(cfi[i])
+                                          ↓ 内部 highlight(range) 自动渲染
+```
+
+关键变化：**砍掉 React 侧的 chunkIndex→cfi→setTTSHighlight 链路**，
+让 foliate 的 `highlightCfi` 直接消费 cfi。这就是 Phase 5（"web 端对齐"）的实质，
+但因为 Phase 1 不需要任何引擎改造，可以**直接跳到 Phase 3 的 hook 拆分 + 这个 highlight 路径替换**。
+
+### 新执行顺序（替代原 Phase 1 / 2 / 4）
+
+- [ ] **Phase A**：替换高亮渲染路径——Web 端先做
+  - [ ] 在 FoliateViewer.tsx 用 foliate `view.tts.highlightCfi(cfi)` 取代当前 `setTTSHighlight(cfi)` 的 overlayer 自管理
+  - [ ] 实测高亮效果与现状一致
+- [ ] **Phase B**：删除 chunkIndex→cfi 的 React 中介逻辑
+  - [ ] useReaderTTS 里 `setTTSHighlight` 调用点全部改走 `view.tts.highlightCfi`
+  - [ ] `didForceReapplyTTSHighlightRef` 等补丁可以一并删
+- [ ] **Phase C**：mobile 端跟进
+  - [ ] use-reader-bridge 的 `setTTSHighlight` 内部 JS 改成调 `view.tts.highlightCfi(cfi)`，对外接口不变
+- [ ] **Phase D**：拆 useReaderTTS（仍是 2699 行的 God hook，但现在能拆得更干净）
+
+引擎改造（原 Phase 1）和 SSML 重构（原 Phase 2）**都不需要做**了。
+保留 `edge-tts-metadata.ts` 解析器以备将来要消费 WordBoundary/SentenceBoundary 时直接用。
+
