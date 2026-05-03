@@ -17,7 +17,11 @@ const DEFAULT_ARTWORK = (() => {
 
 export class TrackPlayerEdgeTTSPlayer implements ITTSPlayer {
   private static readonly INITIAL_BUFFER_CHUNKS = 8;
-  private static readonly FETCH_CONCURRENCY = 8;
+  // Edge readaloud is a free consumer endpoint. Sustained 8-way concurrent
+  // WebSocket fetches can trip rate limiting on a single client IP, surfacing
+  // as "Edge TTS returned no audio" failures mid-playback. 3 keeps the
+  // initial buffer responsive while staying under the typical limit.
+  private static readonly FETCH_CONCURRENCY = 3;
   private static readonly STARVE_RESUME_BUFFER_CHUNKS = 2;
   private static readonly MAX_RETRIES = 3;
   private static readonly MAX_CHUNK_FETCH_RETRIES = 4;
@@ -361,10 +365,14 @@ export class TrackPlayerEdgeTTSPlayer implements ITTSPlayer {
           throw error;
         }
         lastError = error;
+        const text = this._chunks[index] || "";
+        const textPreview = text.length > 60 ? `${text.slice(0, 60)}…` : text;
         console.warn("[TrackPlayerEdgeTTSPlayer] chunk fetch failed", {
           index,
           attempt: attempt + 1,
           maxAttempts: TrackPlayerEdgeTTSPlayer.MAX_CHUNK_FETCH_RETRIES + 1,
+          textLen: text.length,
+          textPreview,
           error,
         });
         await new Promise((resolve) => setTimeout(resolve, 500 * (attempt + 1)));

@@ -349,6 +349,12 @@ async function fetchEdgeTTSAudioCore(
       .then((ws) => {
         let audioData = new ArrayBuffer(0);
         let settled = false;
+        // Capture diagnostic frames so error messages can include the
+        // server's actual reason instead of a generic "no audio". The Edge
+        // server emits Path:response (success/error JSON) and Path:turn.end
+        // even when synthesis produces 0 bytes — usually with the error in
+        // the response body.
+        let lastResponseBody = "";
 
         const timeout = setTimeout(() => {
           if (!settled) {
@@ -365,15 +371,34 @@ async function fetchEdgeTTSAudioCore(
           fn();
         };
 
+        const buildNoAudioError = () => {
+          const textPreview = ssml.length > 80 ? `${ssml.slice(0, 80)}…` : ssml;
+          const responseInfo = lastResponseBody
+            ? ` server response: ${lastResponseBody.slice(0, 200)}`
+            : "";
+          return new Error(
+            `Edge TTS returned no audio.${responseInfo} ssml="${textPreview}"`,
+          );
+        };
+
         ws.onMessage((data) => {
           try {
             if (typeof data === "string") {
+              // Capture the response body for diagnostics — emitted by the
+              // server before turn.end, success or failure. Cheap to parse:
+              // a single substring + indexOf.
+              const responseIdx = data.search(/Path:\s*response\b/i);
+              if (responseIdx >= 0) {
+                const sep = data.indexOf("\r\n\r\n", responseIdx);
+                if (sep >= 0) lastResponseBody = data.slice(sep + 4).trim();
+              }
+
               // Fast path for turn.end — preserves pre-Phase-1 behavior so this
               // check stays cheap when no metadata callback is registered.
               if (data.includes("Path:turn.end") || data.includes("Path: turn.end")) {
                 ws.close();
                 if (!audioData.byteLength) {
-                  return settle(() => reject(new Error("No audio data received from Edge TTS.")));
+                  return settle(() => reject(buildNoAudioError()));
                 }
                 return settle(() => resolve(audioData));
               }
@@ -411,12 +436,28 @@ async function fetchEdgeTTSAudioCore(
         });
 
         ws.onError((error) => {
-          settle(() => reject(new Error(`Edge TTS WebSocket error: ${formatEdgeTTSError(error)}`)));
+          settle(() =>
+            reject(
+              new Error(
+                `Edge TTS WebSocket error: ${formatEdgeTTSError(error)}${
+                  lastResponseBody ? ` (last response: ${lastResponseBody.slice(0, 200)})` : ""
+                }`,
+              ),
+            ),
+          );
         });
 
         ws.onClose(() => {
           if (!audioData.byteLength) {
-            settle(() => reject(new Error("Edge TTS WebSocket closed without audio data")));
+            settle(() =>
+              reject(
+                new Error(
+                  `Edge TTS WebSocket closed without audio data${
+                    lastResponseBody ? ` (last response: ${lastResponseBody.slice(0, 200)})` : ""
+                  }`,
+                ),
+              ),
+            );
           } else {
             settle(() => resolve(audioData));
           }
