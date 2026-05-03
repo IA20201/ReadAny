@@ -14,7 +14,7 @@ import { ConfigTransfer } from "./ConfigTransfer";
 import { useSettingsStore } from "@/stores/settings-store";
 import { getAIEndpointRequestPreview, testAIEndpoint } from "@readany/core/ai";
 import { getPlatformService } from "@readany/core/services";
-import type { AIConfig, AIEndpoint, AIProviderType } from "@readany/core/types";
+import type { AIEndpoint, AIProviderType } from "@readany/core/types";
 import {
   getDefaultBaseUrl,
   PROVIDER_CONFIGS,
@@ -734,16 +734,17 @@ export function AISettings() {
         </h3>
         <ConfigTransfer
           label={t("settings.aiConfig", "AI 配置")}
-          getData={() => ({
-            ...aiConfig,
-            endpoints: aiConfig.endpoints.map(({ models, ...rest }) => rest),
-          })}
+          getData={() => aiConfig}
           applyData={(data) => {
-            const d = data as AIConfig;
-            useSettingsStore.setState((s) => ({ aiConfig: { ...s.aiConfig, ...d } }));
+            const d = data as Record<string, unknown>;
+            if (d && typeof d === "object") {
+              useSettingsStore.setState((s) => ({
+                aiConfig: { ...s.aiConfig, ...(d as Partial<typeof s.aiConfig>) },
+              }));
+            }
           }}
           validate={(d) =>
-            typeof d === "object" && d !== null && "endpoints" in d && Array.isArray((d as AIConfig).endpoints)
+            typeof d === "object" && d !== null && "endpoints" in d && Array.isArray((d as Record<string, unknown>).endpoints)
           }
         />
       </section>

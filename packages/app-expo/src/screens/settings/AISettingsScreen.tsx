@@ -245,13 +245,14 @@ export default function AISettingsScreen() {
               </Text>
               <ConfigTransfer
                 label={t("settings.aiConfig", "AI 配置")}
-                getData={() => ({
-                  ...aiConfig,
-                  endpoints: aiConfig.endpoints.map(({ models, ...rest }) => rest),
-                })}
+                getData={() => aiConfig}
                 applyData={(data) => {
                   const d = data as Record<string, unknown>;
-                  useSettingsStore.setState((s) => ({ aiConfig: { ...s.aiConfig, ...d } }));
+                  if (d && typeof d === "object") {
+                    useSettingsStore.setState((s) => ({
+                      aiConfig: { ...s.aiConfig, ...(d as Partial<typeof s.aiConfig>) },
+                    }));
+                  }
                 }}
                 validate={(d) =>
                   typeof d === "object" && d !== null && "endpoints" in d && Array.isArray((d as Record<string, unknown>).endpoints)

@@ -614,19 +614,29 @@ export default function SyncSettingsScreen() {
               <Text style={styles.sectionTitle}>{t("settings.transferConfig", "配置迁移")}</Text>
               <ConfigTransfer
                 label={t("settings.syncConfig", "同步配置")}
-                getData={() => ({ backendType, config })}
+                getData={() => {
+                  const base = { backendType, config };
+                  if (backendType === "webdav") {
+                    return { ...base, password };
+                  }
+                  if (backendType === "s3") {
+                    return { ...base, secretAccessKey: s3SecretAccessKey };
+                  }
+                  return base;
+                }}
                 applyData={(data) => {
-                  const d = data as { backendType: string; config: Record<string, unknown> };
+                  const d = data as Record<string, unknown>;
                   if (d.backendType === "webdav" && d.config) {
+                    const cfg = d.config as Record<string, unknown>;
                     saveWebDavConfig(
-                      d.config.url as string,
-                      d.config.username as string,
-                      "",
-                      d.config.allowInsecure as boolean,
-                      d.config.remoteRoot as string,
+                      cfg.url as string,
+                      cfg.username as string,
+                      (d.password as string) || "",
+                      cfg.allowInsecure as boolean,
+                      cfg.remoteRoot as string,
                     );
                   } else if (d.backendType === "s3" && d.config) {
-                    saveS3Config(d.config as never, "");
+                    saveS3Config(d.config as never, (d.secretAccessKey as string) || "");
                   }
                 }}
                 validate={(d) => typeof d === "object" && d !== null && "backendType" in d}

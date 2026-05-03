@@ -1,10 +1,8 @@
 import { decodeConfig, encodeConfig } from "@readany/core/utils";
-import { CameraView, useCameraPermissions } from "expo-camera";
 import * as Clipboard from "expo-clipboard";
-import { memo, useCallback, useRef, useState } from "react";
+import { memo, useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Alert, Text, TextInput, TouchableOpacity, View } from "react-native";
-import QRCode from "react-native-qrcode-svg";
 import { fontSize, fontWeight, radius, useColors } from "../../styles/theme";
 
 interface ConfigTransferProps {
@@ -22,12 +20,9 @@ export const ConfigTransfer = memo(function ConfigTransfer({
 }: ConfigTransferProps) {
   const colors = useColors();
   const { t } = useTranslation();
-  const [mode, setMode] = useState<"idle" | "export" | "import" | "scan">("idle");
+  const [mode, setMode] = useState<"idle" | "export" | "import">("idle");
   const [token, setToken] = useState("");
   const [importText, setImportText] = useState("");
-  const [permission, requestPermission] = useCameraPermissions();
-  const scannerHandledRef = useRef(false);
-  const [scannerLocked, setScannerLocked] = useState(false);
 
   const handleExport = useCallback(() => {
     try {
@@ -35,8 +30,9 @@ export const ConfigTransfer = memo(function ConfigTransfer({
       const encoded = encodeConfig(data);
       setToken(encoded);
       setMode("export");
-    } catch {
-      Alert.alert(t("common.error", "错误"), t("settings.exportFailed", "导出失败，数据可能过大"));
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      Alert.alert(t("common.error", "错误"), `${t("settings.exportFailed", "导出失败")}: ${msg}`);
     }
   }, [getData, t]);
 
@@ -47,15 +43,29 @@ export const ConfigTransfer = memo(function ConfigTransfer({
 
   const applyImportedData = useCallback(
     (raw: string) => {
-      const data = decodeConfig(raw.trim());
-      if (!data || !validate(data)) {
+      const trimmed = raw.trim();
+      if (!trimmed) {
         Alert.alert(t("common.error", "错误"), t("settings.invalidConfig", "配置格式无效"));
         return;
       }
-      applyData(data);
-      Alert.alert(t("common.success", "成功"), t("settings.configImported", "配置已导入"));
-      setMode("idle");
-      setImportText("");
+      const data = decodeConfig(trimmed);
+      if (!data) {
+        Alert.alert(t("common.error", "错误"), t("settings.invalidConfig", "配置格式无效，口令可能不完整"));
+        return;
+      }
+      if (!validate(data)) {
+        Alert.alert(t("common.error", "错误"), t("settings.invalidConfig", "配置格式无效"));
+        return;
+      }
+      try {
+        applyData(data);
+        Alert.alert(t("common.success", "成功"), t("settings.configImported", "配置已导入"));
+        setMode("idle");
+        setImportText("");
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        Alert.alert(t("common.error", "错误"), `${t("settings.importFailed", "导入失败")}: ${msg}`);
+      }
     },
     [validate, applyData, t],
   );
@@ -67,36 +77,10 @@ export const ConfigTransfer = memo(function ConfigTransfer({
     if (text) setImportText(text);
   }, []);
 
-  const handleStartScan = useCallback(async () => {
-    if (!permission?.granted) {
-      const result = await requestPermission();
-      if (!result.granted) {
-        Alert.alert(t("common.error", "错误"), t("settings.cameraPermissionDenied", "需要相机权限才能扫描二维码"));
-        return;
-      }
-    }
-    scannerHandledRef.current = false;
-    setScannerLocked(false);
-    setMode("scan");
-  }, [permission, requestPermission, t]);
-
-  const onBarcodeScanned = useCallback(
-    ({ data }: { data: string }) => {
-      if (scannerHandledRef.current) return;
-      scannerHandledRef.current = true;
-      setScannerLocked(true);
-      setMode("idle");
-      applyImportedData(data);
-    },
-    [applyImportedData],
-  );
-
   if (mode === "export") {
-    const canShowQR = token.length <= 2900;
     return (
       <View
         style={{
-          alignItems: "center",
           gap: 12,
           padding: 16,
           borderRadius: radius.lg,
@@ -105,30 +89,39 @@ export const ConfigTransfer = memo(function ConfigTransfer({
           backgroundColor: colors.muted + "40",
         }}
       >
-        {canShowQR ? (
-          <View style={{ padding: 12, borderRadius: radius.md, backgroundColor: "#fff" }}>
-            <QRCode value={token} size={160} />
-          </View>
-        ) : null}
+        <TextInput
+          value={token}
+          editable={false}
+          multiline
+          selectTextOnFocus
+          style={{
+            minHeight: 60,
+            padding: 12,
+            borderRadius: radius.md,
+            borderWidth: 1,
+            borderColor: colors.border,
+            backgroundColor: colors.background,
+            color: colors.foreground,
+            fontSize: fontSize.xs,
+            fontFamily: "monospace",
+            textAlignVertical: "top",
+          }}
+        />
         <Text style={{ fontSize: fontSize.xs, color: colors.mutedForeground, textAlign: "center" }}>
-          {canShowQR
-            ? t("settings.scanOrCopy", "扫描二维码或复制口令，在另一台设备导入")
-            : t("settings.copyToken", "数据较大，请复制口令后在另一台设备导入")}
+          {t("settings.copyToken", "复制下方口令，在另一台设备导入")}
         </Text>
-        <View style={{ flexDirection: "row", gap: 8, width: "100%" }}>
+        <View style={{ flexDirection: "row", gap: 8 }}>
           <TouchableOpacity
             onPress={handleCopy}
             style={{
               flex: 1,
               paddingVertical: 10,
               borderRadius: radius.md,
-              borderWidth: 1,
-              borderColor: colors.border,
-              backgroundColor: colors.background,
+              backgroundColor: colors.primary,
               alignItems: "center",
             }}
           >
-            <Text style={{ fontSize: fontSize.sm, color: colors.foreground, fontWeight: fontWeight.medium }}>
+            <Text style={{ fontSize: fontSize.sm, color: colors.primaryForeground, fontWeight: fontWeight.medium }}>
               {t("common.copy", "复制口令")}
             </Text>
           </TouchableOpacity>
@@ -147,38 +140,6 @@ export const ConfigTransfer = memo(function ConfigTransfer({
             </Text>
           </TouchableOpacity>
         </View>
-      </View>
-    );
-  }
-
-  if (mode === "scan") {
-    return (
-      <View
-        style={{
-          overflow: "hidden",
-          borderRadius: radius.lg,
-          borderWidth: 1,
-          borderColor: colors.border,
-        }}
-      >
-        <CameraView
-          style={{ width: "100%", height: 280 }}
-          facing="back"
-          onBarcodeScanned={!scannerLocked ? onBarcodeScanned : undefined}
-          barcodeScannerSettings={{ barcodeTypes: ["qr"] }}
-        />
-        <TouchableOpacity
-          onPress={() => { setMode("idle"); setScannerLocked(false); }}
-          style={{
-            paddingVertical: 10,
-            backgroundColor: colors.muted,
-            alignItems: "center",
-          }}
-        >
-          <Text style={{ fontSize: fontSize.sm, color: colors.mutedForeground }}>
-            {t("common.cancel", "取消")}
-          </Text>
-        </TouchableOpacity>
       </View>
     );
   }
@@ -267,44 +228,11 @@ export const ConfigTransfer = memo(function ConfigTransfer({
   }
 
   return (
-    <View style={{ gap: 8 }}>
-      <View style={{ flexDirection: "row", gap: 8 }}>
-        <TouchableOpacity
-          onPress={handleExport}
-          style={{
-            flex: 1,
-            paddingVertical: 10,
-            borderRadius: radius.md,
-            borderWidth: 1,
-            borderColor: colors.border,
-            backgroundColor: colors.background,
-            alignItems: "center",
-          }}
-        >
-          <Text style={{ fontSize: fontSize.sm, color: colors.foreground }}>
-            {t("settings.exportConfig", "导出")} {label}
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          onPress={() => setMode("import")}
-          style={{
-            flex: 1,
-            paddingVertical: 10,
-            borderRadius: radius.md,
-            borderWidth: 1,
-            borderColor: colors.border,
-            backgroundColor: colors.background,
-            alignItems: "center",
-          }}
-        >
-          <Text style={{ fontSize: fontSize.sm, color: colors.foreground }}>
-            {t("settings.importConfig", "导入")} {label}
-          </Text>
-        </TouchableOpacity>
-      </View>
+    <View style={{ flexDirection: "row", gap: 8 }}>
       <TouchableOpacity
-        onPress={handleStartScan}
+        onPress={handleExport}
         style={{
+          flex: 1,
           paddingVertical: 10,
           borderRadius: radius.md,
           borderWidth: 1,
@@ -314,7 +242,23 @@ export const ConfigTransfer = memo(function ConfigTransfer({
         }}
       >
         <Text style={{ fontSize: fontSize.sm, color: colors.foreground }}>
-          {t("settings.scanQRCode", "扫码导入")}
+          {t("settings.exportConfig", "导出")} {label}
+        </Text>
+      </TouchableOpacity>
+      <TouchableOpacity
+        onPress={() => setMode("import")}
+        style={{
+          flex: 1,
+          paddingVertical: 10,
+          borderRadius: radius.md,
+          borderWidth: 1,
+          borderColor: colors.border,
+          backgroundColor: colors.background,
+          alignItems: "center",
+        }}
+      >
+        <Text style={{ fontSize: fontSize.sm, color: colors.foreground }}>
+          {t("settings.importConfig", "导入")} {label}
         </Text>
       </TouchableOpacity>
     </View>
