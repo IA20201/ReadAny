@@ -466,8 +466,6 @@ const makeStyles = (colors: ThemeColors) =>
     },
     editorSheetTablet: {
       width: "100%",
-      maxWidth: 720,
-      alignSelf: "center",
       borderRadius: 20,
       marginBottom: 28,
     },

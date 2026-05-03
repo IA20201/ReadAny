@@ -82,8 +82,6 @@ export function TagManagementSheet({
           s.sheet,
           layout.isTablet && {
             width: "100%",
-            maxWidth: Math.min(layout.centeredContentWidth, 720),
-            alignSelf: "center",
           },
         ]}
       >
