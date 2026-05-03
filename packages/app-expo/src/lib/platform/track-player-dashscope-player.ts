@@ -45,12 +45,18 @@ export class TrackPlayerDashScopeTTSPlayer implements ITTSPlayer {
   private _progressPollTimer: ReturnType<typeof setInterval> | null = null;
   private _getArtwork: (() => string | undefined) | null = null;
   private _currentArtwork = DEFAULT_ARTWORK;
+  private _getTitle: (() => string | undefined) | null = null;
+  private _currentTitle = "";
   private _producerRunning = false;
   private _retryCount = 0;
   private _silenceTrackIds = new Set<string>();
 
   setArtworkGetter(getter: () => string | undefined): void {
     this._getArtwork = getter;
+  }
+
+  setTitleGetter(getter: () => string | undefined): void {
+    this._getTitle = getter;
   }
 
   async speak(text: string | string[], config: TTSConfig): Promise<void> {
@@ -82,6 +88,7 @@ export class TrackPlayerDashScopeTTSPlayer implements ITTSPlayer {
     this._playStarted = false;
     this._lastNotifiedIndex = -1;
     this._currentArtwork = this._getArtwork?.() || DEFAULT_ARTWORK;
+    this._currentTitle = this._getTitle?.() || "";
     this._producerRunning = false;
     this._silenceTrackIds.clear();
 
@@ -285,7 +292,7 @@ export class TrackPlayerDashScopeTTSPlayer implements ITTSPlayer {
     await TrackPlayer.add({
       id: `tts-dashscope-${index}`,
       url: audioUri,
-      title: `Segment ${index + 1}`,
+      title: this._currentTitle || `Segment ${index + 1}`,
       artwork: this._currentArtwork,
     });
 

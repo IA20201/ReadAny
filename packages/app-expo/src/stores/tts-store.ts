@@ -123,6 +123,20 @@ function startPlayback(
     );
   }
 
+  // Set title getter for RNTP players — chapter name shown on lock screen
+  // / control center / notification, with fallback to book title.
+  if (
+    "setTitleGetter" in player &&
+    typeof (player as { setTitleGetter?: unknown }).setTitleGetter === "function"
+  ) {
+    (player as { setTitleGetter: (getter: () => string | undefined) => void }).setTitleGetter(
+      () => {
+        const state = get();
+        return state.currentChapterTitle || state.currentBookTitle || undefined;
+      },
+    );
+  }
+
   player.onStateChange = (playState) => {
     if (gen !== _sessionGeneration) return;
     console.log("[TTSStore][player] state-change", {
