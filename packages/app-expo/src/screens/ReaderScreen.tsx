@@ -1158,16 +1158,25 @@ export function ReaderScreen({ route, navigation }: Props) {
   // in iOS Settings, then comes back). Only fires when followSystemFontScale
   // is on; otherwise the stored fontSize is used as-is and there's nothing
   // to re-push.
+  //
+  // We also re-send paragraphSpacing and pageMargin so the webview's
+  // layoutScale-based scaling (in reader.template.html) re-runs against the
+  // new effective font size — otherwise the renderer would keep margins
+  // computed from the previous size.
   useEffect(() => {
     if (!webViewReady) return;
     if (!readSettings.followSystemFontScale) return;
     bridge.applySettings({
       fontSize: computeEffectiveFontSize(readSettings.fontSize, true),
+      paragraphSpacing: readSettings.paragraphSpacing,
+      pageMargin: readSettings.pageMargin,
     });
   }, [
     systemFontScale,
     readSettings.followSystemFontScale,
     readSettings.fontSize,
+    readSettings.paragraphSpacing,
+    readSettings.pageMargin,
     webViewReady,
     bridge,
     computeEffectiveFontSize,

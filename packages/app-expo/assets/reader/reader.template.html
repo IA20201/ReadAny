@@ -1168,7 +1168,14 @@
         }
         const fSize = currentFontSize;
         const lh = currentLineHeight;
-        const ps = currentParagraphSpacing;
+        // paragraphSpacing/pageMargin are stored as px tuned at the
+        // default 16px font size. Scale them with the actual font size so
+        // spacing reads proportionally at large font sizes — without this
+        // a 16px paragraphSpacing looks cramped at fontSize 64.
+        // BASELINE matches defaultReadSettings.fontSize in core/stores/settings-store.ts.
+        const BASELINE_FONT_SIZE = 16;
+        const layoutScale = currentFontSize / BASELINE_FONT_SIZE;
+        const ps = Math.round(currentParagraphSpacing * layoutScale);
 
         const baseStyles = `
           :root {
@@ -1203,7 +1210,12 @@
       }
 
       if (settings.pageMargin != null) {
-        const margin = settings.pageMargin;
+        // Scale pageMargin with fontSize so the page edges stay
+        // proportionally placed at large font sizes. Same baseline (16) as
+        // the paragraphSpacing scaling above.
+        const BASELINE_FONT_SIZE = 16;
+        const layoutScale = currentFontSize / BASELINE_FONT_SIZE;
+        const margin = Math.round(settings.pageMargin * layoutScale);
         const gapPercent = Math.max(1, Math.round((margin / 393) * 100));
         renderer.setAttribute('gap', gapPercent + '%');
         renderer.setAttribute('margin', margin + 'px');
