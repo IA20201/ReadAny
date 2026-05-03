@@ -48,6 +48,7 @@ export {
   deleteChunks,
   getSkills,
   insertSkill,
+  upsertSkill,
   updateSkill,
   deleteSkill,
 } from "@readany/core/db/database";

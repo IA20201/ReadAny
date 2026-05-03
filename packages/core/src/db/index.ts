@@ -75,6 +75,7 @@ export {
   // Skill queries
   getSkills,
   insertSkill,
+  upsertSkill,
   updateSkill,
   deleteSkill,
 } from "./database";

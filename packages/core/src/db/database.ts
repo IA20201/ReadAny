@@ -108,6 +108,7 @@ export {
 export {
   getSkills,
   insertSkill,
+  upsertSkill,
   updateSkill,
   deleteSkill,
 } from "./skill-queries";
