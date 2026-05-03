@@ -460,8 +460,6 @@ export function useReaderBridge(callbacks: ReaderBridgeCallbacks) {
   );
 
   const setTTSHighlight = useCallback((cfi: string | null, color?: string, force = false) => {
-    const previousCfi = lastTTSHighlightRef.current.cfi;
-    const previousColor = lastTTSHighlightRef.current.color;
     const nextColor = color || null;
     if (
       !force &&
@@ -472,56 +470,41 @@ export function useReaderBridge(callbacks: ReaderBridgeCallbacks) {
     }
     lastTTSHighlightRef.current = { cfi, color: nextColor };
 
-    const previousCfiStr = JSON.stringify(previousCfi);
-    const previousColorStr = JSON.stringify(previousColor);
-    const cfiStr = JSON.stringify(cfi);
-    const colorStr = JSON.stringify(nextColor);
+    // Phase C: route through the WebView's setTTSHighlight/clearTTSHighlight
+    // commands, which now drive the highlight via view.tts.highlightCfi
+    // (foliate's TTS class). Previously we injected addAnnotation/
+    // removeAnnotation directly, running a parallel rendering path.
     if (!cfi) {
       webViewRef.current?.injectJavaScript(`
-          (function() {
-            try {
-              if (typeof handleCommand === 'function' && ${previousCfiStr}) {
-                handleCommand({
-                  type: 'removeAnnotation',
-                  annotation: { value: ${previousCfiStr}, type: 'tts-highlight' },
-                });
-              }
-            } catch (e) {}
-          })();
-          true;
-        `);
-      return;
-    }
-
-    webViewRef.current?.injectJavaScript(`
         (function() {
           try {
-            var removePrevious = function() {
-              if (typeof handleCommand !== 'function' || !${previousCfiStr}) return Promise.resolve();
-              return Promise.resolve(handleCommand({
-                type: 'removeAnnotation',
-                annotation: { value: ${previousCfiStr}, type: 'tts-highlight' },
-              }));
-            };
-            var apply = function() {
-              if (typeof handleCommand !== 'function') return Promise.resolve();
-              return Promise.resolve(handleCommand({
-                type: 'addAnnotation',
-                annotation: {
-                  value: ${cfiStr},
-                  type: 'tts-highlight',
-                  color: ${colorStr},
-                },
-              }));
-            };
-            var shouldReplace =
-              ${force ? "true" : "false"} ||
-              (!!${previousCfiStr} && (${previousCfiStr} !== ${cfiStr} || ${previousColorStr} !== ${colorStr}));
-            (shouldReplace ? removePrevious() : Promise.resolve()).finally(apply);
+            if (typeof handleCommand === 'function') {
+              handleCommand({ type: 'clearTTSHighlight' });
+            }
           } catch (e) {}
         })();
         true;
       `);
+      return;
+    }
+
+    const cfiStr = JSON.stringify(cfi);
+    const colorStr = JSON.stringify(nextColor);
+    webViewRef.current?.injectJavaScript(`
+      (function() {
+        try {
+          if (typeof handleCommand === 'function') {
+            handleCommand({
+              type: 'setTTSHighlight',
+              cfi: ${cfiStr},
+              color: ${colorStr},
+              force: ${force ? "true" : "false"},
+            });
+          }
+        } catch (e) {}
+      })();
+      true;
+    `);
   }, []);
 
   const flashHighlight = useCallback(
