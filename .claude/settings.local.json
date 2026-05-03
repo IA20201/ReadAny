@@ -49,7 +49,8 @@
       "Bash(xxd)",
       "Bash(gh issue *)",
       "Bash(npm install *)",
-      "Bash(awk '/async function openBook/,/^    \\\\}$/' /Users/tuntuntutu/Project/ReadAny/packages/app-expo/assets/reader/reader.template.html)"
+      "Bash(awk '/async function openBook/,/^    \\\\}$/' /Users/tuntuntutu/Project/ReadAny/packages/app-expo/assets/reader/reader.template.html)",
+      "Bash(gh search *)"
     ]
   }
 }
