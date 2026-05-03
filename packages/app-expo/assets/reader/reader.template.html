@@ -376,14 +376,10 @@
           removeAllTTSHighlights();
 
           try {
-            // Use the rounded SVG drawer (drawTTSHighlight) so the engine
-            // callback path produces the same visuals as the legacy
-            // draw-annotation route. Phase C consolidates highlight
-            // rendering through view.tts so both paths must look identical.
             (target || source).overlayer.add(
               TTS_HIGHLIGHT_KEY,
               renderRange,
-              drawTTSHighlight,
+              Overlayer.highlight,
               { color: resolveTTSHighlightColor(ttsHighlightState.color) }
             );
           } catch (e) {
@@ -456,17 +452,13 @@
     }
 
     function clearTTSHighlight() {
-      const previousAnnotation = ttsHighlightState.annotationValue;
-      if (!ttsHighlightState.cfi && !previousAnnotation) return;
+      const previousValue = ttsHighlightState.annotationValue;
+      if (!previousValue && !ttsHighlightState.cfi) return;
       ttsHighlightState = { cfi: null, color: null, annotationValue: null };
-      // Single source of truth: view.tts's callback paints under TTS_HIGHLIGHT_KEY.
       removeAllTTSHighlights();
-      // Defensive cleanup for highlights that may have been added through the
-      // legacy view.addAnnotation path before Phase C migration. Safe no-op
-      // once nothing produces those annotations anymore.
-      if (view && previousAnnotation) {
+      if (view && previousValue) {
         try {
-          view.deleteAnnotation({ value: previousAnnotation, type: 'tts-highlight' });
+          view.deleteAnnotation({ value: previousValue, type: 'tts-highlight' });
         } catch (e) {}
       }
     }
@@ -557,12 +549,13 @@
       }
     }
 
-    async function setTTSHighlight(cfi, color, force) {
-      postToRN('debug', { message: '[ttsHighlight] setTTSHighlight called: cfi=' + (cfi || 'null') + ' color=' + (color || 'null') + ' force=' + (force ? 'true' : 'false') });
+    async function setTTSHighlight(cfi, color) {
+      postToRN('debug', { message: '[ttsHighlight] setTTSHighlight called: cfi=' + (cfi || 'null') + ' color=' + (color || 'null') });
+      const previousValue = ttsHighlightState.annotationValue;
+      const annotationValue = cfi ? `${TTS_ANNOTATION_PREFIX}${cfi}` : null;
       const normalizedColor = color || null;
       if (
-        !force &&
-        ttsHighlightState.cfi === (cfi || null) &&
+        ttsHighlightState.annotationValue === annotationValue &&
         ttsHighlightState.color === normalizedColor
       ) {
         return;
@@ -570,33 +563,37 @@
       ttsHighlightState = {
         cfi: cfi || null,
         color: normalizedColor,
-        annotationValue: null, // legacy field; preserved for clearTTSHighlight cleanup
+        annotationValue,
       };
       if (!view) {
         postToRN('debug', { message: '[ttsHighlight] no view, aborting' });
         return;
       }
 
-      if (!cfi) {
-        removeAllTTSHighlights();
-        return;
-      }
-
-      // Phase C: drive highlight via foliate's TTS class. ensureTTSEngine
-      // wires a highlight() callback that paints under TTS_HIGHLIGHT_KEY using
-      // drawTTSHighlight; calling tts.highlightCfi(cfi) walks the iterator
-      // to that CFI and triggers the callback. Replaces the previous
-      // view.addAnnotation({type:'tts-highlight'}) round-trip.
-      try {
-        const tts = await ensureTTSEngine();
-        if (tts && typeof tts.highlightCfi === 'function') {
-          tts.highlightCfi(cfi);
-          postToRN('debug', { message: '[ttsHighlight] highlightCfi success for: ' + cfi.slice(0, 40) });
-        } else {
-          postToRN('debug', { message: '[ttsHighlight] highlightCfi unavailable' });
+      // Remove previous TTS highlight annotation
+      if (previousValue) {
+        try {
+          await view.deleteAnnotation({ value: previousValue, type: 'tts-highlight' });
+        } catch (e) {
+          postToRN('debug', { message: '[ttsHighlight] delete error: ' + String(e) });
         }
+      }
+      removeAllTTSHighlights();
+
+      if (!cfi) return;
+
+      // Only draw the active TTS highlight here.
+      // Reader-level sentence following is controlled in React so this layer
+      // does not accidentally trigger extra relocates while simply repainting.
+      try {
+        await view.addAnnotation({
+          value: annotationValue,
+          type: 'tts-highlight',
+          color: color || null,
+        });
+        postToRN('debug', { message: '[ttsHighlight] addAnnotation success for: ' + cfi.slice(0, 40) });
       } catch (e) {
-        postToRN('debug', { message: '[ttsHighlight] highlightCfi error: ' + String(e) });
+        postToRN('debug', { message: '[ttsHighlight] addAnnotation error: ' + String(e) });
       }
     }
 
@@ -806,7 +803,7 @@
           if (view && msg.settings) applySettings(msg.settings);
           break;
         case 'setTTSHighlight':
-          await setTTSHighlight(msg.cfi, msg.color, !!msg.force);
+          await setTTSHighlight(msg.cfi, msg.color);
           break;
         case 'clearTTSHighlight':
           await clearTTSHighlight();
