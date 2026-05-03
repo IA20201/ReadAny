@@ -5,6 +5,10 @@ import { AppState, type AppStateStatus, Image, Platform } from "react-native";
 import TrackPlayer, { Event, State } from "react-native-track-player";
 
 import { ensureSilenceFile } from "./tts-silence-keeper";
+import {
+  chunkIndexFromTrackId,
+  trackIdForChunkIndex,
+} from "./track-player-chunk-id";
 
 const CHUNK_MAX_CHARS = 500;
 const DEFAULT_ARTWORK = (() => {
@@ -17,7 +21,11 @@ const DEFAULT_ARTWORK = (() => {
 
 export class TrackPlayerEdgeTTSPlayer implements ITTSPlayer {
   private static readonly INITIAL_BUFFER_CHUNKS = 8;
-  private static readonly FETCH_CONCURRENCY = 8;
+  // Edge readaloud is a free consumer endpoint. Sustained 8-way concurrent
+  // WebSocket fetches can trip rate limiting on a single client IP, surfacing
+  // as "Edge TTS returned no audio" failures mid-playback. 3 keeps the
+  // initial buffer responsive while staying under the typical limit.
+  private static readonly FETCH_CONCURRENCY = 3;
   private static readonly STARVE_RESUME_BUFFER_CHUNKS = 2;
   private static readonly MAX_RETRIES = 3;
   private static readonly MAX_CHUNK_FETCH_RETRIES = 4;
@@ -44,12 +52,18 @@ export class TrackPlayerEdgeTTSPlayer implements ITTSPlayer {
   private _progressPollTimer: ReturnType<typeof setInterval> | null = null;
   private _getArtwork: (() => string | undefined) | null = null;
   private _currentArtwork = DEFAULT_ARTWORK;
+  private _getTitle: (() => string | undefined) | null = null;
+  private _currentTitle = "";
   private _producerRunning = false;
   private _retryCount = 0;
   private _silenceTrackIds = new Set<string>();
 
   setArtworkGetter(getter: () => string | undefined): void {
     this._getArtwork = getter;
+  }
+
+  setTitleGetter(getter: () => string | undefined): void {
+    this._getTitle = getter;
   }
 
   async speak(text: string | string[], config: TTSConfig): Promise<void> {
@@ -74,6 +88,7 @@ export class TrackPlayerEdgeTTSPlayer implements ITTSPlayer {
     this._playStarted = false;
     this._lastNotifiedIndex = -1;
     this._currentArtwork = this._getArtwork?.() || DEFAULT_ARTWORK;
+    this._currentTitle = this._getTitle?.() || "";
     this._producerRunning = false;
     this._silenceTrackIds.clear();
 
@@ -112,8 +127,12 @@ export class TrackPlayerEdgeTTSPlayer implements ITTSPlayer {
         if (gen !== this._speakGen || this._stopped) return;
         // Skip notifications for silence keep-alive tracks
         if (event.track && this._silenceTrackIds.has(event.track.id as string)) return;
-        if (event.index != null && event.index >= 0) {
-          this._notifyChunkChange(event.index);
+        // Resolve the chunk index from the track ID — TrackPlayer's queue
+        // index doesn't equal the chunk index when silence keep-alive tracks
+        // are interleaved.
+        const chunkIndex = chunkIndexFromTrackId(event.track?.id);
+        if (chunkIndex != null) {
+          this._notifyChunkChange(chunkIndex);
         }
       },
     );
@@ -123,13 +142,30 @@ export class TrackPlayerEdgeTTSPlayer implements ITTSPlayer {
       if (event.state === State.Playing) {
         this.onStateChange?.("playing");
       } else if (event.state === State.Paused) {
-        // When the generated queue is temporarily empty, RNTP may report Paused.
-        // That is buffering/starvation, not a user pause. Keep UI in playing mode
-        // and resume as soon as the producer adds the next chunk.
+        // RNTP reports Paused for several reasons that are NOT real starvation:
+        //   1. The Paused state right after `TrackPlayer.reset()` in speak(),
+        //      which fires before any chunk has been added.
+        //   2. Brief transitions while RNTP loads the next track (we see this
+        //      every time _resumeStarvedQueue calls TrackPlayer.skip()).
+        //   3. Transient buffering hiccups while real chunks are queued ahead.
+        // Misclassifying any of these as starvation makes _addFetchedChunk
+        // call _resumeStarvedQueue → TrackPlayer.skip(currentIndex + 1), which
+        // chops off the currently playing track and jumps to the next one —
+        // the user-visible bug where "山穷水尽" cuts straight to "国祚已竭"
+        // and the sentences in between are skipped.
+        //
+        // Treat Paused as starvation only when (a) we already started real
+        // playback and (b) we genuinely have no chunk queued past the current
+        // playing one. Real end-of-queue starvation still gets caught by the
+        // PlaybackQueueEnded handler below, which carries an authoritative
+        // track index.
         if (this._paused) {
           this.onStateChange?.("paused");
-        } else if (!this._downloadComplete) {
-          this._markQueueStarved();
+        } else if (!this._downloadComplete && this._playStarted) {
+          const hasChunksAhead = this._nextChunkToAdd > this._currentIndex + 1;
+          if (!hasChunksAhead) {
+            this._markQueueStarved();
+          }
         } else if (this._isAtFinalTrack()) {
           this._finishPlayback();
         }
@@ -269,8 +305,14 @@ export class TrackPlayerEdgeTTSPlayer implements ITTSPlayer {
     await TrackPlayer.play();
     this._playStarted = true;
     this._startProgressPolling(gen);
-    const activeIndex = await TrackPlayer.getActiveTrackIndex().catch(() => undefined);
-    this._notifyChunkChange(activeIndex ?? 0);
+    // Resolve current playback position by track ID, not queue index — when
+    // silence keep-alive tracks were inserted at the head of the queue
+    // before playback started, the queue index would be off by N.
+    const activeTrack = await TrackPlayer.getActiveTrack().catch(() => null);
+    const chunkIndex = chunkIndexFromTrackId(activeTrack?.id);
+    if (chunkIndex != null) {
+      this._notifyChunkChange(chunkIndex);
+    }
     this.onStateChange?.("playing");
   }
 
@@ -278,9 +320,9 @@ export class TrackPlayerEdgeTTSPlayer implements ITTSPlayer {
     if (gen !== this._speakGen || this._stopped) throw new Error("aborted");
 
     await TrackPlayer.add({
-      id: `tts-chunk-${index}`,
+      id: trackIdForChunkIndex(index),
       url: audioUri,
-      title: `Segment ${index + 1}`,
+      title: this._currentTitle || `Segment ${index + 1}`,
       artwork: this._currentArtwork,
     });
 
@@ -313,15 +355,40 @@ export class TrackPlayerEdgeTTSPlayer implements ITTSPlayer {
       const queue = await TrackPlayer.getQueue();
       if (queue.length === 0) return;
 
-      const targetIndex = Math.min(Math.max(this._currentIndex + 1, 0), queue.length - 1);
+      // Find the queue position of the next chunk that should play. We can't
+      // pass a chunk index directly to TrackPlayer.skip — that takes a queue
+      // index, and silence-track removals + insertions can leave the two
+      // out of sync. Find by track ID instead.
+      const targetChunkIndex = this._currentIndex + 1;
+      const targetTrackId = trackIdForChunkIndex(targetChunkIndex);
+      let targetQueuePos = queue.findIndex((track) => track.id === targetTrackId);
+      if (targetQueuePos < 0) {
+        // Next chunk hasn't been added yet — fall back to the first chunk
+        // track in the queue beyond the currently played position. If even
+        // that fails, the queue only has consumed/silence tracks; stay
+        // starved and wait for the next _addFetchedChunk to retrigger us.
+        for (let i = 0; i < queue.length; i++) {
+          const idx = chunkIndexFromTrackId(queue[i].id);
+          if (idx != null && idx > this._currentIndex) {
+            targetQueuePos = i;
+            break;
+          }
+        }
+        if (targetQueuePos < 0) return;
+      }
+
       this._queueStarved = false;
-      await TrackPlayer.skip(targetIndex).catch(() => {});
+      await TrackPlayer.skip(targetQueuePos).catch(() => {});
       await TrackPlayer.play();
-      this._notifyChunkChange(targetIndex);
+      const resolvedTrack = await TrackPlayer.getActiveTrack().catch(() => null);
+      const resolvedChunkIndex =
+        chunkIndexFromTrackId(resolvedTrack?.id) ?? targetChunkIndex;
+      this._notifyChunkChange(resolvedChunkIndex);
       this._startProgressPolling(gen);
       this.onStateChange?.("playing");
       console.log("[TrackPlayerEdgeTTSPlayer] resumed after queue starvation", {
-        targetIndex,
+        targetQueuePos,
+        resolvedChunkIndex,
         queueLength: queue.length,
       });
     } catch (error) {
@@ -354,10 +421,14 @@ export class TrackPlayerEdgeTTSPlayer implements ITTSPlayer {
           throw error;
         }
         lastError = error;
+        const text = this._chunks[index] || "";
+        const textPreview = text.length > 60 ? `${text.slice(0, 60)}…` : text;
         console.warn("[TrackPlayerEdgeTTSPlayer] chunk fetch failed", {
           index,
           attempt: attempt + 1,
           maxAttempts: TrackPlayerEdgeTTSPlayer.MAX_CHUNK_FETCH_RETRIES + 1,
+          textLen: text.length,
+          textPreview,
           error,
         });
         await new Promise((resolve) => setTimeout(resolve, 500 * (attempt + 1)));
@@ -395,23 +466,32 @@ export class TrackPlayerEdgeTTSPlayer implements ITTSPlayer {
     }
 
     try {
-      const [activeIndex, playbackState] = await Promise.all([
-        TrackPlayer.getActiveTrackIndex().catch(() => undefined),
+      const [activeTrack, playbackState] = await Promise.all([
+        TrackPlayer.getActiveTrack().catch(() => null),
         TrackPlayer.getPlaybackState().catch(() => null),
       ]);
 
       if (gen !== this._speakGen || this._stopped) return;
 
-      if (activeIndex != null) {
-        this._notifyChunkChange(activeIndex);
+      // Resolve chunk index from track ID — see chunkIndexFromTrackId for
+      // why we don't use the queue index.
+      const chunkIndex = chunkIndexFromTrackId(activeTrack?.id);
+      if (chunkIndex != null) {
+        this._notifyChunkChange(chunkIndex);
       }
 
       if (playbackState?.state === State.Ended || playbackState?.state === State.Stopped) {
-        this._handlePlaybackEnded(gen, activeIndex);
+        this._handlePlaybackEnded(gen, chunkIndex ?? undefined);
         return;
       }
 
-      if (!this._downloadComplete || this._paused || !this._isAtFinalTrack(activeIndex)) return;
+      if (
+        !this._downloadComplete ||
+        this._paused ||
+        chunkIndex == null ||
+        !this._isAtFinalTrack(chunkIndex)
+      )
+        return;
 
       const progress = await TrackPlayer.getProgress().catch(() => null);
       if (gen !== this._speakGen || this._stopped || !progress) return;
@@ -433,11 +513,14 @@ export class TrackPlayerEdgeTTSPlayer implements ITTSPlayer {
 
   private _markQueueStarved(track?: number): void {
     this._queueStarved = true;
-    const lastQueuedIndex = Math.max(0, this._nextChunkToAdd - 1);
+    // Trust `track` from PlaybackQueueEnded — it's the chunk index of the
+    // track that was last playing. Without it (e.g. PlaybackState=Paused
+    // before any real chunk played), keep `_currentIndex` at whatever
+    // _notifyChunkChange last set; bumping it to lastQueuedIndex was the
+    // old behavior and caused _resumeStarvedQueue to skip past unplayed
+    // chunks once the producer caught up.
     if (typeof track === "number") {
       this._currentIndex = Math.max(this._currentIndex, track);
-    } else {
-      this._currentIndex = Math.max(this._currentIndex, lastQueuedIndex);
     }
     console.warn("[TrackPlayerEdgeTTSPlayer] queue starved, waiting for next generated chunk", {
       track,
