@@ -145,12 +145,28 @@ export class TrackPlayerDashScopeTTSPlayer implements ITTSPlayer {
       if (event.state === State.Playing) {
         this.onStateChange?.("playing");
       } else if (event.state === State.Paused) {
-        // Queue starvation can temporarily report Paused while the producer is
-        // still generating audio. Treat that as buffering, not a user pause.
+        // RNTP reports Paused for several reasons that are NOT real starvation:
+        //   1. The Paused state right after `TrackPlayer.reset()` in speak(),
+        //      which fires before any chunk has been added.
+        //   2. Brief transitions while RNTP loads the next track (we see this
+        //      every time _resumeStarvedQueue calls TrackPlayer.skip()).
+        //   3. Transient buffering hiccups while real chunks are queued ahead.
+        // Misclassifying any of these as starvation makes _addFetchedChunk
+        // call _resumeStarvedQueue → TrackPlayer.skip(currentIndex + 1), which
+        // chops off the currently playing track and jumps to the next one.
+        //
+        // Treat Paused as starvation only when (a) we already started real
+        // playback and (b) we genuinely have no chunk queued past the current
+        // playing one. Real end-of-queue starvation still gets caught by the
+        // PlaybackQueueEnded handler below, which carries an authoritative
+        // track index.
         if (this._paused) {
           this.onStateChange?.("paused");
-        } else if (!this._downloadComplete) {
-          this._markQueueStarved();
+        } else if (!this._downloadComplete && this._playStarted) {
+          const hasChunksAhead = this._nextChunkToAdd > this._currentIndex + 1;
+          if (!hasChunksAhead) {
+            this._markQueueStarved();
+          }
         } else if (this._isAtFinalTrack()) {
           this._finishPlayback();
         }
