@@ -47,7 +47,8 @@
       "WebFetch(domain:expo.dev)",
       "WebFetch(domain:codepen.io)",
       "Bash(xxd)",
-      "Bash(gh issue *)"
+      "Bash(gh issue *)",
+      "Bash(npm install *)"
     ]
   }
 }

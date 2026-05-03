@@ -9,6 +9,7 @@ import { Cloud, Database, Download, Upload, Wifi } from "lucide-react";
  */
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { ConfigTransfer } from "./ConfigTransfer";
 import { LANSyncDialog } from "./LANSyncDialog";
 
 type BackendType = "webdav" | "s3" | "lan";
@@ -804,6 +805,34 @@ export function SyncSettings() {
           )}
         </section>
       )}
+
+      {/* Transfer sync config */}
+      <section className="space-y-3 border-t pt-4">
+        <h3 className="text-sm font-medium text-foreground">
+          {t("settings.transferConfig", "配置迁移")}
+        </h3>
+        <ConfigTransfer
+          label={t("settings.syncConfig", "同步配置")}
+          getData={() => ({ backendType, config })}
+          applyData={(data) => {
+            const { backendType: bt, config: cfg } = data as { backendType: string; config: Record<string, unknown> };
+            if (bt === "webdav" && cfg) {
+              saveWebDavConfig(
+                cfg.url as string,
+                cfg.username as string,
+                "", // password needs to be re-entered
+                cfg.allowInsecure as boolean,
+                cfg.remoteRoot as string,
+              );
+            } else if (bt === "s3" && cfg) {
+              saveS3Config(cfg as never, ""); // secret key needs to be re-entered
+            }
+          }}
+          validate={(d) =>
+            typeof d === "object" && d !== null && "backendType" in d
+          }
+        />
+      </section>
 
       {/* LAN Sync Dialog */}
       <LANSyncDialog

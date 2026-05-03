@@ -20,6 +20,7 @@
         "UIBackgroundModes": [
           "audio"
         ],
+        "NSCameraUsageDescription": "ReadAny uses the camera to scan sync and configuration QR codes.",
         "ITSAppUsesNonExemptEncryption": false
       }
     },

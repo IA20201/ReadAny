@@ -1,3 +1,4 @@
+import { ConfigTransfer } from "../../components/settings/ConfigTransfer";
 import { getPlatformService } from "@readany/core/services";
 import { useSyncStore } from "@readany/core/stores";
 import { useResponsiveLayout } from "@/hooks/use-responsive-layout";
@@ -23,7 +24,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useColors } from "../../styles/theme";
+import { spacing, useColors } from "../../styles/theme";
 import { SettingsHeader } from "./SettingsHeader";
 import { makeStyles } from "./sync/sync-styles";
 import { WebDavForm } from "./sync/WebDavForm";
@@ -607,6 +608,30 @@ export default function SyncSettingsScreen() {
               )}
             </View>
             )}
+
+            {/* Transfer sync config */}
+            <View style={[styles.section, { marginTop: spacing.lg }]}>
+              <Text style={styles.sectionTitle}>{t("settings.transferConfig", "配置迁移")}</Text>
+              <ConfigTransfer
+                label={t("settings.syncConfig", "同步配置")}
+                getData={() => ({ backendType, config })}
+                applyData={(data) => {
+                  const d = data as { backendType: string; config: Record<string, unknown> };
+                  if (d.backendType === "webdav" && d.config) {
+                    saveWebDavConfig(
+                      d.config.url as string,
+                      d.config.username as string,
+                      "",
+                      d.config.allowInsecure as boolean,
+                      d.config.remoteRoot as string,
+                    );
+                  } else if (d.backendType === "s3" && d.config) {
+                    saveS3Config(d.config as never, "");
+                  }
+                }}
+                validate={(d) => typeof d === "object" && d !== null && "backendType" in d}
+              />
+            </View>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>

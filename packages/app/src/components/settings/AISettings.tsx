@@ -10,10 +10,11 @@ import {
 } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
+import { ConfigTransfer } from "./ConfigTransfer";
 import { useSettingsStore } from "@/stores/settings-store";
 import { getAIEndpointRequestPreview, testAIEndpoint } from "@readany/core/ai";
 import { getPlatformService } from "@readany/core/services";
-import type { AIEndpoint, AIProviderType } from "@readany/core/types";
+import type { AIConfig, AIEndpoint, AIProviderType } from "@readany/core/types";
 import {
   getDefaultBaseUrl,
   PROVIDER_CONFIGS,
@@ -724,6 +725,27 @@ export function AISettings() {
             <span>30</span>
           </div>
         </div>
+      </section>
+
+      {/* Transfer */}
+      <section className="space-y-3">
+        <h3 className="text-sm font-medium text-foreground">
+          {t("settings.transferConfig", "配置迁移")}
+        </h3>
+        <ConfigTransfer
+          label={t("settings.aiConfig", "AI 配置")}
+          getData={() => ({
+            ...aiConfig,
+            endpoints: aiConfig.endpoints.map(({ models, ...rest }) => rest),
+          })}
+          applyData={(data) => {
+            const d = data as AIConfig;
+            useSettingsStore.setState((s) => ({ aiConfig: { ...s.aiConfig, ...d } }));
+          }}
+          validate={(d) =>
+            typeof d === "object" && d !== null && "endpoints" in d && Array.isArray((d as AIConfig).endpoints)
+          }
+        />
       </section>
     </div>
   );
