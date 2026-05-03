@@ -360,11 +360,15 @@ export const FoliateViewer = forwardRef<FoliateViewerHandle, FoliateViewerProps>
 
     const clearTTSHighlight = useCallback(() => {
       ttsHighlightStateRef.current.cfi = null;
-      const prev = ttsHighlightKeyRef.current;
       ttsHighlightKeyRef.current = null;
-      if (prev && viewRef.current) {
+      // Single source of truth: foliate.view.tts's highlight callback paints
+      // under this overlayer key, so clearing it here mirrors what the TTS
+      // class's internal "remove previous before add" already does.
+      const view = viewRef.current;
+      const active = view?.renderer?.getContents?.()?.[0];
+      if (active?.overlayer) {
         try {
-          viewRef.current.deleteAnnotation({ value: prev });
+          active.overlayer.remove("readany-tts-engine-hl");
         } catch {
           // no-op
         }
@@ -400,6 +404,23 @@ export const FoliateViewer = forwardRef<FoliateViewerHandle, FoliateViewerProps>
           }
         }
 
+        // Detect vertical writing mode so vertical-text books (zh/ja with
+        // writing-mode: vertical-rl) get a correctly oriented highlight.
+        // This mirrors what drawAnnotationHandler does for user annotations,
+        // and avoids regressing vertical-text rendering when callers route
+        // through view.tts.highlightCfi() instead of view.addAnnotation().
+        let vertical = false;
+        try {
+          const node = renderRange.startContainer;
+          const el = node.nodeType === 1 ? (node as Element) : node.parentElement;
+          if (el && active.doc.defaultView) {
+            const writingMode = active.doc.defaultView.getComputedStyle(el).writingMode || "";
+            vertical = writingMode.includes("vertical");
+          }
+        } catch {
+          // ignore
+        }
+
         try {
           active.overlayer.remove("readany-tts-engine-hl");
         } catch {
@@ -409,6 +430,7 @@ export const FoliateViewer = forwardRef<FoliateViewerHandle, FoliateViewerProps>
         try {
           active.overlayer.add("readany-tts-engine-hl", renderRange, Overlayer.highlight, {
             color: ttsHighlightStateRef.current.color || "rgba(96, 165, 250, 0.35)",
+            vertical,
           });
         } catch {
           // no-op
@@ -990,28 +1012,27 @@ export const FoliateViewer = forwardRef<FoliateViewerHandle, FoliateViewerProps>
             return;
           }
 
-          const view = viewRef.current;
-          if (!view) return;
+          // Delegate to foliate's TTS class. It walks its sentence iterator
+          // to the matching CFI and invokes the highlight() callback we
+          // registered at initTTS time — that callback owns the overlayer
+          // render under key "readany-tts-engine-hl".
+          //
+          // Previously we double-managed via view.addAnnotation({type:
+          // "tts-highlight"}) which routed through drawAnnotationHandler,
+          // running a parallel highlight pipeline alongside foliate's own.
+          // Phase A consolidates to foliate as the single source of truth.
+          const tts = await ensureDesktopTTS();
+          if (!tts) return;
 
-          // Use foliate-tts: prefix so the key never collides with user annotation CFIs
-          const key = `foliate-tts:${cfi}`;
-          const prev = ttsHighlightKeyRef.current;
-          ttsHighlightKeyRef.current = key;
-
-          if (prev && prev !== key) {
-            try {
-              await view.deleteAnnotation({ value: prev });
-            } catch {
-              // no-op
-            }
-          }
+          // Track that a highlight is active. Used as a guard elsewhere; the
+          // cfi value itself is owned by ttsHighlightStateRef now.
+          ttsHighlightKeyRef.current = cfi;
 
           try {
-            await view.addAnnotation({
-              value: key,
-              type: "tts-highlight",
-              color: color || "rgba(96, 165, 250, 0.35)",
-            });
+            const handle = tts as { highlightCfi?: (value: string) => unknown };
+            if (typeof handle.highlightCfi === "function") {
+              handle.highlightCfi(cfi);
+            }
           } catch {
             // no-op
           }
