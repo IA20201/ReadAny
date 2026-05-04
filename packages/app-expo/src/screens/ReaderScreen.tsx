@@ -64,6 +64,7 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  useWindowDimensions,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { WebView } from "react-native-webview";
@@ -307,6 +308,19 @@ export function ReaderScreen({ route, navigation }: Props) {
   const showTopTitleProgress = readSettings.showTopTitleProgress !== false;
   const showBottomTimeBattery = readSettings.showBottomTimeBattery !== false;
   const volumeButtonsPageTurn = readSettings.volumeButtonsPageTurn === true;
+
+  // Track OS-level accessibility font scale; re-renders when the user
+  // changes the system font size while the reader is open.
+  const { fontScale: systemFontScale } = useWindowDimensions();
+  // Apply the system scale only when the user has opted into
+  // followSystemFontScale. The store keeps the user's raw fontSize, so
+  // toggling the option (or changing OS font size) doesn't drift the
+  // stepper value.
+  const computeEffectiveFontSize = useCallback(
+    (rawFontSize: number, follow: boolean | undefined): number =>
+      follow ? Math.max(1, Math.round(rawFontSize * systemFontScale)) : rawFontSize,
+    [systemFontScale],
+  );
 
   // Custom fonts — build @font-face CSS per-font using individual filePath
   const customFonts = useFontStore((s) => s.fonts);
@@ -555,7 +569,7 @@ export function ReaderScreen({ route, navigation }: Props) {
         fontCSSLength: fontCSS.length,
       });
       bridge.applySettings({
-        fontSize: settings.fontSize,
+        fontSize: computeEffectiveFontSize(settings.fontSize, settings.followSystemFontScale),
         lineHeight: settings.lineHeight,
         paragraphSpacing: settings.paragraphSpacing,
         pageMargin: settings.pageMargin,
@@ -919,14 +933,17 @@ export function ReaderScreen({ route, navigation }: Props) {
       const { fonts, selectedFontId: selId } = useFontStore.getState();
       const fontCSS = buildCustomFontFaceCSS(fonts, selId);
       const fontFamily = selId ? fonts.find((f) => f.id === selId)?.fontFamily : undefined;
+      // Recompute effective fontSize after every settings change — covers
+      // both stepper changes and toggling followSystemFontScale on/off.
+      const merged = { ...currentSettings, ...updates };
       bridge.applySettings({
-        ...currentSettings,
-        ...updates,
+        ...merged,
+        fontSize: computeEffectiveFontSize(merged.fontSize, merged.followSystemFontScale),
         customFontFaceCSS: fontCSS,
         customFontFamily: fontFamily,
       });
     },
-    [bridge, updateReadSettings],
+    [bridge, updateReadSettings, computeEffectiveFontSize],
   );
 
   // Selection popover handlers
@@ -1135,6 +1152,35 @@ export function ReaderScreen({ route, navigation }: Props) {
       customFontFamily: customFontFamily,
     });
   }, [customFontFaceCSS, customFontFamily, webViewReady]);
+
+  // Re-apply effective fontSize when the OS-level font scale changes while
+  // the reader is open (e.g. user changes "Display & Brightness → Text Size"
+  // in iOS Settings, then comes back). Only fires when followSystemFontScale
+  // is on; otherwise the stored fontSize is used as-is and there's nothing
+  // to re-push.
+  //
+  // We also re-send paragraphSpacing and pageMargin so the webview's
+  // layoutScale-based scaling (in reader.template.html) re-runs against the
+  // new effective font size — otherwise the renderer would keep margins
+  // computed from the previous size.
+  useEffect(() => {
+    if (!webViewReady) return;
+    if (!readSettings.followSystemFontScale) return;
+    bridge.applySettings({
+      fontSize: computeEffectiveFontSize(readSettings.fontSize, true),
+      paragraphSpacing: readSettings.paragraphSpacing,
+      pageMargin: readSettings.pageMargin,
+    });
+  }, [
+    systemFontScale,
+    readSettings.followSystemFontScale,
+    readSettings.fontSize,
+    readSettings.paragraphSpacing,
+    readSettings.pageMargin,
+    webViewReady,
+    bridge,
+    computeEffectiveFontSize,
+  ]);
 
   // Load annotations into reader when ready
   useEffect(() => {
