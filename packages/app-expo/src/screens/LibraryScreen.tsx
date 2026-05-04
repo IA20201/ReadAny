@@ -138,10 +138,6 @@ export function LibraryScreen() {
   const columnCount = layout.isTabletLandscape ? 5 : layout.isTablet ? 4 : NUM_COLUMNS;
   const contentWidth = layout.centeredContentWidth;
   const gridItemWidth = Math.floor((contentWidth - gridGap * (columnCount - 1)) / columnCount);
-  const searchExpandedWidth = Math.min(
-    layout.isTabletLandscape ? 420 : layout.isTablet ? 360 : layout.width - 210,
-    Math.max(180, contentWidth - 220),
-  );
   const s = useMemo(
     () =>
       makeStyles(colors, {
@@ -149,8 +145,9 @@ export function LibraryScreen() {
         contentWidth,
         gridGap,
         gridItemWidth,
+        isWideScreen: layout.isTablet,
       }),
-    [colors, contentWidth, gridGap, gridItemWidth, layout.horizontalPadding],
+    [colors, contentWidth, gridGap, gridItemWidth, layout.horizontalPadding, layout.isTablet],
   );
   const [showSearch, setShowSearch] = useState(false);
   const [showSort, setShowSort] = useState(false);
@@ -786,77 +783,23 @@ export function LibraryScreen() {
               <View style={s.headerActions}>
                 <SyncButton size={18} color={colors.mutedForeground} />
                 {hasBooks && (
-                  <Animated.View
-                    style={[
-                      s.animatedSearchWrap,
-                      {
-                        width: searchAnim.interpolate({
-                          inputRange: [0, 1],
-                          outputRange: [36, searchExpandedWidth],
-                        }),
-                        borderBottomColor: searchAnim.interpolate({
-                          inputRange: [0, 1],
-                          outputRange: ["transparent", colors.primary],
-                        }),
-                        borderBottomWidth: searchAnim.interpolate({
-                          inputRange: [0, 1],
-                          outputRange: [0, 1],
-                        }),
-                      },
-                    ]}
+                  <TouchableOpacity
+                    style={s.headerBtn}
+                    onPress={() => {
+                      if (showSearch) {
+                        closeSearch();
+                        Keyboard.dismiss();
+                      } else {
+                        openSearch();
+                      }
+                    }}
+                    activeOpacity={0.7}
                   >
-                    <TouchableOpacity
-                      style={s.headerBtn}
-                      onPress={() => {
-                        if (showSearch) {
-                          if (!filter.search.trim()) {
-                            closeSearch();
-                            Keyboard.dismiss();
-                          }
-                        } else {
-                          openSearch();
-                        }
-                      }}
-                      activeOpacity={0.7}
-                    >
-                      <SearchIcon
-                        size={18}
-                        color={showSearch ? colors.primary : colors.mutedForeground}
-                      />
-                    </TouchableOpacity>
-                    <Animated.View
-                      style={{
-                        flex: 1,
-                        opacity: searchAnim,
-                        flexDirection: "row",
-                        alignItems: "center",
-                      }}
-                    >
-                      <TextInput
-                        ref={searchInputRef}
-                        style={s.searchInputInline}
-                        placeholder={t("library.searchPlaceholder", "搜索...")}
-                        placeholderTextColor={colors.mutedForeground}
-                        value={filter.search}
-                        onChangeText={(text) => setFilter({ search: text })}
-                        onBlur={() => {
-                          if (!filter.search.trim()) closeSearch();
-                        }}
-                        returnKeyType="search"
-                      />
-                      {filter.search.length > 0 && showSearch && (
-                        <TouchableOpacity
-                          style={s.clearSearchBtn}
-                          onPress={() => {
-                            setFilter({ search: "" });
-                            searchInputRef.current?.focus();
-                          }}
-                        >
-                          <XIcon size={14} color={colors.mutedForeground} />
-                        </TouchableOpacity>
-                      )}
-                    </Animated.View>
-                  </Animated.View>
+                    <SearchIcon
+                      size={18}
+                      color={showSearch ? colors.primary : colors.mutedForeground}
+                    />
+                  </TouchableOpacity>
                 )}
                 {hasBooks && (
                   <TouchableOpacity style={s.headerBtn} onPress={() => setShowSort(!showSort)}>
@@ -895,45 +838,99 @@ export function LibraryScreen() {
             </View>
           )}
 
-          {hasBooks && allTags.length > 0 && (
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              style={s.tagScroll}
-              contentContainerStyle={s.tagScrollContent}
-            >
-              <TouchableOpacity
-                style={[s.tagChip, !activeTag && !activeGroupId && s.tagChipActive]}
-                onPress={() => setActiveTag("")}
-              >
-                <Text style={[s.tagChipText, !activeTag && !activeGroupId && s.tagChipTextActive]}>
-                  {t("library.all", "全部")}
-                </Text>
-              </TouchableOpacity>
-              {allTags.map((tag) => (
-                <TouchableOpacity
-                  key={tag}
-                  style={[s.tagChip, activeTag === tag && s.tagChipActive]}
-                  onPress={() => setActiveTag(activeTag === tag ? "" : tag)}
+          {hasBooks && ((!selectionMode && showSearch) || allTags.length > 0) && (
+            <View style={s.searchTagSection}>
+              {!selectionMode && showSearch && (
+                <Animated.View
+                  style={[
+                    s.searchInputContainer,
+                    layout.isTablet ? s.searchInputContainerWide : null,
+                    {
+                      opacity: searchAnim,
+                      transform: [
+                        {
+                          translateY: searchAnim.interpolate({
+                            inputRange: [0, 1],
+                            outputRange: [-4, 0],
+                          }),
+                        },
+                      ],
+                    },
+                  ]}
                 >
-                  <Text style={[s.tagChipText, activeTag === tag && s.tagChipTextActive]}>
-                    {tag}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-              <TouchableOpacity
-                style={[s.tagChip, activeTag === "__uncategorized__" && s.tagChipActive]}
-                onPress={() =>
-                  setActiveTag(activeTag === "__uncategorized__" ? "" : "__uncategorized__")
-                }
-              >
-                <Text
-                  style={[s.tagChipText, activeTag === "__uncategorized__" && s.tagChipTextActive]}
+                  <SearchIcon size={16} color={colors.mutedForeground} />
+                  <TextInput
+                    ref={searchInputRef}
+                    style={s.searchInput}
+                    placeholder={t("library.searchPlaceholder", "搜索...")}
+                    placeholderTextColor={colors.mutedForeground}
+                    value={filter.search}
+                    onChangeText={(text) => setFilter({ search: text })}
+                    onBlur={() => {
+                      if (!filter.search.trim()) closeSearch();
+                    }}
+                    returnKeyType="search"
+                  />
+                  {filter.search.length > 0 && (
+                    <TouchableOpacity
+                      style={s.searchClearBtn}
+                      onPress={() => {
+                        setFilter({ search: "" });
+                        searchInputRef.current?.focus();
+                      }}
+                      hitSlop={6}
+                    >
+                      <XIcon size={14} color={colors.mutedForeground} />
+                    </TouchableOpacity>
+                  )}
+                </Animated.View>
+              )}
+              {allTags.length > 0 && (
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  style={[s.tagScroll, layout.isTablet ? s.tagScrollWide : null]}
+                  contentContainerStyle={s.tagScrollContent}
                 >
-                  {t("sidebar.uncategorized", "未分类")}
-                </Text>
-              </TouchableOpacity>
-            </ScrollView>
+                  <TouchableOpacity
+                    style={[s.tagChip, !activeTag && !activeGroupId && s.tagChipActive]}
+                    onPress={() => setActiveTag("")}
+                  >
+                    <Text
+                      style={[s.tagChipText, !activeTag && !activeGroupId && s.tagChipTextActive]}
+                    >
+                      {t("library.all", "全部")}
+                    </Text>
+                  </TouchableOpacity>
+                  {allTags.map((tag) => (
+                    <TouchableOpacity
+                      key={tag}
+                      style={[s.tagChip, activeTag === tag && s.tagChipActive]}
+                      onPress={() => setActiveTag(activeTag === tag ? "" : tag)}
+                    >
+                      <Text style={[s.tagChipText, activeTag === tag && s.tagChipTextActive]}>
+                        {tag}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                  <TouchableOpacity
+                    style={[s.tagChip, activeTag === "__uncategorized__" && s.tagChipActive]}
+                    onPress={() =>
+                      setActiveTag(activeTag === "__uncategorized__" ? "" : "__uncategorized__")
+                    }
+                  >
+                    <Text
+                      style={[
+                        s.tagChipText,
+                        activeTag === "__uncategorized__" && s.tagChipTextActive,
+                      ]}
+                    >
+                      {t("sidebar.uncategorized", "未分类")}
+                    </Text>
+                  </TouchableOpacity>
+                </ScrollView>
+              )}
+            </View>
           )}
         </View>
       </View>
@@ -1128,6 +1125,7 @@ const makeStyles = (
     contentWidth: number;
     gridGap: number;
     gridItemWidth: number;
+    isWideScreen: boolean;
   },
 ) =>
   StyleSheet.create({
@@ -1166,21 +1164,40 @@ const makeStyles = (
       alignItems: "center",
       justifyContent: "center",
     },
-    animatedSearchWrap: {
+    searchTagSection: {
+      flexDirection: layout.isWideScreen ? "row" : "column",
+      alignItems: layout.isWideScreen ? "center" : "stretch",
+      gap: layout.isWideScreen ? 12 : 6,
+      marginBottom: 4,
+    },
+    searchInputContainer: {
       flexDirection: "row",
       alignItems: "center",
       height: 36,
-      overflow: "hidden",
+      paddingHorizontal: 10,
+      gap: 6,
+      borderRadius: radius.full,
+      backgroundColor: colors.muted,
     },
-    searchInputInline: {
+    searchInputContainerWide: {
+      width: 280,
+    },
+    searchInput: {
       flex: 1,
       fontSize: fontSize.sm,
       color: colors.foreground,
       padding: 0,
-      minWidth: 50,
+      minWidth: 0,
     },
-    clearSearchBtn: { width: 24, height: 36, alignItems: "center", justifyContent: "center" },
+    searchClearBtn: {
+      width: 22,
+      height: 22,
+      borderRadius: 11,
+      alignItems: "center",
+      justifyContent: "center",
+    },
     tagScroll: { marginBottom: 4 },
+    tagScrollWide: { flex: 1, minWidth: 0, marginBottom: 0 },
     tagScrollContent: { gap: 6, paddingRight: 8 },
     tagChip: {
       paddingHorizontal: 12,
