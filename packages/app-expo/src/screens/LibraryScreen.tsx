@@ -310,30 +310,32 @@ export function LibraryScreen() {
     [groups, activeGroupId],
   );
 
+  const hasSearch = filter.search.trim().length > 0;
+
   const groupedEntries = useMemo(() => {
-    const query = filter.search.toLowerCase().trim();
+    if (hasSearch) return [];
     return groups
       .map((group) => {
         const groupBooks = filteredBooks.filter((book) => book.groupId === group.id);
         return { type: "group" as const, group, books: groupBooks };
       })
-      .filter(
-        (item) => item.books.length > 0 && (!query || item.group.name.toLowerCase().includes(query)),
-      );
-  }, [filteredBooks, filter.search, groups]);
+      .filter((item) => item.books.length > 0);
+  }, [filteredBooks, groups, hasSearch]);
 
   const visibleBooks = useMemo(
     () =>
-      isGroupView && !activeGroupId ? filteredBooks.filter((book) => !book.groupId) : filteredBooks,
-    [activeGroupId, filteredBooks, isGroupView],
+      isGroupView && !activeGroupId && !hasSearch
+        ? filteredBooks.filter((book) => !book.groupId)
+        : filteredBooks,
+    [activeGroupId, filteredBooks, isGroupView, hasSearch],
   );
 
   const gridItems = useMemo<LibraryGridItem[]>(
     () =>
-      isGroupView && !activeGroupId
+      isGroupView && !activeGroupId && !hasSearch
         ? [...groupedEntries, ...visibleBooks.map((book) => ({ type: "book" as const, book }))]
         : visibleBooks.map((book) => ({ type: "book" as const, book })),
-    [activeGroupId, groupedEntries, isGroupView, visibleBooks],
+    [activeGroupId, groupedEntries, isGroupView, visibleBooks, hasSearch],
   );
 
   const handleLocalImport = useCallback(async () => {
@@ -496,13 +498,19 @@ export function LibraryScreen() {
 
   const handleOpen = useCallback(
     async (book: Book) => {
+      if (showSearch) {
+        searchAnim.setValue(0);
+        setShowSearch(false);
+        setFilter({ search: "" });
+        Keyboard.dismiss();
+      }
       if (book.syncStatus === "remote") {
         await downloadBook(book);
         return;
       }
       await openMobileBook({ bookId: book.id, navigation: nav, t });
     },
-    [downloadBook, nav, t],
+    [downloadBook, nav, t, showSearch, searchAnim, setFilter],
   );
 
   const handleManageTags = useCallback((book: Book) => {
@@ -712,16 +720,6 @@ export function LibraryScreen() {
 
   return (
     <SafeAreaView style={[s.container, { backgroundColor: colors.background }]} edges={["top"]}>
-      {showSearch && (
-        <Pressable
-          style={[StyleSheet.absoluteFill, { zIndex: 10 }]}
-          onPress={() => {
-            Keyboard.dismiss();
-            if (!filter.search.trim()) closeSearch();
-          }}
-        />
-      )}
-
       <ExtractorWebView ref={extractorRef} />
 
       {/* Header */}
@@ -1033,6 +1031,8 @@ export function LibraryScreen() {
               columnWrapperStyle={s.gridRow}
               contentContainerStyle={s.gridContent}
               showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="on-drag"
             />
           )}
         </View>
