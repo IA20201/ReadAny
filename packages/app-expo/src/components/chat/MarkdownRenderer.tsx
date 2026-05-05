@@ -196,13 +196,13 @@ export function MarkdownRenderer({
         const text = node.content || "";
         if (citations && citations.length > 0 && /\[\d+\]/.test(text)) {
           return (
-            <Text key={node.key} style={style}>
+            <Text key={node.key} style={style} selectable>
               {renderTextWithCitations(text, citations, onCitationClick, colors)}
             </Text>
           );
         }
         return (
-          <Text key={node.key} style={style}>
+          <Text key={node.key} style={style} selectable>
             {text}
           </Text>
         );

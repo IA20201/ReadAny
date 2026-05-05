@@ -258,7 +258,7 @@ function MessageBubble({
             </View>
           )}
           {textParts.map((part) => (
-            <Text key={part.id} style={s.userText}>
+            <Text key={part.id} style={s.userText} selectable>
               {part.text}
             </Text>
           ))}
