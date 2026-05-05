@@ -117,25 +117,27 @@ export function HomePage() {
     [groups, activeGroupId],
   );
 
+  const hasSearch = filter.search.trim().length > 0;
+
   const groupedEntries = useMemo(() => {
-    const query = filter.search.toLowerCase().trim();
+    if (hasSearch) return [];
     return groups
       .map((group) => {
         const groupBooks = filtered.filter((book) => book.groupId === group.id);
         return { group, books: groupBooks };
       })
-      .filter(
-        ({ group, books }) =>
-          books.length > 0 && (!query || group.name.toLowerCase().includes(query)),
-      );
-  }, [filtered, filter.search, groups]);
+      .filter(({ books }) => books.length > 0);
+  }, [filtered, groups, hasSearch]);
 
   const visibleBooks = useMemo(
-    () => (isGroupView && !activeGroupId ? filtered.filter((book) => !book.groupId) : filtered),
-    [activeGroupId, filtered, isGroupView],
+    () =>
+      isGroupView && !activeGroupId && !hasSearch
+        ? filtered.filter((book) => !book.groupId)
+        : filtered,
+    [activeGroupId, filtered, isGroupView, hasSearch],
   );
   const visibleItemCount =
-    isGroupView && !activeGroupId
+    isGroupView && !activeGroupId && !hasSearch
       ? groupedEntries.length + visibleBooks.length
       : visibleBooks.length;
 
@@ -144,7 +146,7 @@ export function HomePage() {
     | { type: "book"; book: import("@readany/core/types").Book };
 
   const mixedItems = useMemo((): MixedItem[] => {
-    if (!isGroupView || activeGroupId) return [];
+    if (!isGroupView || activeGroupId || hasSearch) return [];
     const items: MixedItem[] = [];
     for (const { group, books: groupBooks } of groupedEntries) {
       items.push({ type: "group", group, books: groupBooks });
@@ -153,7 +155,7 @@ export function HomePage() {
       items.push({ type: "book", book });
     }
     return items;
-  }, [isGroupView, activeGroupId, groupedEntries, visibleBooks]);
+  }, [isGroupView, activeGroupId, groupedEntries, visibleBooks, hasSearch]);
 
   const handleSortChange = useCallback(
     (field: SortField) => {
