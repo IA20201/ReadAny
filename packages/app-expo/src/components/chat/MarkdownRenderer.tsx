@@ -196,17 +196,22 @@ export function MarkdownRenderer({
         const text = node.content || "";
         if (citations && citations.length > 0 && /\[\d+\]/.test(text)) {
           return (
-            <Text key={node.key} style={style} selectable>
+            <Text key={node.key} style={style}>
               {renderTextWithCitations(text, citations, onCitationClick, colors)}
             </Text>
           );
         }
         return (
-          <Text key={node.key} style={style} selectable>
+          <Text key={node.key} style={style}>
             {text}
           </Text>
         );
       },
+      textgroup: (node: ASTNode, children: ReactNode[], _parent: ASTNode[], style: any) => (
+        <Text key={node.key} style={style.textgroup} selectable>
+          {children}
+        </Text>
+      ),
     }),
     [colors, citations, onCitationClick],
   );
