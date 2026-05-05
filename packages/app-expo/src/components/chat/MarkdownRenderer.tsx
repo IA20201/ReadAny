@@ -207,11 +207,6 @@ export function MarkdownRenderer({
           </Text>
         );
       },
-      textgroup: (node: ASTNode, children: ReactNode[], _parent: ASTNode[], style: any) => (
-        <Text key={node.key} style={style.textgroup} selectable>
-          {children}
-        </Text>
-      ),
     }),
     [colors, citations, onCitationClick],
   );
