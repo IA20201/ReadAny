@@ -1,7 +1,7 @@
 /**
  * ReadingProgressSlider — A draggable progress slider for the reader.
  *
- * Uses gesture dx (delta from start) for reliable tracking on iOS.
+ * Uses pageX (absolute screen coordinates) for reliable tracking on iOS.
  * Debounces seek at 100ms, with cooldown to prevent snap-back.
  */
 import React, { useCallback, useRef, useState } from "react";
@@ -37,11 +37,12 @@ export function ReadingProgressSlider({
 }: Props) {
   const [localProgress, setLocalProgress] = useState<number | null>(null);
   const trackWidthRef = useRef(0);
+  const trackPageXRef = useRef(0); // absolute X of track left edge on screen
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const thumbScale = useRef(new Animated.Value(1)).current;
   const cooldownRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // Store the fraction at drag start so we can use dx for movement
-  const startFractionRef = useRef(0);
+  const trackViewRef = useRef<View>(null);
+
   // Refs for callbacks to avoid stale closures in PanResponder
   const onSeekRef = useRef(onSeek);
   onSeekRef.current = onSeek;
@@ -49,12 +50,17 @@ export function ReadingProgressSlider({
   onDragStartRef.current = onDragStart;
   const onDragEndRef = useRef(onDragEnd);
   onDragEndRef.current = onDragEnd;
-  const progressRef = useRef(progress);
-  progressRef.current = progress;
 
   // Use local progress while dragging/cooldown, otherwise external progress
   const displayProgress = localProgress != null ? localProgress : progress;
   const displayPercent = Math.round(displayProgress * 100);
+
+  // Calculate fraction from absolute pageX
+  const fractionFromPageX = (pageX: number) => {
+    const width = trackWidthRef.current;
+    if (width <= 0) return 0;
+    return clamp((pageX - trackPageXRef.current) / width);
+  };
 
   const panResponder = useRef(
     PanResponder.create({
@@ -65,36 +71,30 @@ export function ReadingProgressSlider({
           clearTimeout(cooldownRef.current);
           cooldownRef.current = null;
         }
-        // Calculate initial fraction from tap position
-        const width = trackWidthRef.current;
-        if (width > 0) {
-          const tapFraction = clamp(evt.nativeEvent.locationX / width);
-          startFractionRef.current = tapFraction;
-          setLocalProgress(tapFraction);
-        } else {
-          startFractionRef.current = progressRef.current;
-          setLocalProgress(progressRef.current);
-        }
+        // Measure track position right before using it
+        trackViewRef.current?.measure((_x, _y, _w, _h, pageX) => {
+          if (pageX != null) trackPageXRef.current = pageX;
+        });
+        const fraction = fractionFromPageX(evt.nativeEvent.pageX);
+        setLocalProgress(fraction);
         onDragStartRef.current?.();
         Animated.spring(thumbScale, { toValue: 1.5, useNativeDriver: true, friction: 8 }).start();
-      },
-      onPanResponderMove: (_, gestureState) => {
-        const width = trackWidthRef.current;
-        if (width <= 0) return;
-        // Use dx from the starting fraction for reliable tracking
-        const fraction = clamp(startFractionRef.current + gestureState.dx / width);
-        setLocalProgress(fraction);
-        // Debounced seek
+        // Debounced seek for the initial tap
         if (debounceRef.current) clearTimeout(debounceRef.current);
         debounceRef.current = setTimeout(() => {
           onSeekRef.current(fraction);
         }, 100);
       },
-      onPanResponderRelease: (_, gestureState) => {
-        const width = trackWidthRef.current;
-        const fraction = width > 0
-          ? clamp(startFractionRef.current + gestureState.dx / width)
-          : (localProgress ?? progressRef.current);
+      onPanResponderMove: (evt) => {
+        const fraction = fractionFromPageX(evt.nativeEvent.pageX);
+        setLocalProgress(fraction);
+        if (debounceRef.current) clearTimeout(debounceRef.current);
+        debounceRef.current = setTimeout(() => {
+          onSeekRef.current(fraction);
+        }, 100);
+      },
+      onPanResponderRelease: (evt) => {
+        const fraction = fractionFromPageX(evt.nativeEvent.pageX);
         Animated.spring(thumbScale, { toValue: 1, useNativeDriver: true, friction: 8 }).start();
         if (debounceRef.current) clearTimeout(debounceRef.current);
         setLocalProgress(fraction);
@@ -117,14 +117,22 @@ export function ReadingProgressSlider({
     }),
   ).current;
 
-  const handleLayout = useCallback((e: any) => {
-    trackWidthRef.current = e.nativeEvent.layout.width;
+  const handleLayout = useCallback(() => {
+    trackViewRef.current?.measure((_x, _y, width, _h, pageX) => {
+      if (width != null) trackWidthRef.current = width;
+      if (pageX != null) trackPageXRef.current = pageX;
+    });
   }, []);
 
   return (
     <View style={styles.container}>
       <Text style={[styles.label, { color: textColor }]}>{displayPercent}%</Text>
-      <View style={styles.trackWrap} onLayout={handleLayout} {...panResponder.panHandlers}>
+      <View
+        ref={trackViewRef}
+        style={styles.trackWrap}
+        onLayout={handleLayout}
+        {...panResponder.panHandlers}
+      >
         <View style={[styles.track, { backgroundColor: trackColor }]}>
           <View
             style={[styles.fill, { backgroundColor: accentColor, width: `${displayProgress * 100}%` }]}
