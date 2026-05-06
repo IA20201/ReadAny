@@ -859,18 +859,77 @@
             type: msg.mimeType || 'application/epub+zip'
           });
         } else if (msg.uri) {
-          const res = await fetch(msg.uri);
-          const isLocalFileStatus = res.status === 0 && /^file:\/\//i.test(msg.uri);
-          if (!res.ok && !isLocalFileStatus) throw new Error(`Failed to fetch: ${res.status}`);
-          const blob = await res.blob();
-          file = new File([blob], msg.fileName || 'book.epub', {
-            type: msg.mimeType || blob.type || 'application/octet-stream'
-          });
+          // Try Range-based lazy loading for ZIP-based formats (EPUB, CBZ, FBZ)
+          // This avoids loading the entire file into memory — only reads
+          // the ZIP central directory (~few KB) then fetches entries on demand.
+          const isZipFormat = /\.(epub|cbz|fb2\.zip|fbz)$/i.test(msg.fileName || '');
+          let lazyBook = null;
+
+          if (isZipFormat) {
+            try {
+              // HEAD request to get file size and check Range support
+              const headRes = await fetch(msg.uri, { method: 'HEAD' });
+              const acceptRanges = headRes.headers.get('Accept-Ranges');
+              const contentLength = parseInt(headRes.headers.get('Content-Length'), 10);
+
+              if (acceptRanges === 'bytes' && contentLength > 0) {
+                // Create a HttpRangeReader compatible with zip.js's ZipReader
+                const bookUri = msg.uri;
+                const rangeReader = {
+                  size: contentLength,
+                  async readUint8Array(offset, length) {
+                    const end = Math.min(offset + length - 1, contentLength - 1);
+                    const res = await fetch(bookUri, {
+                      headers: { 'Range': `bytes=${offset}-${end}` }
+                    });
+                    if (!res.ok && res.status !== 206) {
+                      throw new Error(`Range request failed: ${res.status}`);
+                    }
+                    return new Uint8Array(await res.arrayBuffer());
+                  }
+                };
+
+                // Use zip.js and EPUB from the bundled globals
+                const { configure, ZipReader, TextWriter, BlobWriter } = window._zipJs;
+                configure({ useWebWorkers: false });
+                const zipReader = new ZipReader(rangeReader);
+                const entries = await zipReader.getEntries();
+                const map = new Map(entries.map(entry => [entry.filename, entry]));
+
+                const load = (f) => (name, ...args) =>
+                  map.has(name) ? f(map.get(name), ...args) : null;
+                const loadText = load(entry => entry.getData(new TextWriter()));
+                const loadBlob = load((entry, type) => entry.getData(new BlobWriter(type)));
+                const getSize = (name) => map.get(name)?.uncompressedSize ?? 0;
+                const loader = { entries, loadText, loadBlob, getSize };
+
+                // Initialize EPUB from lazy loader
+                const EPUB = window._EPUB;
+                lazyBook = await new EPUB(loader).init();
+              }
+            } catch (lazyErr) {
+              console.warn('[Reader] Lazy loading failed, falling back to full fetch:', lazyErr);
+              lazyBook = null;
+            }
+          }
+
+          if (!lazyBook) {
+            const res = await fetch(msg.uri);
+            const isLocalFileStatus = res.status === 0 && /^file:\/\//i.test(msg.uri);
+            if (!res.ok && !isLocalFileStatus) throw new Error(`Failed to fetch: ${res.status}`);
+            const blob = await res.blob();
+            file = new File([blob], msg.fileName || 'book.epub', {
+              type: msg.mimeType || blob.type || 'application/octet-stream'
+            });
+          } else {
+            // Skip makeBook below — we already have the book object
+            file = lazyBook;
+          }
         } else {
           throw new Error('No book data provided');
         }
 
-        const book = await makeBook(file);
+        const book = (file && file.sections) ? file : await makeBook(file);
         currentBook = book;
 
         const el = document.createElement('foliate-view');
