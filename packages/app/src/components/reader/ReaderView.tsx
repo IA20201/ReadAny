@@ -2761,7 +2761,7 @@ export function ReaderView({ bookId, tabId }: ReaderViewProps) {
             onPrev={handleNavPrev}
             onNext={handleNavNext}
             onSeek={(fraction) => {
-              suppressProgressTracking(2000);
+              suppressProgressTracking(3000);
               foliateRef.current?.goToFraction(fraction);
             }}
             onMouseEnter={handleMouseEnter}

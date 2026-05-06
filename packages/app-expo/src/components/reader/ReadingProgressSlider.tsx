@@ -13,6 +13,10 @@ interface Props {
   progress: number;
   /** Called when user seeks to a new position (0-1) */
   onSeek: (fraction: number) => void;
+  /** Called when user starts dragging */
+  onDragStart?: () => void;
+  /** Called when user releases the slider */
+  onDragEnd?: () => void;
   /** Primary/accent color */
   accentColor?: string;
   /** Track background color */
@@ -26,6 +30,8 @@ const clamp = (val: number) => Math.max(0, Math.min(1, val));
 export function ReadingProgressSlider({
   progress,
   onSeek,
+  onDragStart,
+  onDragEnd,
   accentColor = "#3b82f6",
   trackColor = "rgba(255,255,255,0.15)",
   textColor = "rgba(255,255,255,0.7)",
@@ -59,6 +65,7 @@ export function ReadingProgressSlider({
           clearTimeout(cooldownRef.current);
           cooldownRef.current = null;
         }
+        onDragStart?.();
         Animated.spring(thumbScale, { toValue: 1.5, useNativeDriver: true, friction: 8 }).start();
         const fraction = clamp(evt.nativeEvent.locationX / trackWidthRef.current);
         setLocalProgress(fraction);
@@ -76,8 +83,8 @@ export function ReadingProgressSlider({
         if (debounceRef.current) clearTimeout(debounceRef.current);
         setLocalProgress(fraction);
         onSeek(fraction);
+        onDragEnd?.();
         // Keep showing local progress for 500ms to avoid snap-back
-        // until the WebView relocate event arrives with the new position
         cooldownRef.current = setTimeout(() => {
           cooldownRef.current = null;
           setLocalProgress(null);
