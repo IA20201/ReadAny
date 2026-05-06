@@ -913,6 +913,23 @@
             }
           }
 
+          // Try Range-based lazy loading for PDF
+          // pdf.js natively supports Range requests via url + disableAutoFetch
+          if (!lazyBook && /\.pdf$/i.test(msg.fileName || '')) {
+            try {
+              const headRes = await fetch(msg.uri, { method: 'HEAD' });
+              const acceptRanges = headRes.headers.get('Accept-Ranges');
+              const contentLength = parseInt(headRes.headers.get('Content-Length'), 10);
+
+              if (acceptRanges === 'bytes' && contentLength > 0 && window._makePDFFromURL) {
+                lazyBook = await window._makePDFFromURL(msg.uri, msg.fileName || 'book.pdf');
+              }
+            } catch (pdfLazyErr) {
+              console.warn('[Reader] PDF lazy loading failed, falling back to full fetch:', pdfLazyErr);
+              lazyBook = null;
+            }
+          }
+
           if (!lazyBook) {
             const res = await fetch(msg.uri);
             const isLocalFileStatus = res.status === 0 && /^file:\/\//i.test(msg.uri);

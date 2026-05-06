@@ -21,6 +21,7 @@ async function buildReader() {
     import * as CFI from "${FOLIATE_DIR.replace(/\\/g, "/")}/epubcfi.js";
     import { configure, ZipReader, BlobReader, TextWriter, BlobWriter } from "${FOLIATE_DIR.replace(/\\/g, "/")}/vendor/zip.js";
     import { EPUB } from "${FOLIATE_DIR.replace(/\\/g, "/")}/epub.js";
+    import { makePDFFromURL } from "${FOLIATE_DIR.replace(/\\/g, "/")}/pdf.js";
 
     window.makeBook = makeBook;
     window.Overlayer = Overlayer;
@@ -29,6 +30,7 @@ async function buildReader() {
     // Expose zip.js and EPUB for lazy Range-based loading in reader template
     window._zipJs = { configure, ZipReader, BlobReader, TextWriter, BlobWriter };
     window._EPUB = EPUB;
+    window._makePDFFromURL = makePDFFromURL;
 
     if (!customElements.get('foliate-view')) {
       customElements.define('foliate-view', View);
