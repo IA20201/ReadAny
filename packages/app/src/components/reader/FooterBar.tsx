@@ -32,7 +32,7 @@ import {
   Plus,
   Square,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 interface FooterBarProps {
@@ -42,6 +42,7 @@ interface FooterBarProps {
   isVisible: boolean;
   onPrev: () => void;
   onNext: () => void;
+  onSeek?: (fraction: number) => void;
   onMouseEnter?: () => void;
   onMouseLeave?: () => void;
   /** TTS mode */
@@ -56,6 +57,7 @@ export function FooterBar({
   isVisible,
   onPrev,
   onNext,
+  onSeek,
   onMouseEnter,
   onMouseLeave,
   showTTS = false,
@@ -100,6 +102,18 @@ export function FooterBar({
 
   const progress = tab?.progress ?? 0;
   const pct = Math.round(progress * 100);
+
+  // Debounced progress seek (100ms like readest/anx-reader)
+  const seekTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const handleProgressSeek = useCallback(
+    (value: number) => {
+      if (seekTimerRef.current) clearTimeout(seekTimerRef.current);
+      seekTimerRef.current = setTimeout(() => {
+        onSeek?.(value / 100);
+      }, 100);
+    },
+    [onSeek],
+  );
 
   const adjustRate = (delta: number) => {
     const newRate = Math.round(Math.max(0.5, Math.min(2.0, config.rate + delta)) * 10) / 10;
@@ -253,7 +267,7 @@ export function FooterBar({
         )}
 
         {/* Main footer bar */}
-        <div className="flex h-10 items-center justify-between px-2">
+        <div className="flex h-10 items-center justify-between gap-2 px-2">
           {/* Left: prev button */}
           <button
             type="button"
@@ -263,8 +277,21 @@ export function FooterBar({
             <ChevronLeft className="h-4 w-4" />
           </button>
 
+          {/* Progress slider */}
+          {onSeek && (
+            <input
+              type="range"
+              className="mx-1 min-w-0 flex-1 h-1 accent-primary cursor-pointer"
+              min={0}
+              max={100}
+              value={pct}
+              onChange={(e) => handleProgressSeek(parseInt(e.target.value, 10))}
+              aria-label="Jump to position"
+            />
+          )}
+
           {/* Center: page info + TTS controls when active */}
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1 shrink-0">
             {/* Page info — always visible */}
             <span className="text-xs text-muted-foreground tabular-nums shrink-0">
               {totalPages > 0 ? `${currentPage} / ${totalPages}` : `${pct}%`}

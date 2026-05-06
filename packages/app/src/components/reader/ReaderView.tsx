@@ -2760,6 +2760,7 @@ export function ReaderView({ bookId, tabId }: ReaderViewProps) {
             isVisible={controlsVisible}
             onPrev={handleNavPrev}
             onNext={handleNavNext}
+            onSeek={(fraction) => foliateRef.current?.goToFraction(fraction)}
             onMouseEnter={handleMouseEnter}
             onMouseLeave={handleMouseLeave}
           />
