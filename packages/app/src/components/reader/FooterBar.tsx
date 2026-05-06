@@ -103,14 +103,25 @@ export function FooterBar({
   const progress = tab?.progress ?? 0;
   const pct = Math.round(progress * 100);
 
+  // Local slider value for smooth dragging (avoids snap-back)
+  const [localSliderValue, setLocalSliderValue] = useState<number | null>(null);
+  const cooldownTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const displayPct = localSliderValue != null ? localSliderValue : pct;
+
   // Debounced progress seek (100ms like readest/anx-reader)
   const seekTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const handleProgressSeek = useCallback(
     (value: number) => {
+      setLocalSliderValue(value);
+      if (cooldownTimerRef.current) clearTimeout(cooldownTimerRef.current);
       if (seekTimerRef.current) clearTimeout(seekTimerRef.current);
       seekTimerRef.current = setTimeout(() => {
         onSeek?.(value / 100);
       }, 100);
+      // Keep local value for 600ms after last interaction
+      cooldownTimerRef.current = setTimeout(() => {
+        setLocalSliderValue(null);
+      }, 600);
     },
     [onSeek],
   );
@@ -281,13 +292,13 @@ export function FooterBar({
           {onSeek && (
             <div className="flex flex-1 items-center gap-2.5 min-w-0">
               <span className="text-[11px] tabular-nums text-muted-foreground shrink-0 w-8 text-right">
-                {pct}%
+                {displayPct}%
               </span>
               <div className="relative flex-1 h-7 flex items-center group">
                 <div className="absolute inset-x-0 h-[3px] rounded-full bg-muted/60 overflow-hidden">
                   <div
                     className="h-full bg-primary/70 rounded-full transition-[width] duration-75"
-                    style={{ width: `${pct}%` }}
+                    style={{ width: `${displayPct}%` }}
                   />
                 </div>
                 <input
@@ -295,13 +306,13 @@ export function FooterBar({
                   className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
                   min={0}
                   max={100}
-                  value={pct}
+                  value={displayPct}
                   onChange={(e) => handleProgressSeek(parseInt(e.target.value, 10))}
                   aria-label="Jump to position"
                 />
                 <div
                   className="absolute w-3 h-3 rounded-full bg-primary shadow-sm border-2 border-background transition-transform group-hover:scale-125 pointer-events-none"
-                  style={{ left: `calc(${pct}% - 6px)` }}
+                  style={{ left: `calc(${displayPct}% - 6px)` }}
                 />
               </div>
             </div>

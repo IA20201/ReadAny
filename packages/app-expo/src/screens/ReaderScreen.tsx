@@ -1729,6 +1729,7 @@ export function ReaderScreen({ route, navigation }: Props) {
             <ReadingProgressSlider
               progress={progress}
               onSeek={(fraction) => {
+                suppressProgressTracking(2000);
                 bridgeRef.current?.goToFraction(fraction);
               }}
               accentColor={colors.primary}
