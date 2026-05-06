@@ -24,7 +24,11 @@ let _useNative: boolean | null = null; // null = not yet determined
  * Reuses the existing server if one is already running for the same docRoot.
  */
 export async function startFileServer(docRoot: string): Promise<string> {
-  const cleanRoot = docRoot.replace(/\/+$/, "");
+  // Strip file:// URI prefix — native servers need plain filesystem paths
+  let cleanRoot = docRoot.replace(/\/+$/, "");
+  if (cleanRoot.startsWith("file://")) {
+    cleanRoot = decodeURIComponent(cleanRoot.slice(7));
+  }
 
   // Reuse existing server
   if (_serverUrl && _serverDocRoot === cleanRoot) {
@@ -66,15 +70,6 @@ async function _startNativeServer(cleanRoot: string): Promise<string> {
     fileDir: cleanRoot,
     port: 0,
     stopInBackground: false,
-    extraConfig: `
-      server.range-requests = "enable"
-      setenv.add-response-header = (
-        "Access-Control-Allow-Origin" => "*",
-        "Access-Control-Allow-Methods" => "GET, HEAD, OPTIONS",
-        "Access-Control-Allow-Headers" => "Range, Content-Type",
-        "Access-Control-Expose-Headers" => "Content-Range, Content-Length, Accept-Ranges"
-      )
-    `,
   });
 
   _serverDocRoot = cleanRoot;
@@ -86,6 +81,12 @@ async function _startNativeServer(cleanRoot: string): Promise<string> {
 
 // --- Fallback: JS TCP server (original implementation) ---
 async function _startTcpFallback(cleanRoot: string): Promise<string> {
+  // TCP fallback also needs plain path
+  let fsRoot = cleanRoot;
+  if (fsRoot.startsWith("file://")) {
+    fsRoot = decodeURIComponent(fsRoot.slice(7));
+  }
+
   let TcpSocket: any;
   try {
     TcpSocket = (await import("react-native-tcp-socket")).default;
@@ -119,7 +120,7 @@ async function _startTcpFallback(cleanRoot: string): Promise<string> {
           return;
         }
 
-        const filePath = `${cleanRoot}/${decodedPath}`;
+        const filePath = `${fsRoot}/${decodedPath}`;
         let file: InstanceType<typeof File>;
         try {
           file = new File(filePath);
