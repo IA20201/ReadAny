@@ -1,9 +1,8 @@
 /**
  * ReadingProgressSlider — A draggable progress slider for the reader.
  *
- * Uses PanResponder for smooth drag interaction with 100ms debounce.
- * Ignores external progress updates while dragging + 300ms cooldown
- * to prevent "snap back" during seek.
+ * Uses gesture dx (delta from start) for reliable tracking on iOS.
+ * Debounces seek at 100ms, with cooldown to prevent snap-back.
  */
 import React, { useCallback, useRef, useState } from "react";
 import { Animated, PanResponder, StyleSheet, Text, View } from "react-native";
@@ -40,63 +39,80 @@ export function ReadingProgressSlider({
   const trackWidthRef = useRef(0);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const thumbScale = useRef(new Animated.Value(1)).current;
-  const isDraggingRef = useRef(false);
   const cooldownRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Store the fraction at drag start so we can use dx for movement
+  const startFractionRef = useRef(0);
+  // Refs for callbacks to avoid stale closures in PanResponder
+  const onSeekRef = useRef(onSeek);
+  onSeekRef.current = onSeek;
+  const onDragStartRef = useRef(onDragStart);
+  onDragStartRef.current = onDragStart;
+  const onDragEndRef = useRef(onDragEnd);
+  onDragEndRef.current = onDragEnd;
+  const progressRef = useRef(progress);
+  progressRef.current = progress;
 
   // Use local progress while dragging/cooldown, otherwise external progress
   const displayProgress = localProgress != null ? localProgress : progress;
   const displayPercent = Math.round(displayProgress * 100);
 
-  const debouncedSeek = useCallback(
-    (fraction: number) => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-      debounceRef.current = setTimeout(() => onSeek(fraction), 100);
-    },
-    [onSeek],
-  );
-
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: (_, gs) => Math.abs(gs.dx) > 2,
+      onMoveShouldSetPanResponder: (_, gs) => Math.abs(gs.dx) > 3,
       onPanResponderGrant: (evt) => {
-        isDraggingRef.current = true;
         if (cooldownRef.current) {
           clearTimeout(cooldownRef.current);
           cooldownRef.current = null;
         }
-        onDragStart?.();
+        // Calculate initial fraction from tap position
+        const width = trackWidthRef.current;
+        if (width > 0) {
+          const tapFraction = clamp(evt.nativeEvent.locationX / width);
+          startFractionRef.current = tapFraction;
+          setLocalProgress(tapFraction);
+        } else {
+          startFractionRef.current = progressRef.current;
+          setLocalProgress(progressRef.current);
+        }
+        onDragStartRef.current?.();
         Animated.spring(thumbScale, { toValue: 1.5, useNativeDriver: true, friction: 8 }).start();
-        const fraction = clamp(evt.nativeEvent.locationX / trackWidthRef.current);
-        setLocalProgress(fraction);
-        debouncedSeek(fraction);
       },
-      onPanResponderMove: (evt) => {
-        const fraction = clamp(evt.nativeEvent.locationX / trackWidthRef.current);
+      onPanResponderMove: (_, gestureState) => {
+        const width = trackWidthRef.current;
+        if (width <= 0) return;
+        // Use dx from the starting fraction for reliable tracking
+        const fraction = clamp(startFractionRef.current + gestureState.dx / width);
         setLocalProgress(fraction);
-        debouncedSeek(fraction);
+        // Debounced seek
+        if (debounceRef.current) clearTimeout(debounceRef.current);
+        debounceRef.current = setTimeout(() => {
+          onSeekRef.current(fraction);
+        }, 100);
       },
-      onPanResponderRelease: (evt) => {
-        const fraction = clamp(evt.nativeEvent.locationX / trackWidthRef.current);
-        isDraggingRef.current = false;
+      onPanResponderRelease: (_, gestureState) => {
+        const width = trackWidthRef.current;
+        const fraction = width > 0
+          ? clamp(startFractionRef.current + gestureState.dx / width)
+          : (localProgress ?? progressRef.current);
         Animated.spring(thumbScale, { toValue: 1, useNativeDriver: true, friction: 8 }).start();
         if (debounceRef.current) clearTimeout(debounceRef.current);
         setLocalProgress(fraction);
-        onSeek(fraction);
-        onDragEnd?.();
-        // Keep showing local progress for 500ms to avoid snap-back
+        onSeekRef.current(fraction);
+        onDragEndRef.current?.();
+        // Keep local progress for 600ms to avoid snap-back from WebView relocate
         cooldownRef.current = setTimeout(() => {
           cooldownRef.current = null;
           setLocalProgress(null);
-        }, 500);
+        }, 600);
       },
       onPanResponderTerminate: () => {
-        isDraggingRef.current = false;
         Animated.spring(thumbScale, { toValue: 1, useNativeDriver: true, friction: 8 }).start();
+        onDragEndRef.current?.();
         cooldownRef.current = setTimeout(() => {
           cooldownRef.current = null;
           setLocalProgress(null);
-        }, 500);
+        }, 600);
       },
     }),
   ).current;
