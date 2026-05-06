@@ -267,7 +267,7 @@ export function FooterBar({
         )}
 
         {/* Main footer bar */}
-        <div className="flex h-10 items-center justify-between gap-2 px-2">
+        <div className="flex h-10 items-center gap-3 px-3">
           {/* Left: prev button */}
           <button
             type="button"
@@ -279,18 +279,35 @@ export function FooterBar({
 
           {/* Progress slider */}
           {onSeek && (
-            <input
-              type="range"
-              className="mx-1 min-w-0 flex-1 h-1 accent-primary cursor-pointer"
-              min={0}
-              max={100}
-              value={pct}
-              onChange={(e) => handleProgressSeek(parseInt(e.target.value, 10))}
-              aria-label="Jump to position"
-            />
+            <div className="flex flex-1 items-center gap-2.5 min-w-0">
+              <span className="text-[11px] tabular-nums text-muted-foreground shrink-0 w-8 text-right">
+                {pct}%
+              </span>
+              <div className="relative flex-1 h-7 flex items-center group">
+                <div className="absolute inset-x-0 h-[3px] rounded-full bg-muted/60 overflow-hidden">
+                  <div
+                    className="h-full bg-primary/70 rounded-full transition-[width] duration-75"
+                    style={{ width: `${pct}%` }}
+                  />
+                </div>
+                <input
+                  type="range"
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                  min={0}
+                  max={100}
+                  value={pct}
+                  onChange={(e) => handleProgressSeek(parseInt(e.target.value, 10))}
+                  aria-label="Jump to position"
+                />
+                <div
+                  className="absolute w-3 h-3 rounded-full bg-primary shadow-sm border-2 border-background transition-transform group-hover:scale-125 pointer-events-none"
+                  style={{ left: `calc(${pct}% - 6px)` }}
+                />
+              </div>
+            </div>
           )}
 
-          {/* Center: page info + TTS controls when active */}
+          {/* Right: page info + TTS controls when active */}
           <div className="flex items-center gap-1 shrink-0">
             {/* Page info — always visible */}
             <span className="text-xs text-muted-foreground tabular-nums shrink-0">
