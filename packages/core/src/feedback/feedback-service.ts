@@ -91,7 +91,6 @@ export async function submitFeedback(
       type: submission.type,
       title: submission.title,
       description: submission.description,
-      contact: submission.contact,
       deviceInfo: submission.deviceInfo,
     };
     if (submission.includeLogs && submission.logs) {
@@ -186,15 +185,11 @@ export async function getFeedbackHistory(): Promise<FeedbackRecord[]> {
 
 // ─── Status Refresh ────────────────────────────────────────────────────────
 
-export async function refreshFeedbackStatus(
-  issueNumbers: number[],
-): Promise<FeedbackStatusItem[]> {
+export async function refreshFeedbackStatus(issueNumbers: number[]): Promise<FeedbackStatusItem[]> {
   if (!_workerBaseUrl || issueNumbers.length === 0) return [];
 
   const params = issueNumbers.join(",");
-  const response = await fetch(
-    `${_workerBaseUrl}/api/feedback/status?issues=${params}`,
-  );
+  const response = await fetch(`${_workerBaseUrl}/api/feedback/status?issues=${params}`);
 
   if (!response.ok) return [];
 
@@ -203,10 +198,11 @@ export async function refreshFeedbackStatus(
   // Update local DB
   const db = await getDB();
   for (const item of items) {
-    await db.execute(
-      `UPDATE feedback SET status = ?, updated_at = ? WHERE issue_number = ?`,
-      [item.state, Date.now(), item.number],
-    );
+    await db.execute("UPDATE feedback SET status = ?, updated_at = ? WHERE issue_number = ?", [
+      item.state,
+      Date.now(),
+      item.number,
+    ]);
   }
 
   return items;

@@ -2,6 +2,8 @@
  * FeedbackScreen — Submit bug reports / feature requests and track history.
  * Submissions are sent to a Cloudflare Worker that creates GitHub Issues.
  */
+import { useColors } from "@/styles/theme";
+import type { ThemeColors } from "@/styles/theme";
 import {
   collectDeviceInfo,
   collectLogs,
@@ -10,7 +12,11 @@ import {
   submitFeedback,
 } from "@readany/core/feedback";
 import type { DeviceInfo, FeedbackRecord, FeedbackType } from "@readany/core/feedback";
+import type { TFunction } from "i18next";
+import { Bug, Check, Lightbulb, MessageSquare } from "lucide-react-native";
+import type { LucideIcon } from "lucide-react-native";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   ActivityIndicator,
   Alert,
@@ -20,30 +26,35 @@ import {
   Platform,
   ScrollView,
   StyleSheet,
-  Switch,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useTranslation } from "react-i18next";
-import { useColors } from "@/styles/theme";
 import { SettingsHeader } from "./SettingsHeader";
 
-const FEEDBACK_TYPES: { key: FeedbackType; label: string }[] = [
-  { key: "bug", label: "Bug" },
-  { key: "feature", label: "建议" },
-  { key: "other", label: "其他" },
+const FEEDBACK_TYPES: {
+  key: FeedbackType;
+  labelKey: string;
+  fallback: string;
+  Icon: LucideIcon;
+}[] = [
+  { key: "bug", labelKey: "feedback.typeBug", fallback: "Bug", Icon: Bug },
+  { key: "feature", labelKey: "feedback.typeFeature", fallback: "建议", Icon: Lightbulb },
+  { key: "other", labelKey: "feedback.typeOther", fallback: "其他", Icon: MessageSquare },
 ];
 
 export default function FeedbackScreen() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const colors = useColors();
   const [activeTab, setActiveTab] = useState<"submit" | "history">("submit");
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={["top"]}>
+    <SafeAreaView
+      style={[styles.container, { backgroundColor: colors.background }]}
+      edges={["top"]}
+    >
       <SettingsHeader title={t("feedback.title", "反馈建议")} />
 
       {/* Tab bar */}
@@ -52,7 +63,12 @@ export default function FeedbackScreen() {
           style={[styles.tab, activeTab === "submit" && { borderBottomColor: colors.primary }]}
           onPress={() => setActiveTab("submit")}
         >
-          <Text style={[styles.tabText, { color: activeTab === "submit" ? colors.primary : colors.mutedForeground }]}>
+          <Text
+            style={[
+              styles.tabText,
+              { color: activeTab === "submit" ? colors.primary : colors.mutedForeground },
+            ]}
+          >
             {t("feedback.submitTab", "提交反馈")}
           </Text>
         </TouchableOpacity>
@@ -60,14 +76,19 @@ export default function FeedbackScreen() {
           style={[styles.tab, activeTab === "history" && { borderBottomColor: colors.primary }]}
           onPress={() => setActiveTab("history")}
         >
-          <Text style={[styles.tabText, { color: activeTab === "history" ? colors.primary : colors.mutedForeground }]}>
+          <Text
+            style={[
+              styles.tabText,
+              { color: activeTab === "history" ? colors.primary : colors.mutedForeground },
+            ]}
+          >
             {t("feedback.historyTab", "我的反馈")}
           </Text>
         </TouchableOpacity>
       </View>
 
       {activeTab === "submit" ? (
-        <SubmitTab colors={colors} t={t} />
+        <SubmitTab colors={colors} t={t} locale={i18n.language} />
       ) : (
         <HistoryTab colors={colors} t={t} />
       )}
@@ -75,13 +96,15 @@ export default function FeedbackScreen() {
   );
 }
 
-// ─── Submit Tab ─────────────────────────────────────────────────────────────
+interface FeedbackTabProps {
+  colors: ThemeColors;
+  t: TFunction;
+}
 
-function SubmitTab({ colors, t }: { colors: any; t: any }) {
+function SubmitTab({ colors, t, locale }: FeedbackTabProps & { locale: string }) {
   const [type, setType] = useState<FeedbackType>("bug");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [contact, setContact] = useState("");
   const [includeLogs, setIncludeLogs] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const remaining = getRemainingSubmissions();
@@ -92,9 +115,9 @@ function SubmitTab({ colors, t }: { colors: any; t: any }) {
         platform: Platform.OS as DeviceInfo["platform"],
         osVersion: `${Platform.OS} ${Platform.Version}`,
         appVersion: "1.2.1", // TODO: dynamic
-        locale: "zh-CN",
+        locale,
       }),
-    [],
+    [locale],
   );
 
   const canSubmit = title.trim().length > 0 && description.trim().length > 0 && remaining > 0;
@@ -108,39 +131,54 @@ function SubmitTab({ colors, t }: { colors: any; t: any }) {
         type,
         title: title.trim(),
         description: description.trim(),
-        contact: contact.trim() || undefined,
         includeLogs,
         deviceInfo,
         logs,
       });
       Alert.alert(
         t("feedback.submitSuccess", "提交成功"),
-        t("feedback.submitSuccessDesc", "感谢你的反馈！Issue #{{number}} 已创建。", { number: result.issueNumber }),
+        t("feedback.submitSuccessDesc", "感谢你的反馈！Issue #{{number}} 已创建。", {
+          number: result.issueNumber,
+        }),
         [{ text: t("common.ok", "好的") }],
       );
       setTitle("");
       setDescription("");
-      setContact("");
       setIncludeLogs(false);
     } catch (err) {
       Alert.alert(
         t("feedback.submitFailed", "提交失败"),
-        err instanceof Error ? err.message : "未知错误",
+        err instanceof Error
+          ? err.message
+          : t("feedback.submitFailedUnknown", "提交失败，请稍后重试"),
       );
     } finally {
       setSubmitting(false);
     }
-  }, [canSubmit, submitting, type, title, description, contact, includeLogs, deviceInfo, t]);
+  }, [canSubmit, submitting, type, title, description, includeLogs, deviceInfo, t]);
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
+    >
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.formContent}
         keyboardShouldPersistTaps="handled"
       >
-        {/* Type selector */}
-        <Text style={[styles.label, { color: colors.foreground }]}>{t("feedback.type", "类型")}</Text>
+        <View style={[styles.introBlock, { borderBottomColor: colors.border }]}>
+          <Text style={[styles.introTitle, { color: colors.foreground }]}>
+            {t("feedback.title", "反馈建议")}
+          </Text>
+          <Text style={[styles.introText, { color: colors.mutedForeground }]}>
+            {t("feedback.desc", "提交 bug 报告或功能建议，我们会尽快处理")}
+          </Text>
+        </View>
+
+        <Text style={[styles.label, { color: colors.foreground }]}>
+          {t("feedback.type", "类型")}
+        </Text>
         <View style={styles.typeRow}>
           {FEEDBACK_TYPES.map((ft) => (
             <TouchableOpacity
@@ -152,17 +190,28 @@ function SubmitTab({ colors, t }: { colors: any; t: any }) {
               ]}
               onPress={() => setType(ft.key)}
             >
-              <Text style={[styles.typeBtnText, { color: type === ft.key ? colors.primary : colors.foreground }]}>
-                {ft.key === "bug" ? "🐛 Bug" : ft.key === "feature" ? "💡 " + ft.label : "📝 " + ft.label}
+              <ft.Icon size={14} color={type === ft.key ? colors.primary : colors.foreground} />
+              <Text
+                style={[
+                  styles.typeBtnText,
+                  { color: type === ft.key ? colors.primary : colors.foreground },
+                ]}
+              >
+                {t(ft.labelKey, ft.fallback)}
               </Text>
             </TouchableOpacity>
           ))}
         </View>
 
         {/* Title */}
-        <Text style={[styles.label, { color: colors.foreground }]}>{t("feedback.titleLabel", "标题")} *</Text>
+        <Text style={[styles.label, { color: colors.foreground }]}>
+          {t("feedback.titleLabel", "标题")} *
+        </Text>
         <TextInput
-          style={[styles.input, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.card }]}
+          style={[
+            styles.input,
+            { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.card },
+          ]}
           placeholder={t("feedback.titlePlaceholder", "简要描述问题或建议")}
           placeholderTextColor={colors.mutedForeground}
           value={title}
@@ -171,9 +220,14 @@ function SubmitTab({ colors, t }: { colors: any; t: any }) {
         />
 
         {/* Description */}
-        <Text style={[styles.label, { color: colors.foreground }]}>{t("feedback.descLabel", "详细描述")} *</Text>
+        <Text style={[styles.label, { color: colors.foreground }]}>
+          {t("feedback.descLabel", "详细描述")} *
+        </Text>
         <TextInput
-          style={[styles.textArea, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.card }]}
+          style={[
+            styles.textArea,
+            { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.card },
+          ]}
           placeholder={t("feedback.descPlaceholder", "请详细描述你遇到的问题或建议...")}
           placeholderTextColor={colors.mutedForeground}
           value={description}
@@ -183,36 +237,41 @@ function SubmitTab({ colors, t }: { colors: any; t: any }) {
           textAlignVertical="top"
         />
 
-        {/* Contact */}
-        <Text style={[styles.label, { color: colors.foreground }]}>{t("feedback.contactLabel", "联系方式（选填）")}</Text>
-        <TextInput
-          style={[styles.input, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.card }]}
-          placeholder={t("feedback.contactPlaceholder", "邮箱或微信，方便我们联系你")}
-          placeholderTextColor={colors.mutedForeground}
-          value={contact}
-          onChangeText={setContact}
-          autoCapitalize="none"
-        />
-
-        {/* Upload logs */}
-        <View style={styles.switchRow}>
-          <Text style={[styles.label, { color: colors.foreground, marginBottom: 0 }]}>
-            {t("feedback.uploadLogs", "上传应用日志")}
+        <View
+          style={[styles.logPanel, { borderColor: colors.border, backgroundColor: colors.card }]}
+        >
+          <TouchableOpacity
+            style={styles.checkRow}
+            onPress={() => setIncludeLogs((checked) => !checked)}
+            activeOpacity={0.75}
+          >
+            <View
+              style={[
+                styles.checkbox,
+                {
+                  borderColor: includeLogs ? colors.primary : colors.border,
+                  backgroundColor: includeLogs ? colors.primary : colors.background,
+                },
+              ]}
+            >
+              {includeLogs && <Check size={13} color={colors.primaryForeground} strokeWidth={3} />}
+            </View>
+            <Text style={[styles.logTitle, { color: colors.foreground }]}>
+              {t("feedback.uploadLogs", "上传应用日志")}
+            </Text>
+          </TouchableOpacity>
+          <Text style={[styles.hint, { color: colors.mutedForeground }]}>
+            {t("feedback.logsHint", "仅在勾选时附带诊断日志，帮助定位问题。")}
           </Text>
-          <Switch
-            value={includeLogs}
-            onValueChange={setIncludeLogs}
-            trackColor={{ true: colors.primary }}
-          />
         </View>
-        <Text style={[styles.hint, { color: colors.mutedForeground }]}>
-          {t("feedback.logsHint", "日志有助于我们定位问题，不包含个人隐私信息")}
-        </Text>
 
-        {/* Device info preview */}
         <View style={[styles.deviceInfoBox, { backgroundColor: colors.muted }]}>
           <Text style={[styles.deviceInfoText, { color: colors.mutedForeground }]}>
-            {deviceInfo.platform} {deviceInfo.osVersion} · v{deviceInfo.appVersion} · {deviceInfo.locale}
+            {t("feedback.deviceInfo", "{{platform}} · v{{version}} · {{locale}}", {
+              platform: `${deviceInfo.platform} ${deviceInfo.osVersion}`,
+              version: deviceInfo.appVersion,
+              locale: deviceInfo.locale,
+            })}
           </Text>
         </View>
 
@@ -239,7 +298,7 @@ function SubmitTab({ colors, t }: { colors: any; t: any }) {
 
 // ─── History Tab ────────────────────────────────────────────────────────────
 
-function HistoryTab({ colors, t }: { colors: any; t: any }) {
+function HistoryTab({ colors, t }: FeedbackTabProps) {
   const [records, setRecords] = useState<FeedbackRecord[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -290,7 +349,10 @@ function HistoryTab({ colors, t }: { colors: any; t: any }) {
           <View
             style={[
               styles.statusBadge,
-              { backgroundColor: item.status === "open" ? `${colors.primary}20` : `${colors.mutedForeground}20` },
+              {
+                backgroundColor:
+                  item.status === "open" ? `${colors.primary}20` : `${colors.mutedForeground}20`,
+              },
             ]}
           >
             <Text
@@ -299,7 +361,9 @@ function HistoryTab({ colors, t }: { colors: any; t: any }) {
                 { color: item.status === "open" ? colors.primary : colors.mutedForeground },
               ]}
             >
-              {item.status === "open" ? t("feedback.statusOpen", "处理中") : t("feedback.statusClosed", "已关闭")}
+              {item.status === "open"
+                ? t("feedback.statusOpen", "处理中")
+                : t("feedback.statusClosed", "已关闭")}
             </Text>
           </View>
         </TouchableOpacity>
@@ -326,14 +390,24 @@ const styles = StyleSheet.create({
   tabText: { fontSize: 14, fontWeight: "500" },
   scrollView: { flex: 1 },
   formContent: { padding: 16, gap: 4 },
+  introBlock: {
+    paddingBottom: 14,
+    marginBottom: 4,
+    borderBottomWidth: 0.5,
+  },
+  introTitle: { fontSize: 15, fontWeight: "600" },
+  introText: { fontSize: 12, lineHeight: 18, marginTop: 4 },
   label: { fontSize: 13, fontWeight: "500", marginTop: 12, marginBottom: 6 },
   typeRow: { flexDirection: "row", gap: 8 },
   typeBtn: {
     flex: 1,
+    flexDirection: "row",
+    gap: 6,
     paddingVertical: 10,
     borderRadius: 8,
     borderWidth: 1,
     alignItems: "center",
+    justifyContent: "center",
   },
   typeBtnText: { fontSize: 13, fontWeight: "500" },
   input: {
@@ -351,12 +425,27 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     fontSize: 14,
   },
-  switchRow: {
+  logPanel: {
+    marginTop: 14,
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  checkRow: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    marginTop: 12,
+    gap: 8,
   },
+  checkbox: {
+    width: 18,
+    height: 18,
+    borderRadius: 5,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  logTitle: { fontSize: 13, fontWeight: "500" },
   hint: { fontSize: 11, marginTop: 4 },
   deviceInfoBox: {
     marginTop: 12,

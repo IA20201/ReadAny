@@ -16,7 +16,6 @@ export interface FeedbackSubmission {
   type: FeedbackType;
   title: string;
   description: string;
-  contact?: string;
   includeLogs: boolean;
   deviceInfo: DeviceInfo;
   logs?: string;
