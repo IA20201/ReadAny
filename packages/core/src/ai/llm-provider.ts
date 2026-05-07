@@ -260,13 +260,25 @@ export async function createChatModelFromEndpoint(
     }
 
     case "google": {
-      const { ChatGoogleGenerativeAI } = await import("@langchain/google-genai");
+      // Use OpenAI-compatible endpoint for Gemini — this allows injecting
+      // custom fetch (required for streaming on React Native/Android where
+      // globalThis.fetch doesn't support response.body streaming).
+      // Gemini's OpenAI-compatible endpoint: https://generativelanguage.googleapis.com/v1beta/openai
+      const { ChatOpenAI } = await import("@langchain/openai");
 
-      return new ChatGoogleGenerativeAI({
+      const geminiBaseUrl = endpoint.baseUrl
+        ? getEndpointBaseUrl(endpoint)
+        : "https://generativelanguage.googleapis.com/v1beta/openai";
+
+      return new ChatOpenAI({
         model,
         apiKey,
+        configuration: {
+          baseURL: geminiBaseUrl,
+          fetch: endpointFetch,
+        },
         temperature,
-        maxOutputTokens: maxTokens,
+        maxTokens,
         streaming,
       });
     }
