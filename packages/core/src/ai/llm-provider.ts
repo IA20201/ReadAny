@@ -266,9 +266,16 @@ export async function createChatModelFromEndpoint(
       // Gemini's OpenAI-compatible endpoint: https://generativelanguage.googleapis.com/v1beta/openai
       const { ChatOpenAI } = await import("@langchain/openai");
 
-      const geminiBaseUrl = endpoint.baseUrl
-        ? getEndpointBaseUrl(endpoint)
-        : "https://generativelanguage.googleapis.com/v1beta/openai";
+      // Ensure the base URL ends with /v1beta/openai for Google's OpenAI-compatible API
+      let geminiBaseUrl: string;
+      if (endpoint.useExactRequestUrl && endpoint.baseUrl) {
+        geminiBaseUrl = endpoint.baseUrl.trim();
+      } else {
+        const rawBase = (endpoint.baseUrl || "https://generativelanguage.googleapis.com").replace(/\/+$/, "");
+        geminiBaseUrl = rawBase.includes("/v1beta/openai")
+          ? rawBase
+          : `${rawBase}/v1beta/openai`;
+      }
 
       return new ChatOpenAI({
         model,
