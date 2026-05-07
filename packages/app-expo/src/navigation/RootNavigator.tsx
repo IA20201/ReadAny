@@ -9,6 +9,7 @@ import { WebDavImportBrowserScreen } from "@/screens/library/WebDavImportBrowser
 import AISettingsScreen from "@/screens/settings/AISettingsScreen";
 import AboutScreen from "@/screens/settings/AboutScreen";
 import AppearanceSettingsScreen from "@/screens/settings/AppearanceSettingsScreen";
+import FeedbackScreen from "@/screens/settings/FeedbackScreen";
 import FontSettingsScreen from "@/screens/settings/FontSettingsScreen";
 import SyncSettingsScreen from "@/screens/settings/SyncSettingsScreen";
 import TTSSettingsScreen from "@/screens/settings/TTSSettingsScreen";
@@ -38,6 +39,7 @@ export type RootStackParamList = {
   TranslationSettings: undefined;
   SyncSettings: undefined;
   About: undefined;
+  Feedback: undefined;
   FullScreenNotes: { bookId: string };
   FontSettings: undefined;
   WebDavImportBrowser: { source: WebDavImportSource };
@@ -96,6 +98,7 @@ export function RootNavigator() {
             <Stack.Screen name="TranslationSettings" component={TranslationSettingsScreen} />
             <Stack.Screen name="SyncSettings" component={SyncSettingsScreen} />
             <Stack.Screen name="About" component={AboutScreen} />
+            <Stack.Screen name="Feedback" component={FeedbackScreen} />
             <Stack.Screen name="FontSettings" component={FontSettingsScreen} options={{ animation: "slide_from_right" }} />
             <Stack.Screen
               name="WebDavImportBrowser"
