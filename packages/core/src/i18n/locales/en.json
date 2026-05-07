@@ -103,7 +103,7 @@
     "descLabel": "Details",
     "descPlaceholder": "Describe what happened or what you would like to improve...",
     "uploadLogs": "Upload app logs",
-    "logsHint": "Diagnostic logs are attached only when enabled and help us troubleshoot.",
+    "logsHint": "Only the last hour of diagnostic logs is attached when enabled.",
     "deviceInfo": "{{platform}} · v{{version}} · {{locale}}",
     "remaining": "{{count}} submission(s) left today",
     "submit": "Submit feedback",
@@ -115,6 +115,7 @@
     "noHistory": "No feedback yet",
     "statusOpen": "Open",
     "statusClosed": "Closed",
+    "newReply": "New reply",
     "openIssue": "Open issue"
   },
   "streaming": {

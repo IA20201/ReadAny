@@ -101,7 +101,7 @@
     "descLabel": "详细描述",
     "descPlaceholder": "请详细描述你遇到的问题或建议...",
     "uploadLogs": "上传应用日志",
-    "logsHint": "仅在勾选时附带诊断日志，帮助定位问题。",
+    "logsHint": "仅在勾选时附带最近 1 小时诊断日志，帮助定位问题。",
     "deviceInfo": "{{platform}} · v{{version}} · {{locale}}",
     "remaining": "今日还可提交 {{count}} 次",
     "submit": "提交反馈",
@@ -113,6 +113,7 @@
     "noHistory": "暂无反馈记录",
     "statusOpen": "处理中",
     "statusClosed": "已关闭",
+    "newReply": "有新回复",
     "openIssue": "打开 Issue"
   },
   "streaming": {

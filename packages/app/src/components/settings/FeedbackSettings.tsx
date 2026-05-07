@@ -9,6 +9,8 @@ import {
   collectLogs,
   getFeedbackHistory,
   getRemainingSubmissions,
+  markFeedbackReplySeen,
+  refreshFeedbackStatus,
   submitFeedback,
 } from "@readany/core/feedback";
 import type { DeviceInfo, FeedbackRecord, FeedbackType } from "@readany/core/feedback";
@@ -62,11 +64,19 @@ export function FeedbackSettings() {
     [],
   );
 
-  useEffect(() => {
-    getFeedbackHistory()
-      .then(setRecords)
-      .catch(() => {});
+  const loadRecords = useCallback(async (refreshStatus = false) => {
+    const history = await getFeedbackHistory();
+    setRecords(history);
+
+    if (!refreshStatus || history.length === 0) return;
+
+    await refreshFeedbackStatus(history.map((record) => record.issueNumber));
+    setRecords(await getFeedbackHistory());
   }, []);
+
+  useEffect(() => {
+    loadRecords(true).catch(() => {});
+  }, [loadRecords]);
 
   const canSubmit = title.trim().length > 0 && description.trim().length > 0 && remaining > 0;
 
@@ -93,9 +103,7 @@ export function FeedbackSettings() {
       setTitle("");
       setDescription("");
       setIncludeLogs(false);
-      getFeedbackHistory()
-        .then(setRecords)
-        .catch(() => {});
+      loadRecords().catch(() => {});
     } catch (err) {
       setSubmitResult({
         kind: "error",
@@ -107,7 +115,7 @@ export function FeedbackSettings() {
     } finally {
       setSubmitting(false);
     }
-  }, [canSubmit, submitting, type, title, description, includeLogs, deviceInfo, t]);
+  }, [canSubmit, submitting, type, title, description, includeLogs, deviceInfo, loadRecords, t]);
 
   return (
     <div className="mx-auto max-w-3xl px-6 py-5">
@@ -197,7 +205,7 @@ export function FeedbackSettings() {
                 {t("feedback.uploadLogs", "上传应用日志")}
               </button>
               <p className="mt-0.5 text-[11px] leading-4 text-muted-foreground">
-                {t("feedback.logsHint", "仅在勾选时附带诊断日志，帮助定位问题。")}
+                {t("feedback.logsHint", "仅在勾选时附带最近 1 小时诊断日志，帮助定位问题。")}
               </p>
             </div>
           </div>
@@ -249,9 +257,16 @@ export function FeedbackSettings() {
               <div key={record.id} className="flex items-center justify-between px-3 py-2.5">
                 <div className="flex-1 min-w-0 mr-3">
                   <p className="text-xs font-medium text-foreground truncate">{record.title}</p>
-                  <p className="text-[10px] text-muted-foreground mt-0.5">
-                    #{record.issueNumber} · {new Date(record.createdAt).toLocaleDateString()}
-                  </p>
+                  <div className="mt-0.5 flex items-center gap-1.5">
+                    <p className="text-[10px] text-muted-foreground">
+                      #{record.issueNumber} · {new Date(record.createdAt).toLocaleDateString()}
+                    </p>
+                    {record.hasNewReply && (
+                      <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] text-amber-700 dark:text-amber-300">
+                        {t("feedback.newReply", "有新回复")}
+                      </span>
+                    )}
+                  </div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   <span
@@ -271,6 +286,11 @@ export function FeedbackSettings() {
                     rel="noopener noreferrer"
                     className="text-muted-foreground hover:text-foreground"
                     title={t("feedback.openIssue", "打开 Issue")}
+                    onClick={() => {
+                      markFeedbackReplySeen(record.issueNumber)
+                        .then(() => loadRecords())
+                        .catch(() => {});
+                    }}
                   >
                     <ExternalLink className="h-3 w-3" />
                   </a>

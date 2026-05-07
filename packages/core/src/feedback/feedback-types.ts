@@ -43,4 +43,5 @@ export interface FeedbackStatusItem {
   state: "open" | "closed";
   title: string;
   hasNewComment: boolean;
+  commentCount?: number;
 }

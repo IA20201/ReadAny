@@ -99,6 +99,14 @@ const migrations: Migration[] = [
       updated_at INTEGER
     )`,
   },
+  {
+    version: 11,
+    description: "Track feedback replies",
+    up: [
+      "ALTER TABLE feedback ADD COLUMN has_new_reply INTEGER NOT NULL DEFAULT 0",
+      "ALTER TABLE feedback ADD COLUMN comment_count INTEGER NOT NULL DEFAULT 0",
+    ],
+  },
 ];
 
 /** Run pending migrations */

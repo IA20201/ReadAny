@@ -9,11 +9,14 @@ export type {
 
 export {
   appendLog,
+  appendStructuredLog,
   clearLogs,
   collectDeviceInfo,
   collectLogs,
   getFeedbackHistory,
   getRemainingSubmissions,
+  installFeedbackLogCapture,
+  markFeedbackReplySeen,
   refreshFeedbackStatus,
   setFeedbackWorkerUrl,
   submitFeedback,

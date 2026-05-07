@@ -9,6 +9,8 @@ import {
   collectLogs,
   getFeedbackHistory,
   getRemainingSubmissions,
+  markFeedbackReplySeen,
+  refreshFeedbackStatus,
   submitFeedback,
 } from "@readany/core/feedback";
 import type { DeviceInfo, FeedbackRecord, FeedbackType } from "@readany/core/feedback";
@@ -261,7 +263,7 @@ function SubmitTab({ colors, t, locale }: FeedbackTabProps & { locale: string })
             </Text>
           </TouchableOpacity>
           <Text style={[styles.hint, { color: colors.mutedForeground }]}>
-            {t("feedback.logsHint", "仅在勾选时附带诊断日志，帮助定位问题。")}
+            {t("feedback.logsHint", "仅在勾选时附带最近 1 小时诊断日志，帮助定位问题。")}
           </Text>
         </View>
 
@@ -302,9 +304,29 @@ function HistoryTab({ colors, t }: FeedbackTabProps) {
   const [records, setRecords] = useState<FeedbackRecord[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const handleOpenIssue = useCallback(async (item: FeedbackRecord) => {
+    if (item.hasNewReply) {
+      setRecords((current) =>
+        current.map((record) =>
+          record.id === item.id ? { ...record, hasNewReply: false } : record,
+        ),
+      );
+      await markFeedbackReplySeen(item.issueNumber).catch(() => {});
+    }
+    Linking.openURL(item.issueUrl);
+  }, []);
+
   useEffect(() => {
-    getFeedbackHistory()
-      .then(setRecords)
+    async function loadRecords() {
+      const history = await getFeedbackHistory();
+      setRecords(history);
+      if (history.length === 0) return;
+
+      await refreshFeedbackStatus(history.map((record) => record.issueNumber));
+      setRecords(await getFeedbackHistory());
+    }
+
+    loadRecords()
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
@@ -335,7 +357,7 @@ function HistoryTab({ colors, t }: FeedbackTabProps) {
       renderItem={({ item }) => (
         <TouchableOpacity
           style={[styles.historyItem, { borderBottomColor: colors.border }]}
-          onPress={() => Linking.openURL(item.issueUrl)}
+          onPress={() => handleOpenIssue(item)}
           activeOpacity={0.7}
         >
           <View style={styles.historyLeft}>
@@ -345,6 +367,11 @@ function HistoryTab({ colors, t }: FeedbackTabProps) {
             <Text style={[styles.historyMeta, { color: colors.mutedForeground }]}>
               #{item.issueNumber} · {new Date(item.createdAt).toLocaleDateString()}
             </Text>
+            {item.hasNewReply && (
+              <Text style={[styles.newReplyText, { color: colors.amber }]}>
+                {t("feedback.newReply", "有新回复")}
+              </Text>
+            )}
           </View>
           <View
             style={[
@@ -474,6 +501,7 @@ const styles = StyleSheet.create({
   historyLeft: { flex: 1, marginRight: 12 },
   historyTitle: { fontSize: 14, fontWeight: "500" },
   historyMeta: { fontSize: 11, marginTop: 3 },
+  newReplyText: { fontSize: 11, marginTop: 3, fontWeight: "500" },
   statusBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 4 },
   statusText: { fontSize: 11, fontWeight: "500" },
 });
