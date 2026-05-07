@@ -1230,8 +1230,8 @@
       if (settings.fontSize !== undefined || settings.lineHeight !== undefined || settings.fontTheme !== undefined || settings.paragraphSpacing !== undefined
           || settings.customFontFamily !== undefined || settings.customFontFaceCSS !== undefined) {
         const fontThemes = {
-          default: { cjk: 'system-ui', serif: 'system-ui' },
-          system: { cjk: 'system-ui', serif: 'system-ui' },
+          default: { cjk: '-apple-system, BlinkMacSystemFont, system-ui, sans-serif', serif: '-apple-system, BlinkMacSystemFont, system-ui, sans-serif' },
+          system: { cjk: '-apple-system, BlinkMacSystemFont, system-ui, sans-serif', serif: '-apple-system, BlinkMacSystemFont, system-ui, sans-serif' },
           literata: { cjk: "'Noto Serif SC', 'Source Han Serif SC', serif", serif: "Literata, Georgia, serif" },
         };
 
@@ -1240,7 +1240,14 @@
           fontFamily = currentCustomFontFamily;
         } else {
           const theme = fontThemes[currentFontTheme] || fontThemes.default;
-          fontFamily = "'" + theme.cjk + "', '" + theme.serif + "', serif";
+          // For themes with multi-value font stacks (like system default), use as-is
+          // For named font themes (like literata), wrap in quotes
+          const needsQuotes = !theme.cjk.includes(',');
+          if (needsQuotes) {
+            fontFamily = "'" + theme.cjk + "', '" + theme.serif + "', serif";
+          } else {
+            fontFamily = theme.cjk;
+          }
         }
         const fSize = currentFontSize;
         const lh = currentLineHeight;
