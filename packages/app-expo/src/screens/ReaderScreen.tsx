@@ -1,6 +1,7 @@
 import { MarkdownRenderer } from "@/components/chat/MarkdownRenderer";
 import { BookmarkRibbon } from "@/components/reader/BookmarkRibbon";
 import { ChapterTranslationSheet } from "@/components/reader/ChapterTranslationSheet";
+import { ReadingProgressSlider } from "@/components/reader/ReadingProgressSlider";
 import { SelectionPopover } from "@/components/reader/SelectionPopover";
 import { TTSPage } from "@/components/reader/TTSPage";
 import { TranslationPanel } from "@/components/reader/TranslationPanel";
@@ -30,7 +31,7 @@ import {
 } from "@/stores";
 import { useMissingBookPromptStore } from "@/stores/missing-book-prompt-store";
 import { useTheme } from "@/styles/ThemeContext";
-import { useColors } from "@/styles/theme";
+import { useColors, withOpacity } from "@/styles/theme";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { readingContextService } from "@readany/core/ai/reading-context-service";
 import { runWithDbRetry } from "@readany/core/db/write-retry";
@@ -1725,9 +1726,17 @@ export function ReaderScreen({ route, navigation }: Props) {
               },
             ]}
           >
-            <View style={s.bottomToolbarProgressTrack}>
-              <View style={[s.bottomToolbarProgressFill, { width: `${percent}%` }]} />
-            </View>
+            <ReadingProgressSlider
+              progress={progress}
+              onDragStart={() => suppressProgressTracking(99999)}
+              onDragEnd={() => suppressProgressTracking(2000)}
+              onSeek={(fraction) => {
+                bridgeRef.current?.goToFraction(fraction);
+              }}
+              accentColor={colors.primary}
+              trackColor={withOpacity(colors.foreground, 0.12)}
+              textColor={withOpacity(colors.foreground, 0.6)}
+            />
             <View style={s.bottomDockRow}>
               <TouchableOpacity
                 style={s.bottomDockBtn}
