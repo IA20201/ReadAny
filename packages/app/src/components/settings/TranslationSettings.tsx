@@ -20,7 +20,6 @@ export function TranslationSettings() {
 
   const isAIProvider = translationConfig.provider.id === "ai";
   const isDeepLProvider = translationConfig.provider.id === "deepl";
-  const isMicrosoftProvider = translationConfig.provider.id === "microsoft";
 
   // Get all endpoints with models
   const endpointsWithModels = aiConfig.endpoints.filter((e) => e.models.length > 0);
@@ -110,7 +109,7 @@ export function TranslationSettings() {
         <div className="space-y-4">
           {/* 翻译引擎选择 */}
           <div className="space-y-2">
-            <label className="text-sm text-foreground">{t("settings.translationProvider")}</label>
+            <span className="text-sm text-foreground">{t("settings.translationProvider")}</span>
             <div className="relative" ref={providerPopoverRef}>
               <button
                 type="button"
@@ -146,19 +145,10 @@ export function TranslationSettings() {
             </div>
           </div>
 
-          {/* Microsoft - no config needed */}
-          {isMicrosoftProvider && (
-            <div className="rounded-lg border border-green-200 bg-green-50 px-3 py-2.5 dark:border-green-800/40 dark:bg-green-900/20">
-              <p className="text-xs text-green-700 dark:text-green-300">
-                {t("settings.microsoftFreeHint", "免费内置，无需配置。使用微软 Edge 翻译引擎。")}
-              </p>
-            </div>
-          )}
-
           {/* AI 模型选择 (only show for AI provider) */}
           {isAIProvider && (
             <div className="space-y-2">
-              <label className="text-sm text-foreground">{t("settings.translationModel")}</label>
+              <span className="text-sm text-foreground">{t("settings.translationModel")}</span>
               {endpointsWithModels.length > 0 ? (
                 <div className="relative" ref={modelPopoverRef}>
                   <button
@@ -218,8 +208,11 @@ export function TranslationSettings() {
           {isDeepLProvider && (
             <div className="space-y-4">
               <div className="space-y-2">
-                <label className="text-sm text-foreground">{t("settings.apiKey")}</label>
+                <label htmlFor="translation-deepl-api-key" className="text-sm text-foreground">
+                  {t("settings.apiKey")}
+                </label>
                 <PasswordInput
+                  id="translation-deepl-api-key"
                   placeholder={t("settings.apiKeyPlaceholder")}
                   value={translationConfig.provider.apiKey || ""}
                   onChange={(e) => handleApiKeyChange(e.target.value)}
@@ -228,15 +221,16 @@ export function TranslationSettings() {
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm text-foreground">{t("translation.deeplBaseUrl")}</label>
+                <label htmlFor="translation-deepl-base-url" className="text-sm text-foreground">
+                  {t("translation.deeplBaseUrl")}
+                </label>
                 <Input
+                  id="translation-deepl-base-url"
                   placeholder={t("translation.deeplBaseUrlPlaceholder")}
                   value={translationConfig.provider.baseUrl || ""}
                   onChange={(e) => handleBaseUrlChange(e.target.value)}
                 />
-                <p className="text-xs text-muted-foreground">
-                  {t("translation.deeplBaseUrlHint")}
-                </p>
+                <p className="text-xs text-muted-foreground">{t("translation.deeplBaseUrlHint")}</p>
               </div>
             </div>
           )}

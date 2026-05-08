@@ -477,7 +477,8 @@ export function ReaderView({ bookId, tabId }: ReaderViewProps) {
     sectionIndex: currentSectionIndex,
     ready: translationReady,
     getParagraphs: () => foliateRef.current?.getChapterParagraphs() ?? [],
-    injectTranslations: (results) => foliateRef.current?.injectChapterTranslations(results),
+    injectTranslations: (results, visibility) =>
+      foliateRef.current?.injectChapterTranslations(results, visibility),
     removeTranslations: () => foliateRef.current?.removeChapterTranslations(),
     applyVisibility: (originalVisible, translationVisible) =>
       foliateRef.current?.applyChapterTranslationVisibility(originalVisible, translationVisible),

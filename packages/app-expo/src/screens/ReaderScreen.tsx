@@ -17,9 +17,10 @@ import {
   SearchIcon,
   XIcon,
 } from "@/components/ui/Icon";
+import { SyncButton } from "@/components/ui/SyncButton";
 import { useReaderBridge } from "@/hooks/use-reader-bridge";
-import { startFileServer, stopFileServer } from "@/lib/reader/local-file-server";
 import type { RelocateEvent, SelectionEvent, VisibleTTSSegment } from "@/hooks/use-reader-bridge";
+import { startFileServer, stopFileServer } from "@/lib/reader/local-file-server";
 import type { RootStackParamList } from "@/navigation/RootNavigator";
 import {
   useAnnotationStore,
@@ -158,7 +159,6 @@ import { useReaderSearch } from "./reader/useReaderSearch";
 import { useReaderSystemInfo } from "./reader/useReaderSystemInfo";
 import { useReaderTTS } from "./reader/useReaderTTS";
 import { useVolumeButtonPaging } from "./reader/useVolumeButtonPaging";
-import { SyncButton } from "@/components/ui/SyncButton";
 
 const READER_HTML_ASSET = Asset.fromModule(require("../../assets/reader/reader.html"));
 
@@ -297,7 +297,8 @@ export function ReaderScreen({ route, navigation }: Props) {
     getChapterParagraphs: () => Promise<Array<{ id: string; text: string; tagName: string }>>;
     injectChapterTranslations: (
       results: Array<{ paragraphId: string; originalText: string; translatedText: string }>,
-    ) => void;
+      visibility?: { originalVisible: boolean; translationVisible: boolean },
+    ) => Promise<void>;
     removeChapterTranslations: () => void;
   } | null>(null);
 
@@ -448,8 +449,8 @@ export function ReaderScreen({ route, navigation }: Props) {
       if (!chapterTranslationBridgeRef.current) return [];
       return chapterTranslationBridgeRef.current.getChapterParagraphs();
     },
-    injectTranslations: (results) => {
-      chapterTranslationBridgeRef.current?.injectChapterTranslations(results);
+    injectTranslations: (results, visibility) => {
+      return chapterTranslationBridgeRef.current?.injectChapterTranslations(results, visibility);
     },
     removeTranslations: () => {
       chapterTranslationBridgeRef.current?.removeChapterTranslations();
@@ -1490,7 +1491,13 @@ export function ReaderScreen({ route, navigation }: Props) {
                   {currentChapter || bookTitle}
                 </Text>
               </View>
-              <View style={[s.topToolbarSideSlot, s.topToolbarMetaWrap, { flexDirection: "row", alignItems: "center", gap: 6 }]}>
+              <View
+                style={[
+                  s.topToolbarSideSlot,
+                  s.topToolbarMetaWrap,
+                  { flexDirection: "row", alignItems: "center", gap: 6 },
+                ]}
+              >
                 <SyncButton size={16} color={colors.foreground} />
                 <Text style={s.topToolbarMetaText}>
                   {currentPage > 0 && totalPages > 0
