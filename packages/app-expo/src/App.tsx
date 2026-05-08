@@ -57,10 +57,9 @@ import { useAutoSync } from "@readany/core/hooks/use-auto-sync";
 
 installFeedbackLogCapture();
 
-const feedbackWorkerUrl = process.env.EXPO_PUBLIC_FEEDBACK_WORKER_URL?.trim();
-if (feedbackWorkerUrl) {
-  setFeedbackWorkerUrl(feedbackWorkerUrl);
-}
+const FEEDBACK_WORKER_FALLBACK = "https://readany-feedback-worker.bealqiu.workers.dev";
+const feedbackWorkerUrl = process.env.EXPO_PUBLIC_FEEDBACK_WORKER_URL?.trim() || FEEDBACK_WORKER_FALLBACK;
+setFeedbackWorkerUrl(feedbackWorkerUrl);
 
 // Keep the native splash screen visible while we bootstrap
 SplashScreen.preventAutoHideAsync().catch(() => {});

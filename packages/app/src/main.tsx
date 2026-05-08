@@ -23,10 +23,9 @@ import { useVectorModelStore } from "./stores/vector-model-store";
 
 installFeedbackLogCapture();
 
-const feedbackWorkerUrl = import.meta.env.VITE_FEEDBACK_WORKER_URL?.trim();
-if (feedbackWorkerUrl) {
-  setFeedbackWorkerUrl(feedbackWorkerUrl);
-}
+const FEEDBACK_WORKER_FALLBACK = "https://readany-feedback-worker.bealqiu.workers.dev";
+const feedbackWorkerUrl = import.meta.env.VITE_FEEDBACK_WORKER_URL?.trim() || FEEDBACK_WORKER_FALLBACK;
+setFeedbackWorkerUrl(feedbackWorkerUrl);
 
 // Register platform service before any database/core operations
 const tauriPlatform = new TauriPlatformService();
