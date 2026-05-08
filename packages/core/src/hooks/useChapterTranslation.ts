@@ -140,7 +140,7 @@ export function useChapterTranslation(options: UseChapterTranslationOptions) {
         });
 
         // Mark chapter fully cached
-        markChapterFullyCached(bookId, sectionIndex, config.targetLang).catch(() => {});
+        markChapterFullyCached(bookId, sectionIndex, config.targetLang).catch((err) => console.warn("[Translation] Failed to mark chapter cached:", err));
 
         setState({ status: "complete", originalVisible: true, translationVisible: true });
       } catch (err) {
@@ -247,8 +247,8 @@ export function useChapterTranslation(options: UseChapterTranslationOptions) {
             translationVisible: true,
           });
         }
-      } catch {
-        // Ignore errors
+      } catch (err) {
+        console.warn("[Translation] Auto-restore translation failed:", err);
       }
     }, 300);
 

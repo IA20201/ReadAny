@@ -36,6 +36,16 @@ interface GitHubIssueResponse {
   title: string;
   state: "open" | "closed";
   comments?: number;
+  body?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+interface GitHubCommentResponse {
+  id: number;
+  body: string;
+  created_at: string;
+  user: { login: string; avatar_url: string };
 }
 
 const MAX_TITLE_LENGTH = 120;
@@ -68,6 +78,11 @@ export default {
         return await handleFeedbackStatus(request, env, url);
       }
 
+      // GET /api/feedback/detail?issue=123
+      if (request.method === "GET" && url.pathname === "/api/feedback/detail") {
+        return await handleFeedbackDetail(request, env, url);
+      }
+
       return jsonResponse(request, env, { error: "Not found" }, 404);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Internal error";
@@ -91,11 +106,21 @@ async function handleCreateFeedback(request: Request, env: Env): Promise<Respons
   const description = requireText(payload.description, "description", MAX_DESCRIPTION_LENGTH);
   const logs = truncateText(payload.logs?.trim() ?? "", MAX_LOG_LENGTH);
 
+  // Upload logs to Gist if present
+  let gistUrl: string | undefined;
+  if (logs) {
+    try {
+      gistUrl = await uploadLogsToGist(env, logs, title);
+    } catch {
+      // Non-fatal: if Gist upload fails, just skip logs link
+    }
+  }
+
   const issue = await githubRequest<GitHubIssueResponse>(env, "/issues", {
     method: "POST",
     body: JSON.stringify({
       title: `[${TYPE_LABELS[type]}] ${title}`,
-      body: buildIssueBody({ ...payload, type, title, description, logs }),
+      body: buildIssueBody({ ...payload, type, title, description, logs, gistUrl }),
       labels: parseLabels(env.GITHUB_LABELS),
     }),
   });
@@ -140,6 +165,37 @@ async function handleFeedbackStatus(request: Request, env: Env, url: URL): Promi
       commentCount: issue.comments ?? 0,
     })),
   );
+}
+
+async function handleFeedbackDetail(request: Request, env: Env, url: URL): Promise<Response> {
+  assertGitHubEnv(env);
+
+  const issueNumber = Number.parseInt(url.searchParams.get("issue") ?? "", 10);
+  if (!Number.isInteger(issueNumber) || issueNumber <= 0) {
+    throw new HttpError(400, "Invalid issue number");
+  }
+
+  // Fetch issue + comments in parallel
+  const [issue, comments] = await Promise.all([
+    githubRequest<GitHubIssueResponse>(env, `/issues/${issueNumber}`),
+    githubRequest<GitHubCommentResponse[]>(env, `/issues/${issueNumber}/comments?per_page=50`),
+  ]);
+
+  return jsonResponse(request, env, {
+    number: issue.number,
+    title: issue.title,
+    state: issue.state,
+    body: issue.body ?? "",
+    createdAt: issue.created_at,
+    updatedAt: issue.updated_at,
+    comments: (comments ?? []).map((c) => ({
+      id: c.id,
+      body: c.body,
+      createdAt: c.created_at,
+      author: c.user?.login ?? "unknown",
+      avatarUrl: c.user?.avatar_url ?? "",
+    })),
+  });
 }
 
 async function readFeedbackPayload(request: Request): Promise<FeedbackPayload> {
@@ -199,8 +255,36 @@ async function sha256(value: string): Promise<string> {
   return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
+async function uploadLogsToGist(env: Env, logs: string, title: string): Promise<string> {
+  const filename = `readany-logs-${Date.now()}.txt`;
+  const response = await fetch("https://api.github.com/gists", {
+    method: "POST",
+    headers: {
+      Accept: "application/vnd.github+json",
+      Authorization: `Bearer ${env.GITHUB_TOKEN}`,
+      "Content-Type": "application/json",
+      "User-Agent": "ReadAny Feedback Worker",
+      "X-GitHub-Api-Version": "2022-11-28",
+    },
+    body: JSON.stringify({
+      description: `ReadAny feedback logs: ${title}`,
+      public: false,
+      files: {
+        [filename]: { content: logs },
+      },
+    }),
+  });
+
+  if (!response.ok) {
+    throw new HttpError(500, "Failed to upload logs to Gist");
+  }
+
+  const gist = (await response.json()) as { html_url: string };
+  return gist.html_url;
+}
+
 function buildIssueBody(
-  payload: Required<Pick<FeedbackPayload, "type">> & FeedbackPayload,
+  payload: Required<Pick<FeedbackPayload, "type">> & FeedbackPayload & { gistUrl?: string },
 ): string {
   const device = payload.deviceInfo ?? {};
   const details = [
@@ -216,8 +300,8 @@ function buildIssueBody(
     details[details.length - 1] += `\n- Device: ${device.deviceModel}`;
   }
 
-  if (payload.logs) {
-    details.push(`### Logs\n\`\`\`text\n${payload.logs}\n\`\`\``);
+  if (payload.gistUrl) {
+    details.push(`### Logs\n[View diagnostic logs](${payload.gistUrl})`);
   }
 
   return `${details.join("\n\n")}\n\n---\nSubmitted from ReadAny.`;

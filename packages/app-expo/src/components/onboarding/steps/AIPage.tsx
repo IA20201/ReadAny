@@ -135,7 +135,8 @@ export function AIPage() {
         modelsFetched: false,
       });
       setStatus("success");
-    } catch {
+    } catch (err) {
+      console.warn("[Onboarding] AI connection test failed:", err);
       setStatus("error");
     }
   };

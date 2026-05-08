@@ -23,7 +23,7 @@ import { useVectorModelStore } from "./stores/vector-model-store";
 
 installFeedbackLogCapture();
 
-const FEEDBACK_WORKER_FALLBACK = "https://readany-feedback-worker.bealqiu.workers.dev";
+const FEEDBACK_WORKER_FALLBACK = "https://feedback.readany.top";
 const feedbackWorkerUrl = import.meta.env.VITE_FEEDBACK_WORKER_URL?.trim() || FEEDBACK_WORKER_FALLBACK;
 setFeedbackWorkerUrl(feedbackWorkerUrl);
 

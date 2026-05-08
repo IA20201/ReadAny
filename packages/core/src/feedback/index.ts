@@ -1,5 +1,7 @@
 export type {
   DeviceInfo,
+  FeedbackComment,
+  FeedbackDetail,
   FeedbackRecord,
   FeedbackStatusItem,
   FeedbackSubmission,
@@ -13,6 +15,7 @@ export {
   clearLogs,
   collectDeviceInfo,
   collectLogs,
+  getFeedbackDetail,
   getFeedbackHistory,
   getRemainingSubmissions,
   installFeedbackLogCapture,

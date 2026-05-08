@@ -57,7 +57,7 @@ import { useAutoSync } from "@readany/core/hooks/use-auto-sync";
 
 installFeedbackLogCapture();
 
-const FEEDBACK_WORKER_FALLBACK = "https://readany-feedback-worker.bealqiu.workers.dev";
+const FEEDBACK_WORKER_FALLBACK = "https://feedback.readany.top";
 const feedbackWorkerUrl = process.env.EXPO_PUBLIC_FEEDBACK_WORKER_URL?.trim() || FEEDBACK_WORKER_FALLBACK;
 setFeedbackWorkerUrl(feedbackWorkerUrl);
 

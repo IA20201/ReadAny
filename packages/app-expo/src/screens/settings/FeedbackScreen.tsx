@@ -24,7 +24,6 @@ import {
   Alert,
   FlatList,
   KeyboardAvoidingView,
-  Linking,
   Platform,
   ScrollView,
   StyleSheet,
@@ -34,6 +33,9 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useNavigation } from "@react-navigation/native";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import type { RootStackParamList } from "@/navigation/RootNavigator";
 import { SettingsHeader } from "./SettingsHeader";
 
 const FEEDBACK_TYPES: {
@@ -107,7 +109,7 @@ function SubmitTab({ colors, t, locale }: FeedbackTabProps & { locale: string })
   const [type, setType] = useState<FeedbackType>("bug");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [includeLogs, setIncludeLogs] = useState(false);
+  const [includeLogs, setIncludeLogs] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const remaining = getRemainingSubmissions();
 
@@ -128,7 +130,7 @@ function SubmitTab({ colors, t, locale }: FeedbackTabProps & { locale: string })
     if (!canSubmit || submitting) return;
     setSubmitting(true);
     try {
-      const logs = includeLogs ? collectLogs() : undefined;
+      const logs = includeLogs ? await collectLogs() : undefined;
       const result = await submitFeedback({
         type,
         title: title.trim(),
@@ -303,6 +305,7 @@ function SubmitTab({ colors, t, locale }: FeedbackTabProps & { locale: string })
 function HistoryTab({ colors, t }: FeedbackTabProps) {
   const [records, setRecords] = useState<FeedbackRecord[]>([]);
   const [loading, setLoading] = useState(true);
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
 
   const handleOpenIssue = useCallback(async (item: FeedbackRecord) => {
     if (item.hasNewReply) {
@@ -313,8 +316,8 @@ function HistoryTab({ colors, t }: FeedbackTabProps) {
       );
       await markFeedbackReplySeen(item.issueNumber).catch(() => {});
     }
-    Linking.openURL(item.issueUrl);
-  }, []);
+    navigation.navigate("FeedbackDetail", { issueNumber: item.issueNumber, title: item.title });
+  }, [navigation]);
 
   useEffect(() => {
     async function loadRecords() {

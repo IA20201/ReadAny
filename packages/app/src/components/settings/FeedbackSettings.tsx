@@ -7,22 +7,25 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   collectDeviceInfo,
   collectLogs,
+  getFeedbackDetail,
   getFeedbackHistory,
   getRemainingSubmissions,
   markFeedbackReplySeen,
   refreshFeedbackStatus,
   submitFeedback,
 } from "@readany/core/feedback";
-import type { DeviceInfo, FeedbackRecord, FeedbackType } from "@readany/core/feedback";
+import type { DeviceInfo, FeedbackDetail, FeedbackRecord, FeedbackType } from "@readany/core/feedback";
 import { cn } from "@readany/core/utils";
 import {
   AlertCircle,
+  ArrowLeft,
   Bug,
   Check,
   CheckCircle2,
   ExternalLink,
   Lightbulb,
   Loader2,
+  MessageCircle,
   MessageSquare,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -47,10 +50,11 @@ export function FeedbackSettings() {
   const [type, setType] = useState<FeedbackType>("bug");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [includeLogs, setIncludeLogs] = useState(false);
+  const [includeLogs, setIncludeLogs] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [submitResult, setSubmitResult] = useState<SubmitResult>(null);
   const [records, setRecords] = useState<FeedbackRecord[]>([]);
+  const [selectedIssue, setSelectedIssue] = useState<{ issueNumber: number; title: string } | null>(null);
   const remaining = getRemainingSubmissions();
 
   const deviceInfo: DeviceInfo = useMemo(
@@ -85,7 +89,7 @@ export function FeedbackSettings() {
     setSubmitting(true);
     setSubmitResult(null);
     try {
-      const logs = includeLogs ? collectLogs() : undefined;
+      const logs = includeLogs ? await collectLogs() : undefined;
       const result = await submitFeedback({
         type,
         title: title.trim(),
@@ -116,6 +120,20 @@ export function FeedbackSettings() {
       setSubmitting(false);
     }
   }, [canSubmit, submitting, type, title, description, includeLogs, deviceInfo, loadRecords, t]);
+
+  // Show detail view if an issue is selected
+  if (selectedIssue) {
+    return (
+      <FeedbackDetailView
+        issueNumber={selectedIssue.issueNumber}
+        title={selectedIssue.title}
+        onBack={() => {
+          setSelectedIssue(null);
+          loadRecords(true).catch(() => {});
+        }}
+      />
+    );
+  }
 
   return (
     <div className="mx-auto max-w-3xl px-6 py-5">
@@ -254,7 +272,12 @@ export function FeedbackSettings() {
           </h3>
           <div className="max-h-48 divide-y overflow-y-auto rounded-md border border-border/70">
             {records.map((record) => (
-              <div key={record.id} className="flex items-center justify-between px-3 py-2.5">
+              <button
+                type="button"
+                key={record.id}
+                className="flex w-full items-center justify-between px-3 py-2.5 text-left hover:bg-muted/50 transition-colors"
+                onClick={() => setSelectedIssue({ issueNumber: record.issueNumber, title: record.title })}
+              >
                 <div className="flex-1 min-w-0 mr-3">
                   <p className="text-xs font-medium text-foreground truncate">{record.title}</p>
                   <div className="mt-0.5 flex items-center gap-1.5">
@@ -280,26 +303,149 @@ export function FeedbackSettings() {
                       ? t("feedback.statusOpen", "处理中")
                       : t("feedback.statusClosed", "已关闭")}
                   </span>
-                  <a
-                    href={record.issueUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-muted-foreground hover:text-foreground"
-                    title={t("feedback.openIssue", "打开 Issue")}
-                    onClick={() => {
-                      markFeedbackReplySeen(record.issueNumber)
-                        .then(() => loadRecords())
-                        .catch(() => {});
-                    }}
-                  >
-                    <ExternalLink className="h-3 w-3" />
-                  </a>
                 </div>
-              </div>
+              </button>
             ))}
           </div>
         </div>
       )}
     </div>
   );
+}
+
+// ─── Detail View ──────────────────────────────────────────────────────────────
+
+function FeedbackDetailView({
+  issueNumber,
+  title,
+  onBack,
+}: { issueNumber: number; title: string; onBack: () => void }) {
+  const { t } = useTranslation();
+  const [detail, setDetail] = useState<FeedbackDetail | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function load() {
+      const data = await getFeedbackDetail(issueNumber);
+      setDetail(data);
+      setLoading(false);
+      await markFeedbackReplySeen(issueNumber).catch(() => {});
+    }
+    load();
+  }, [issueNumber]);
+
+  return (
+    <div className="mx-auto max-w-3xl px-6 py-5">
+      {/* Header */}
+      <div className="mb-4 flex items-center gap-2">
+        <button
+          type="button"
+          onClick={onBack}
+          className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <ArrowLeft className="h-3.5 w-3.5" />
+          {t("common.back", "返回")}
+        </button>
+        <span className="text-xs text-muted-foreground">|</span>
+        <span className="text-xs font-medium text-foreground truncate">
+          #{issueNumber} {title}
+        </span>
+        <a
+          href={`https://github.com/codedogQBY/ReadAny/issues/${issueNumber}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="ml-auto text-muted-foreground hover:text-foreground"
+          title={t("feedback.openInBrowser", "在浏览器打开")}
+        >
+          <ExternalLink className="h-3.5 w-3.5" />
+        </a>
+      </div>
+
+      {loading ? (
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+        </div>
+      ) : !detail ? (
+        <div className="flex items-center justify-center py-12">
+          <p className="text-xs text-muted-foreground">
+            {t("feedback.detailLoadFailed", "加载失败，请稍后重试")}
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {/* Status */}
+          <div className="flex items-center gap-3">
+            <span
+              className={cn(
+                "text-[11px] px-2 py-0.5 rounded font-medium",
+                detail.state === "open"
+                  ? "bg-primary/10 text-primary"
+                  : "bg-muted text-muted-foreground",
+              )}
+            >
+              {detail.state === "open"
+                ? t("feedback.statusOpen", "处理中")
+                : t("feedback.statusClosed", "已关闭")}
+            </span>
+            <span className="text-[11px] text-muted-foreground">
+              {new Date(detail.createdAt).toLocaleDateString()}
+            </span>
+          </div>
+
+          {/* Body */}
+          <div className="rounded-md border border-border/70 p-4">
+            <p className="text-xs leading-5 text-foreground whitespace-pre-wrap">
+              {stripMarkdown(detail.body)}
+            </p>
+          </div>
+
+          {/* Comments */}
+          {detail.comments.length > 0 ? (
+            <div className="space-y-3">
+              <div className="flex items-center gap-1.5 text-muted-foreground">
+                <MessageCircle className="h-3.5 w-3.5" />
+                <span className="text-xs font-medium">
+                  {t("feedback.replies", "回复")} ({detail.comments.length})
+                </span>
+              </div>
+              {detail.comments.map((comment) => (
+                <div key={comment.id} className="rounded-md border border-border/70 p-3">
+                  <div className="mb-2 flex items-center justify-between">
+                    <span className="text-[11px] font-medium text-foreground">
+                      {comment.author}
+                    </span>
+                    <span className="text-[10px] text-muted-foreground">
+                      {new Date(comment.createdAt).toLocaleDateString()}
+                    </span>
+                  </div>
+                  <p className="text-xs leading-5 text-foreground whitespace-pre-wrap">
+                    {stripMarkdown(comment.body)}
+                  </p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="py-6 text-center">
+              <p className="text-xs text-muted-foreground">
+                {t("feedback.noReplies", "暂无回复，我们会尽快处理。")}
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Simple markdown stripping for display */
+function stripMarkdown(text: string): string {
+  return text
+    .replace(/^#{1,6}\s+/gm, "")
+    .replace(/\*\*(.+?)\*\*/g, "$1")
+    .replace(/`{3}[\s\S]*?`{3}/g, "[code block]")
+    .replace(/`(.+?)`/g, "$1")
+    .replace(/\[(.+?)\]\(.+?\)/g, "$1")
+    .replace(/^[-*]\s+/gm, "- ")
+    .replace(/---\n?/g, "")
+    .trim();
 }

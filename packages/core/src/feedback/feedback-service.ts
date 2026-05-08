@@ -6,8 +6,10 @@
  */
 
 import { getDB } from "../db/db-core";
+import { getPlatformService } from "../services/platform";
 import type {
   DeviceInfo,
+  FeedbackDetail,
   FeedbackRecord,
   FeedbackStatusItem,
   FeedbackSubmission,
@@ -24,21 +26,93 @@ export function setFeedbackWorkerUrl(url: string): void {
 /** Max submissions per device per day */
 const MAX_DAILY_SUBMISSIONS = 3;
 
-// ─── Log Collection ────────────────────────────────────────────────────────
+// ─── File-based Log System ────────────────────────────────────────────────
 
-const LOG_BUFFER_SIZE = 500;
-const LOG_RETENTION_MS = 24 * 60 * 60 * 1000;
-const LOG_SUBMISSION_WINDOW_MS = 60 * 60 * 1000;
+const CONSOLE_LEVELS = ["debug", "info", "log", "warn", "error"] as const;
+const LOG_DIR = "logs";
+const LOG_FLUSH_INTERVAL_MS = 3000; // Flush to file every 3 seconds
+const LOG_MAX_DAYS = 7; // Keep 7 days of logs
 
-interface LogEntry {
-  createdAt: number;
-  text: string;
+/** In-memory write buffer — flushed to file periodically */
+let _pendingLines: string[] = [];
+let _flushTimer: ReturnType<typeof setInterval> | null = null;
+let _logCaptureCleanup: (() => void) | null = null;
+let _logDirReady = false;
+let _logDirPath = "";
+
+function getTodayDateStr(): string {
+  return new Date().toISOString().slice(0, 10); // "2026-05-08"
 }
 
-const _logBuffer: LogEntry[] = [];
-const CONSOLE_LEVELS = ["debug", "info", "log", "warn", "error"] as const;
+async function ensureLogDir(): Promise<string> {
+  if (_logDirReady) return _logDirPath;
+  const platform = getPlatformService();
+  const dataDir = await platform.getAppDataDir();
+  _logDirPath = await platform.joinPath(dataDir, LOG_DIR);
+  try {
+    await platform.mkdir(_logDirPath);
+  } catch {
+    // Already exists
+  }
+  _logDirReady = true;
+  return _logDirPath;
+}
 
-let _logCaptureCleanup: (() => void) | null = null;
+async function getLogFilePath(dateStr?: string): Promise<string> {
+  const platform = getPlatformService();
+  const dir = await ensureLogDir();
+  const filename = `app-${dateStr || getTodayDateStr()}.log`;
+  return platform.joinPath(dir, filename);
+}
+
+/** Flush pending log lines to file */
+async function flushLogs(): Promise<void> {
+  if (_pendingLines.length === 0) return;
+  const lines = _pendingLines.join("");
+  _pendingLines = [];
+
+  try {
+    const filePath = await getLogFilePath();
+    const platform = getPlatformService();
+    // Read existing content and append
+    let existing = "";
+    try {
+      if (await platform.exists(filePath)) {
+        existing = await platform.readTextFile(filePath);
+      }
+    } catch {
+      // File may not exist yet
+    }
+    await platform.writeTextFile(filePath, existing + lines);
+  } catch {
+    // Non-fatal: if file write fails, logs are lost
+  }
+}
+
+/** Delete log files older than LOG_MAX_DAYS */
+async function cleanOldLogs(): Promise<void> {
+  try {
+    const platform = getPlatformService();
+    const dir = await ensureLogDir();
+    const now = Date.now();
+
+    // Try to delete old files by iterating possible old dates (7-30 days ago)
+    for (let i = LOG_MAX_DAYS; i < 30; i++) {
+      const d = new Date(now - i * 24 * 60 * 60 * 1000);
+      const dateStr = d.toISOString().slice(0, 10);
+      const oldFile = await platform.joinPath(dir, `app-${dateStr}.log`);
+      try {
+        if (await platform.exists(oldFile)) {
+          await platform.deleteFile(oldFile);
+        }
+      } catch {
+        // Ignore
+      }
+    }
+  } catch {
+    // Non-fatal
+  }
+}
 
 function getEventTarget(): Pick<Window, "addEventListener" | "removeEventListener"> | null {
   if (typeof window === "undefined") return null;
@@ -70,27 +144,10 @@ function formatErrorEvent(event: ErrorEvent): string {
   }`;
 }
 
-function pruneLogs(now = Date.now()): void {
-  const oldestAllowedAt = now - LOG_RETENTION_MS;
-  while (_logBuffer.length > 0 && _logBuffer[0].createdAt < oldestAllowedAt) {
-    _logBuffer.shift();
-  }
-  while (_logBuffer.length > LOG_BUFFER_SIZE) {
-    _logBuffer.shift();
-  }
-}
-
-/** Call this to capture log entries into the ring buffer */
+/** Append a single log line to the write buffer */
 export function appendLog(entry: string): void {
-  const now = Date.now();
-  pruneLogs(now);
-  if (_logBuffer.length >= LOG_BUFFER_SIZE) {
-    _logBuffer.shift();
-  }
-  _logBuffer.push({
-    createdAt: now,
-    text: `[${new Date(now).toISOString()}] ${entry}`,
-  });
+  const line = `[${new Date().toISOString()}] ${entry}\n`;
+  _pendingLines.push(line);
 }
 
 /** Capture a structured app event into the feedback log buffer. */
@@ -103,24 +160,69 @@ export function appendStructuredLog(
   appendLog(`[${level}] [event:${event}]${payload}`);
 }
 
-/** Get recent logs as a single string. Defaults to the last hour. */
-export function collectLogs(options?: { sinceMs?: number }): string {
-  const now = Date.now();
-  pruneLogs(now);
-  const sinceMs = options?.sinceMs ?? LOG_SUBMISSION_WINDOW_MS;
-  const since = now - sinceMs;
-  return _logBuffer
-    .filter((entry) => entry.createdAt >= since)
-    .map((entry) => entry.text)
-    .join("\n");
+/** Collect logs for feedback submission. Reads today's + yesterday's log files. */
+export async function collectLogs(options?: { sinceMs?: number }): Promise<string> {
+  // First flush any pending lines
+  await flushLogs();
+
+  const platform = getPlatformService();
+  const sinceMs = options?.sinceMs ?? 60 * 60 * 1000; // Default last 1 hour
+  const sinceTime = new Date(Date.now() - sinceMs).toISOString();
+  const parts: string[] = [];
+
+  // Read today's log
+  try {
+    const todayPath = await getLogFilePath(getTodayDateStr());
+    if (await platform.exists(todayPath)) {
+      parts.push(await platform.readTextFile(todayPath));
+    }
+  } catch {
+    // Ignore
+  }
+
+  // If sinceMs spans more than today, also read yesterday
+  const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  if (yesterday !== getTodayDateStr()) {
+    try {
+      const yesterdayPath = await getLogFilePath(yesterday);
+      if (await platform.exists(yesterdayPath)) {
+        const content = await platform.readTextFile(yesterdayPath);
+        parts.unshift(content);
+      }
+    } catch {
+      // Ignore
+    }
+  }
+
+  const allLogs = parts.join("");
+
+  // Filter lines by timestamp (only return lines since the cutoff)
+  const lines = allLogs.split("\n").filter((line) => {
+    const match = line.match(/^\[(\d{4}-\d{2}-\d{2}T[\d:.]+Z)\]/);
+    if (!match) return false;
+    return match[1] >= sinceTime;
+  });
+
+  return lines.join("\n");
 }
 
-/** Clear the log buffer */
-export function clearLogs(): void {
-  _logBuffer.length = 0;
+/** Clear all log files */
+export async function clearLogs(): Promise<void> {
+  _pendingLines = [];
+  try {
+    const platform = getPlatformService();
+    await ensureLogDir();
+    // Delete current day's log
+    const todayPath = await getLogFilePath(getTodayDateStr());
+    if (await platform.exists(todayPath)) {
+      await platform.deleteFile(todayPath);
+    }
+  } catch {
+    // Ignore
+  }
 }
 
-/** Install console/error capture into the feedback log buffer. Safe to call more than once. */
+/** Install console/error capture into the file-based log system. Safe to call more than once. */
 export function installFeedbackLogCapture(): () => void {
   if (_logCaptureCleanup) return _logCaptureCleanup;
 
@@ -150,6 +252,14 @@ export function installFeedbackLogCapture(): () => void {
     eventTarget.addEventListener("unhandledrejection", onUnhandledRejection);
   }
 
+  // Start periodic flush timer
+  _flushTimer = setInterval(() => {
+    flushLogs().catch(() => {});
+  }, LOG_FLUSH_INTERVAL_MS);
+
+  // Clean old logs on startup (fire-and-forget)
+  cleanOldLogs().catch(() => {});
+
   _logCaptureCleanup = () => {
     for (const [level, original] of originalConsole.entries()) {
       console[level] = original as (typeof console)[typeof level];
@@ -158,6 +268,12 @@ export function installFeedbackLogCapture(): () => void {
       eventTarget.removeEventListener("error", onError);
       eventTarget.removeEventListener("unhandledrejection", onUnhandledRejection);
     }
+    if (_flushTimer) {
+      clearInterval(_flushTimer);
+      _flushTimer = null;
+    }
+    // Final flush
+    flushLogs().catch(() => {});
     _logCaptureCleanup = null;
   };
 
@@ -383,4 +499,18 @@ export function collectDeviceInfo(overrides?: Partial<DeviceInfo>): DeviceInfo {
     locale: "unknown",
     ...overrides,
   };
+}
+
+// ─── Feedback Detail ──────────────────────────────────────────────────────
+
+export async function getFeedbackDetail(issueNumber: number): Promise<FeedbackDetail | null> {
+  if (!_workerBaseUrl || !issueNumber) return null;
+
+  try {
+    const response = await fetch(`${_workerBaseUrl}/api/feedback/detail?issue=${issueNumber}`);
+    if (!response.ok) return null;
+    return (await response.json()) as FeedbackDetail;
+  } catch {
+    return null;
+  }
 }

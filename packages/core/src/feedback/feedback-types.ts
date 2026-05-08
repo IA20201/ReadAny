@@ -45,3 +45,21 @@ export interface FeedbackStatusItem {
   hasNewComment: boolean;
   commentCount?: number;
 }
+
+export interface FeedbackComment {
+  id: number;
+  body: string;
+  createdAt: string;
+  author: string;
+  avatarUrl: string;
+}
+
+export interface FeedbackDetail {
+  number: number;
+  title: string;
+  state: "open" | "closed";
+  body: string;
+  createdAt: string;
+  updatedAt: string;
+  comments: FeedbackComment[];
+}
