@@ -29,7 +29,8 @@ export function TranslationPage({ onNext, onPrev, step, totalSteps }: any) {
     try {
       await testDeepLConnection(apiKey, baseUrl);
       setStatus("success");
-    } catch {
+    } catch (err) {
+      console.warn("[Onboarding] Translation connection test failed:", err);
       setStatus("error");
     }
   };

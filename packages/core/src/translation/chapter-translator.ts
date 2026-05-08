@@ -206,7 +206,7 @@ export async function translateChapter(
 
         if (translatedTexts[i]) {
           storeInCache(chunk[i].text, translatedTexts[i], sourceLang, targetLang, providerId).catch(
-            () => {},
+            (err) => console.warn("[Translation] Failed to cache translation result:", err),
           );
         }
       }
