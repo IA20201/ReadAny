@@ -34,6 +34,7 @@ module.exports = {
         foregroundImage: "./assets/adaptive-icon.png",
         backgroundColor: "#05042B",
       },
+      softwareKeyboardLayoutMode: "resize",
       package: variant.androidPackage,
       permissions: [
         "android.permission.CAMERA",
