@@ -19,6 +19,8 @@ export function TranslationSettings() {
   const modelPopoverRef = useRef<HTMLDivElement>(null);
 
   const isAIProvider = translationConfig.provider.id === "ai";
+  const isDeepLProvider = translationConfig.provider.id === "deepl";
+  const isMicrosoftProvider = translationConfig.provider.id === "microsoft";
 
   // Get all endpoints with models
   const endpointsWithModels = aiConfig.endpoints.filter((e) => e.models.length > 0);
@@ -45,7 +47,7 @@ export function TranslationSettings() {
     updateTranslationConfig({
       provider: {
         ...translationConfig.provider,
-        id: providerId as "ai" | "deepl",
+        id: providerId as "ai" | "deepl" | "microsoft",
         name: TRANSLATOR_PROVIDERS.find((p) => p.id === providerId)?.name || "",
       },
     });
@@ -144,6 +146,15 @@ export function TranslationSettings() {
             </div>
           </div>
 
+          {/* Microsoft - no config needed */}
+          {isMicrosoftProvider && (
+            <div className="rounded-lg border border-green-200 bg-green-50 px-3 py-2.5 dark:border-green-800/40 dark:bg-green-900/20">
+              <p className="text-xs text-green-700 dark:text-green-300">
+                {t("settings.microsoftFreeHint", "免费内置，无需配置。使用微软 Edge 翻译引擎。")}
+              </p>
+            </div>
+          )}
+
           {/* AI 模型选择 (only show for AI provider) */}
           {isAIProvider && (
             <div className="space-y-2">
@@ -204,7 +215,7 @@ export function TranslationSettings() {
           )}
 
           {/* DeepL API Key (only show for DeepL) */}
-          {!isAIProvider && (
+          {isDeepLProvider && (
             <div className="space-y-4">
               <div className="space-y-2">
                 <label className="text-sm text-foreground">{t("settings.apiKey")}</label>

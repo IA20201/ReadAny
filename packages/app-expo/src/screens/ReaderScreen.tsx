@@ -491,6 +491,8 @@ export function ReaderScreen({ route, navigation }: Props) {
         true;
       `);
     },
+    getCurrentCfi: () => currentCfi,
+    goToCfi: (cfi) => bridgeRef.current?.goToCFI(cfi),
   });
 
   useEffect(() => {

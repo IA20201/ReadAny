@@ -481,6 +481,8 @@ export function ReaderView({ bookId, tabId }: ReaderViewProps) {
     removeTranslations: () => foliateRef.current?.removeChapterTranslations(),
     applyVisibility: (originalVisible, translationVisible) =>
       foliateRef.current?.applyChapterTranslationVisibility(originalVisible, translationVisible),
+    getCurrentCfi: () => readerTab?.currentCfi,
+    goToCfi: (cfi) => foliateRef.current?.goToCFI(cfi),
   });
 
   // Track which highlights have been rendered (id -> {cfi, note}) to detect changes

@@ -50,6 +50,10 @@ export interface UseChapterTranslationOptions {
   removeTranslations: () => void;
   /** Apply visibility settings to the DOM */
   applyVisibility?: (originalVisible: boolean, translationVisible: boolean) => void;
+  /** Get current reader position (CFI) — used to restore position after translation injection */
+  getCurrentCfi?: () => string | undefined;
+  /** Navigate to a CFI — used to restore position after translation injection */
+  goToCfi?: (cfi: string) => void;
 }
 
 export function useChapterTranslation(options: UseChapterTranslationOptions) {
@@ -63,11 +67,12 @@ export function useChapterTranslation(options: UseChapterTranslationOptions) {
     injectTranslations,
     removeTranslations,
     applyVisibility,
+    getCurrentCfi,
+    goToCfi,
   } = options;
 
   const [state, setState] = useState<ChapterTranslationState>({ status: "idle" });
   const abortRef = useRef<AbortController | null>(null);
-  const autoRestoreAttemptedRef = useRef<string>("");
   const startTranslationRef = useRef<() => void>(() => {});
 
   const translationConfigFromStore = useSettingsStore((s) => s.translationConfig);
@@ -195,52 +200,55 @@ export function useChapterTranslation(options: UseChapterTranslationOptions) {
   const reset = useCallback(async () => {
     abortRef.current?.abort();
     abortRef.current = null;
-    autoRestoreAttemptedRef.current = "";
     removeTranslations();
     setState({ status: "idle" });
-    await clearChapterCache(bookId, sectionIndex);
-  }, [removeTranslations, bookId, sectionIndex]);
+    // Note: we do NOT clear the persistent chapter cache here.
+    // This allows auto-restore to work when the user returns to this chapter.
+  }, [removeTranslations]);
 
   // ---- Auto-restore cached translations on section load -----------------------
   useEffect(() => {
-    const key = `${bookId}_${sectionIndex}_${translationConfig.targetLang}`;
-    // Only attempt once per section+lang combo, and only when idle+ready
-    if (!ready || state.status !== "idle" || autoRestoreAttemptedRef.current === key) return;
-    autoRestoreAttemptedRef.current = key;
+    if (!ready || state.status !== "idle") return;
 
     let cancelled = false;
-    // Small delay to ensure DOM is fully stable after navigation
+    // Delay to ensure reader position is fully stable before injecting
     const timer = setTimeout(async () => {
       try {
         const cached = await isChapterFullyCached(bookId, sectionIndex, translationConfig.targetLang);
-        if (cached && !cancelled) {
-          // Get paragraphs and restore translations from cache
-          const paragraphs = await getParagraphs();
-          const providerId = translationConfig.provider.id;
-          const results: ChapterTranslationResult[] = [];
-          
-          for (const p of paragraphs) {
-            const translation = await getFromCache(
-              p.text,
-              "AUTO",
-              translationConfig.targetLang,
-              providerId,
-            );
-            if (translation) {
-              results.push({
-                paragraphId: p.id,
-                originalText: p.text,
-                translatedText: translation,
-              });
-            }
+        if (!cached || cancelled) return;
+
+        const paragraphs = await getParagraphs();
+        if (cancelled) return;
+        const providerId = translationConfig.provider.id;
+        const results: ChapterTranslationResult[] = [];
+
+        for (const p of paragraphs) {
+          const translation = await getFromCache(
+            p.text,
+            "AUTO",
+            translationConfig.targetLang,
+            providerId,
+          );
+          if (translation) {
+            results.push({
+              paragraphId: p.id,
+              originalText: p.text,
+              translatedText: translation,
+            });
           }
-          
-          // Inject translations to DOM
-          if (results.length > 0) {
-            injectTranslations(results);
+        }
+
+        if (results.length > 0 && !cancelled) {
+          // Remember position before injection
+          const cfiBeforeInject = getCurrentCfi?.();
+
+          injectTranslations(results);
+
+          // Restore position after DOM change (prevents jump)
+          if (cfiBeforeInject && goToCfi) {
+            setTimeout(() => goToCfi(cfiBeforeInject), 50);
           }
-          
-          // Always show both original and translation by default
+
           setState({
             status: "complete",
             originalVisible: true,
@@ -250,10 +258,11 @@ export function useChapterTranslation(options: UseChapterTranslationOptions) {
       } catch (err) {
         console.warn("[Translation] Auto-restore translation failed:", err);
       }
-    }, 300);
+    }, 1500); // Wait for reader position to fully stabilize
 
     return () => { cancelled = true; clearTimeout(timer); };
-  }, [ready, bookId, sectionIndex, translationConfig.targetLang, state.status, getParagraphs, injectTranslations, translationConfig.provider.id]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, bookId, sectionIndex, translationConfig.targetLang]);
 
   return { state, startTranslation, cancelTranslation, toggleOriginalVisible, toggleTranslationVisible, reset };
 }
