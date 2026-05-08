@@ -144,9 +144,15 @@ function formatErrorEvent(event: ErrorEvent): string {
   }`;
 }
 
+/** Format date as local time string: YYYY-MM-DD HH:mm:ss.SSS */
+function formatLocalTime(date: Date): string {
+  const pad = (n: number, len = 2) => String(n).padStart(len, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}.${pad(date.getMilliseconds(), 3)}`;
+}
+
 /** Append a single log line to the write buffer */
 export function appendLog(entry: string): void {
-  const line = `[${new Date().toISOString()}] ${entry}\n`;
+  const line = `[${formatLocalTime(new Date())}] ${entry}\n`;
   _pendingLines.push(line);
 }
 
@@ -167,7 +173,7 @@ export async function collectLogs(options?: { sinceMs?: number }): Promise<strin
 
   const platform = getPlatformService();
   const sinceMs = options?.sinceMs ?? 60 * 60 * 1000; // Default last 1 hour
-  const sinceTime = new Date(Date.now() - sinceMs).toISOString();
+  const sinceTime = formatLocalTime(new Date(Date.now() - sinceMs));
   const parts: string[] = [];
 
   // Read today's log
@@ -198,7 +204,7 @@ export async function collectLogs(options?: { sinceMs?: number }): Promise<strin
 
   // Filter lines by timestamp (only return lines since the cutoff)
   const lines = allLogs.split("\n").filter((line) => {
-    const match = line.match(/^\[(\d{4}-\d{2}-\d{2}T[\d:.]+Z)\]/);
+    const match = line.match(/^\[(\d{4}-\d{2}-\d{2} [\d:.]+)\]/);
     if (!match) return false;
     return match[1] >= sinceTime;
   });
@@ -469,6 +475,8 @@ export async function refreshFeedbackStatus(issueNumbers: number[]): Promise<Fee
 
   // Update local DB
   const db = await getDB();
+  const returnedNumbers = new Set(items.map((i) => i.number));
+
   for (const item of items) {
     const existingRows = await db.select<{
       comment_count?: number | null;
@@ -483,6 +491,18 @@ export async function refreshFeedbackStatus(issueNumbers: number[]): Promise<Fee
       "UPDATE feedback SET status = ?, has_new_reply = ?, comment_count = ?, updated_at = ? WHERE issue_number = ?",
       [item.state, hasNewReply ? 1 : 0, commentCount, Date.now(), item.number],
     );
+  }
+
+  // Remove issues not returned by the API (likely deleted on GitHub)
+  // Only delete records older than 5 minutes to avoid race condition with newly submitted feedback
+  const safeDeleteThreshold = Date.now() - 5 * 60 * 1000;
+  for (const num of issueNumbers) {
+    if (!returnedNumbers.has(num)) {
+      await db.execute("DELETE FROM feedback WHERE issue_number = ? AND created_at < ?", [
+        num,
+        safeDeleteThreshold,
+      ]);
+    }
   }
 
   return items;
