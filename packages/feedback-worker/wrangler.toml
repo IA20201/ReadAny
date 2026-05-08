@@ -12,6 +12,6 @@ RATE_LIMIT_STATUS_PER_HOUR = "120"
 
 # Create a KV namespace and uncomment before production deploy:
 # pnpm dlx wrangler@4 kv namespace create FEEDBACK_RATE_LIMIT
-# [[kv_namespaces]]
-# binding = "FEEDBACK_RATE_LIMIT"
-# id = "<replace-with-kv-namespace-id>"
+[[kv_namespaces]]
+binding = "FEEDBACK_RATE_LIMIT"
+id = "9b2e37933be24dfeb3d1d8bcbc3e181a"
