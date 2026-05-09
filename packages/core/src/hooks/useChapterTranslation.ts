@@ -12,8 +12,10 @@ import { useSettingsStore } from "../stores/settings-store";
 import { getFromCache } from "../translation/cache";
 import {
   clearChapterCache,
+  getChapterTranslationSettings,
   isChapterFullyCached,
   markChapterFullyCached,
+  updateChapterTranslationSettings,
 } from "../translation/chapter-cache";
 import type {
   ChapterParagraph,
@@ -209,9 +211,11 @@ export function useChapterTranslation(options: UseChapterTranslationOptions) {
         originalVisible: newVisible,
         translationVisible: prev.translationVisible,
       };
+      // Persist visibility preference
+      updateChapterTranslationSettings(bookId, sectionIndex, visibilityRef.current).catch(() => {});
       return { ...prev, ...visibilityRef.current };
     });
-  }, [applyVisibility]);
+  }, [applyVisibility, bookId, sectionIndex]);
 
   // ---- Toggle Translation Visibility ----------------------------------------
   const toggleTranslationVisible = useCallback(() => {
@@ -224,9 +228,11 @@ export function useChapterTranslation(options: UseChapterTranslationOptions) {
         originalVisible: prev.originalVisible,
         translationVisible: newVisible,
       };
+      // Persist visibility preference
+      updateChapterTranslationSettings(bookId, sectionIndex, visibilityRef.current).catch(() => {});
       return { ...prev, ...visibilityRef.current };
     });
-  }, [applyVisibility]);
+  }, [applyVisibility, bookId, sectionIndex]);
 
   // ---- Reset (e.g. on chapter change) ---------------------------------------
   const reset = useCallback(async () => {
@@ -251,6 +257,14 @@ export function useChapterTranslation(options: UseChapterTranslationOptions) {
           translationConfig.targetLang,
         );
         if (!cached || cancelled) return;
+
+        // Load saved visibility preferences
+        const savedSettings = await getChapterTranslationSettings(bookId, sectionIndex);
+        const visibility = {
+          originalVisible: savedSettings?.originalVisible ?? true,
+          translationVisible: savedSettings?.translationVisible ?? true,
+        };
+        visibilityRef.current = visibility;
 
         const paragraphs = await getParagraphsRef.current();
         if (cancelled) return;
