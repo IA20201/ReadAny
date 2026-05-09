@@ -292,7 +292,6 @@ export function ReaderScreen({ route, navigation }: Props) {
 
   // Chapter translation state
   const [currentSectionIndex, setCurrentSectionIndex] = useState(0);
-  const webViewRefForVisibility = useRef<WebView | null>(null);
   const chapterTranslationBridgeRef = useRef<{
     getChapterParagraphs: () => Promise<Array<{ id: string; text: string; tagName: string }>>;
     injectChapterTranslations: (
@@ -459,7 +458,7 @@ export function ReaderScreen({ route, navigation }: Props) {
       const translationHidden = !translationVisible;
       const originalHidden = !originalVisible;
       const solo = !originalVisible && translationVisible;
-      webViewRefForVisibility.current?.injectJavaScript(`
+      bridge.webViewRef.current?.injectJavaScript(`
         (function() {
           try {
             var doc = null;
