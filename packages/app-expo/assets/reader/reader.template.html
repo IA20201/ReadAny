@@ -822,7 +822,7 @@
           postToRN('ttsSegmentContext', getTTSSegmentContextFromEngine(msg.cfi, msg.before, msg.after));
           break;
         case 'injectChapterTranslations':
-          handleInjectChapterTranslations(msg.results || []);
+          await handleInjectChapterTranslations(msg.results || [], msg.visibility);
           break;
         case 'removeChapterTranslations':
           handleRemoveChapterTranslations();
@@ -3187,8 +3187,8 @@ a { color: ${primary} !important; }
     window.doGetChapterParagraphs = function () {
       handleGetChapterParagraphs();
     };
-    window.doInjectChapterTranslations = function (results) {
-      handleInjectChapterTranslations(results);
+    window.doInjectChapterTranslations = function (results, visibility) {
+      return handleInjectChapterTranslations(results, visibility);
     };
     window.doRemoveChapterTranslations = function () {
       handleRemoveChapterTranslations();
@@ -3398,8 +3398,55 @@ a { color: ${primary} !important; }
       }
     }
 
-    function handleInjectChapterTranslations(results) {
+    function getReaderLayoutSignature(doc) {
+      var root = doc && doc.documentElement;
+      var body = doc && doc.body;
+      var renderer = view && view.renderer;
+      return [
+        root ? root.scrollWidth : 0,
+        root ? root.scrollHeight : 0,
+        body ? body.scrollWidth : 0,
+        body ? body.scrollHeight : 0,
+        renderer && typeof renderer.page !== 'undefined' ? renderer.page : '',
+        renderer && typeof renderer.pages !== 'undefined' ? renderer.pages : ''
+      ].join(':');
+    }
+
+    function waitForReaderLayoutStable(doc) {
+      return new Promise(function(resolve) {
+        var win = (doc && doc.defaultView) || window;
+        var requestFrame = win.requestAnimationFrame
+          ? win.requestAnimationFrame.bind(win)
+          : function(callback) { return setTimeout(function() { callback(Date.now()); }, 16); };
+        var previous = getReaderLayoutSignature(doc);
+        var stableFrames = 0;
+        var frames = 0;
+
+        function tick() {
+          frames += 1;
+          var next = getReaderLayoutSignature(doc);
+          if (next === previous) {
+            stableFrames += 1;
+          } else {
+            stableFrames = 0;
+            previous = next;
+          }
+
+          if (stableFrames >= 2 || frames >= 12) {
+            resolve();
+            return;
+          }
+
+          requestFrame(tick);
+        }
+
+        requestFrame(tick);
+      });
+    }
+
+    async function handleInjectChapterTranslations(results, visibility) {
       try {
+        visibility = visibility || { originalVisible: true, translationVisible: true };
         var doc = null;
         var renderer = view && view.renderer;
         if (renderer && renderer.getContents) {
@@ -3449,15 +3496,23 @@ a { color: ${primary} !important; }
           if (!r.translatedText) continue;
           var el = doc.querySelector('[data-translate-id="' + r.paragraphId + '"]');
           if (!el) continue;
+          el.setAttribute('data-original-hidden', String(!visibility.originalVisible));
           // Skip if already injected
-          if (el.nextElementSibling && el.nextElementSibling.classList.contains('readany-translation')) continue;
+          if (el.nextElementSibling && el.nextElementSibling.classList.contains('readany-translation')) {
+            el.nextElementSibling.setAttribute('data-hidden', String(!visibility.translationVisible));
+            el.nextElementSibling.setAttribute('data-solo', String(!visibility.originalVisible && visibility.translationVisible));
+            continue;
+          }
 
           var div = doc.createElement('div');
           div.className = 'readany-translation';
           div.setAttribute('data-para-id', r.paragraphId);
+          div.setAttribute('data-hidden', String(!visibility.translationVisible));
+          div.setAttribute('data-solo', String(!visibility.originalVisible && visibility.translationVisible));
           div.textContent = r.translatedText;
           el.parentNode.insertBefore(div, el.nextSibling);
         }
+        await waitForReaderLayoutStable(doc);
       } catch (err) {
         console.error('[WebView] Error injecting translations:', err);
       }

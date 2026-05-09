@@ -1,9 +1,12 @@
+import type { RootStackParamList } from "@/navigation/RootNavigator";
 /**
  * FeedbackScreen — Submit bug reports / feature requests and track history.
  * Submissions are sent to a Cloudflare Worker that creates GitHub Issues.
  */
 import { useColors } from "@/styles/theme";
 import type { ThemeColors } from "@/styles/theme";
+import { useNavigation } from "@react-navigation/native";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import {
   collectDeviceInfo,
   collectLogs,
@@ -33,9 +36,6 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useNavigation } from "@react-navigation/native";
-import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import type { RootStackParamList } from "@/navigation/RootNavigator";
 import { SettingsHeader } from "./SettingsHeader";
 
 const FEEDBACK_TYPES: {
@@ -125,6 +125,8 @@ function SubmitTab({ colors, t, locale }: FeedbackTabProps & { locale: string })
   );
 
   const canSubmit = title.trim().length > 0 && description.trim().length > 0 && remaining > 0;
+  const submitBackgroundColor = canSubmit ? colors.primary : colors.muted;
+  const submitForegroundColor = canSubmit ? colors.primaryForeground : colors.mutedForeground;
 
   const handleSubmit = useCallback(async () => {
     if (!canSubmit || submitting) return;
@@ -281,15 +283,17 @@ function SubmitTab({ colors, t, locale }: FeedbackTabProps & { locale: string })
 
         {/* Submit */}
         <TouchableOpacity
-          style={[styles.submitBtn, { backgroundColor: canSubmit ? colors.primary : colors.muted }]}
+          style={[styles.submitBtn, { backgroundColor: submitBackgroundColor }]}
           onPress={handleSubmit}
           disabled={!canSubmit || submitting}
           activeOpacity={0.8}
         >
           {submitting ? (
-            <ActivityIndicator color="#fff" size="small" />
+            <ActivityIndicator color={submitForegroundColor} size="small" />
           ) : (
-            <Text style={styles.submitBtnText}>{t("feedback.submit", "提交反馈")}</Text>
+            <Text style={[styles.submitBtnText, { color: submitForegroundColor }]}>
+              {t("feedback.submit", "提交反馈")}
+            </Text>
           )}
         </TouchableOpacity>
         <Text style={[styles.remainingText, { color: colors.mutedForeground }]}>
@@ -307,17 +311,20 @@ function HistoryTab({ colors, t }: FeedbackTabProps) {
   const [loading, setLoading] = useState(true);
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
 
-  const handleOpenIssue = useCallback(async (item: FeedbackRecord) => {
-    if (item.hasNewReply) {
-      setRecords((current) =>
-        current.map((record) =>
-          record.id === item.id ? { ...record, hasNewReply: false } : record,
-        ),
-      );
-      await markFeedbackReplySeen(item.issueNumber).catch(() => {});
-    }
-    navigation.navigate("FeedbackDetail", { issueNumber: item.issueNumber, title: item.title });
-  }, [navigation]);
+  const handleOpenIssue = useCallback(
+    async (item: FeedbackRecord) => {
+      if (item.hasNewReply) {
+        setRecords((current) =>
+          current.map((record) =>
+            record.id === item.id ? { ...record, hasNewReply: false } : record,
+          ),
+        );
+        await markFeedbackReplySeen(item.issueNumber).catch(() => {});
+      }
+      navigation.navigate("FeedbackDetail", { issueNumber: item.issueNumber, title: item.title });
+    },
+    [navigation],
+  );
 
   useEffect(() => {
     async function loadRecords() {
@@ -490,7 +497,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  submitBtnText: { color: "#fff", fontSize: 15, fontWeight: "600" },
+  submitBtnText: { fontSize: 15, fontWeight: "600" },
   remainingText: { fontSize: 11, textAlign: "center", marginTop: 8 },
   emptyState: { flex: 1, alignItems: "center", justifyContent: "center", padding: 40 },
   emptyText: { fontSize: 14 },

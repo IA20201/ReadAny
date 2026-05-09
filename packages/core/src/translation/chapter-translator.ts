@@ -9,6 +9,7 @@ import type { TranslationConfig } from "../types/translation";
 import { getFromCache, storeInCache } from "./cache";
 import { aiTranslateBatch } from "./providers";
 import { deeplTranslate } from "./providers";
+import { microsoftTranslate } from "./providers";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -167,7 +168,9 @@ export async function translateChapter(
       let translatedTexts: string[];
 
       try {
-        if (providerId === "ai") {
+        if (providerId === "microsoft") {
+          translatedTexts = await microsoftTranslate(texts, sourceLang, targetLang);
+        } else if (providerId === "ai") {
           translatedTexts = await aiTranslateBatch(
             texts,
             sourceLang,
