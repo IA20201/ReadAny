@@ -821,24 +821,27 @@ export class OpenAITTSPlayer implements ITTSPlayer {
     this.pendingBytes = [];
 
     const headers: Record<string, string> = {
-      "Content-Type": "application/json",
+      "Content-Type": "application/json; charset=utf-8",
     };
     if (config.openaiApiKey && config.openaiApiKey !== "not-needed") {
       headers["Authorization"] = `Bearer ${config.openaiApiKey}`;
     }
 
     const url = `${config.openaiBaseUrl}/audio/speech`;
+    const jsonStr = JSON.stringify({
+      input: text,
+      voice: config.openaiVoice,
+      model: config.openaiModel,
+      response_format: "mp3",
+      speed: config.rate,
+      stream: true,
+    });
+    const encoder = new TextEncoder();
+    const body = encoder.encode(jsonStr);
     const response = await fetch(url, {
       method: "POST",
       headers,
-      body: JSON.stringify({
-        input: text,
-        voice: config.openaiVoice,
-        model: config.openaiModel,
-        response_format: "mp3",
-        speed: config.rate,
-        stream: true,
-      }),
+      body,
       signal: this.abortController.signal,
     });
 
@@ -953,26 +956,27 @@ export class OpenAITTSPlayer implements ITTSPlayer {
   }
 
   private async fetchAudio(text: string, config: TTSConfig, stream: boolean): Promise<ArrayBuffer> {
-    const platform = getPlatformService();
     const headers: Record<string, string> = {
-      "Content-Type": "application/json",
+      "Content-Type": "application/json; charset=utf-8",
     };
     if (config.openaiApiKey && config.openaiApiKey !== "not-needed") {
       headers["Authorization"] = `Bearer ${config.openaiApiKey}`;
     }
 
     const url = `${config.openaiBaseUrl}/audio/speech`;
-    const response = await platform.fetch(url, {
+    const jsonStr = JSON.stringify({
+      input: text,
+      voice: config.openaiVoice,
+      model: config.openaiModel,
+      response_format: "mp3",
+      speed: config.rate,
+      stream,
+    });
+    // Use native fetch (not platform.fetch) to work in both Tauri and browser environments
+    const response = await fetch(url, {
       method: "POST",
       headers,
-      body: JSON.stringify({
-        input: text,
-        voice: config.openaiVoice,
-        model: config.openaiModel,
-        response_format: "mp3",
-        speed: config.rate,
-        stream,
-      }),
+      body: jsonStr,
     });
 
     if (!response.ok) {
