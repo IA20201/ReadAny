@@ -637,3 +637,452 @@ export class EdgeTTSPlayer implements ITTSPlayer {
     this.scheduledEnd = 0;
   }
 }
+
+// ── OpenAI TTS (OpenAI-compatible /v1/audio/speech endpoint) ──
+
+export class OpenAITTSPlayer implements ITTSPlayer {
+  private audioCtx: AudioContext | null = null;
+  private gainNode: GainNode | null = null;
+  private scheduledEnd = 0;
+  private _playing = false;
+  private _paused = false;
+  private aborted = false;
+  private hasAudioData = false;
+  private playingNotified = false;
+  private checkEndTimer: ReturnType<typeof setInterval> | null = null;
+  private allChunksDone = false;
+  private fetchBuffer = new Map<number, Promise<ArrayBuffer>>();
+  private producerIndex = 0;
+  private producerWake: (() => void) | null = null;
+  private chunkStartTimers = new Set<ReturnType<typeof setTimeout>>();
+  private pausedAt = 0;
+  private static readonly BUFFER_SIZE = 2;
+
+  // Streaming state
+  private abortController: AbortController | null = null;
+  private pendingBytes: Uint8Array[] = [];
+  private decodeTimeout: ReturnType<typeof setTimeout> | null = null;
+
+  onStateChange?: (state: "playing" | "paused" | "stopped") => void;
+  onChunkChange?: (index: number, total: number) => void;
+  onEnd?: () => void;
+
+  get playing() {
+    return this._playing;
+  }
+  get paused() {
+    return this._paused;
+  }
+
+  async speak(text: string | string[], config: TTSConfig) {
+    this.aborted = true;
+    this.cleanupAudio();
+    this.fetchBuffer.clear();
+    this.producerWake?.();
+    if (this.checkEndTimer) {
+      clearInterval(this.checkEndTimer);
+      this.checkEndTimer = null;
+    }
+    if (this.decodeTimeout) {
+      clearTimeout(this.decodeTimeout);
+      this.decodeTimeout = null;
+    }
+    this.abortController?.abort();
+    this.pendingBytes = [];
+
+    const chunks = Array.isArray(text) ? text.filter(Boolean) : splitIntoChunks(text);
+    this._playing = true;
+    this._paused = false;
+    this.aborted = false;
+    this.allChunksDone = false;
+    this.hasAudioData = false;
+    this.playingNotified = false;
+    this.pausedAt = 0;
+
+    this.audioCtx = new AudioContext();
+    this.gainNode = this.audioCtx.createGain();
+    this.gainNode.connect(this.audioCtx.destination);
+    this.scheduledEnd = 0;
+
+    if (this.audioCtx.state === "suspended") {
+      await this.audioCtx.resume();
+    }
+
+    this.checkEndTimer = setInterval(() => {
+      if (!this._playing || this._paused) return;
+      if (this.audioCtx?.state === "suspended") return;
+      if (config.openaiStreaming) return;
+      if (this.allChunksDone && this.audioCtx) {
+        if (!this.hasAudioData) {
+          this.finishPlayback();
+          return;
+        }
+        if (this.audioCtx.currentTime >= this.scheduledEnd - 0.05) {
+          this.finishPlayback();
+        }
+      }
+    }, 200);
+
+    if (config.openaiStreaming) {
+      await this.speakStreaming(chunks, config);
+    } else {
+      await this.speakNonStreaming(chunks, config);
+    }
+  }
+
+  private async speakNonStreaming(chunks: string[], config: TTSConfig) {
+    this.producerIndex = 0;
+    this.fetchBuffer.clear();
+
+    this.runProducer(chunks, config);
+
+    const prewarmCount = Math.min(OpenAITTSPlayer.BUFFER_SIZE, chunks.length);
+    for (let p = 0; p < prewarmCount; p++) {
+      if (this.fetchBuffer.has(p)) continue;
+      if (!this._playing || this.aborted) return;
+      const promise = this.fetchAudio(chunks[p], config, false);
+      promise.catch(() => {});
+      this.fetchBuffer.set(p, promise);
+      this.producerIndex = p + 1;
+    }
+
+    for (let i = 0; i < chunks.length; i++) {
+      if (!this._playing || this.aborted) return;
+      try {
+        const audioData = await this.waitForChunk(i);
+        if (!this._playing || this.aborted) return;
+        await this.decodeAndSchedule(audioData, i);
+      } catch (err) {
+        if ((err as Error)?.message === "aborted") return;
+        console.error("[OpenAI TTS] chunk error:", err);
+      }
+      this.fetchBuffer.delete(i);
+      this.producerWake?.();
+    }
+
+    this.allChunksDone = true;
+  }
+
+  private async runProducer(chunks: string[], config: TTSConfig) {
+    while (this.producerIndex < chunks.length) {
+      if (!this._playing || this.aborted) return;
+
+      while (this.fetchBuffer.size >= OpenAITTSPlayer.BUFFER_SIZE) {
+        if (!this._playing || this.aborted) return;
+        await new Promise<void>((resolve) => {
+          this.producerWake = resolve;
+        });
+        this.producerWake = null;
+      }
+
+      if (!this._playing || this.aborted) return;
+
+      const idx = this.producerIndex++;
+      const promise = this.fetchAudio(chunks[idx], config, false);
+      promise.catch(() => {});
+      this.fetchBuffer.set(idx, promise);
+    }
+  }
+
+  private async waitForChunk(index: number): Promise<ArrayBuffer> {
+    while (!this.fetchBuffer.has(index)) {
+      if (!this._playing || this.aborted) {
+        throw new Error("aborted");
+      }
+      await new Promise<void>((r) => setTimeout(r, 50));
+    }
+    return this.fetchBuffer.get(index)!;
+  }
+
+  private async speakStreaming(chunks: string[], config: TTSConfig) {
+    for (let i = 0; i < chunks.length; i++) {
+      if (!this._playing || this.aborted) return;
+      this.onChunkChange?.(i, chunks.length);
+      try {
+        await this.streamChunk(chunks[i], config, i === 0);
+      } catch (err) {
+        if ((err as Error)?.message === "aborted") return;
+        console.error("[OpenAI TTS] streaming chunk error:", err);
+      }
+    }
+
+    this.flushPendingBytes();
+    this.allChunksDone = true;
+
+    if (this._playing && !this._paused && this.audioCtx) {
+      if (!this.hasAudioData) {
+        this.finishPlayback();
+      }
+    }
+  }
+
+  private async streamChunk(text: string, config: TTSConfig, isFirst: boolean): Promise<void> {
+    this.abortController = new AbortController();
+    this.pendingBytes = [];
+
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+    };
+    if (config.openaiApiKey && config.openaiApiKey !== "not-needed") {
+      headers["Authorization"] = `Bearer ${config.openaiApiKey}`;
+    }
+
+    const url = `${config.openaiBaseUrl}/audio/speech`;
+    const response = await fetch(url, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        input: text,
+        voice: config.openaiVoice,
+        model: config.openaiModel,
+        response_format: "mp3",
+        speed: config.rate,
+        stream: true,
+      }),
+      signal: this.abortController.signal,
+    });
+
+    if (!response.ok) {
+      throw new Error(`OpenAI TTS failed: ${response.status}`);
+    }
+
+    const reader = response.body?.getReader();
+    if (!reader) throw new Error("No response body reader");
+
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let firstAudioReceived = false;
+
+    while (true) {
+      if (!this._playing) {
+        reader.cancel();
+        return;
+      }
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() || "";
+
+      for (const line of lines) {
+        if (!line.startsWith("data:")) continue;
+        const jsonStr = line.slice(5).trim();
+        if (!jsonStr) continue;
+
+        try {
+          const evt = JSON.parse(jsonStr);
+          const audioData = evt?.audio;
+          if (audioData && this.audioCtx) {
+            const binary = atob(audioData);
+            const bytes = new Uint8Array(binary.length);
+            for (let j = 0; j < binary.length; j++) {
+              bytes[j] = binary.charCodeAt(j);
+            }
+            this.pendingBytes.push(bytes);
+
+            if (!firstAudioReceived) {
+              firstAudioReceived = true;
+              if (isFirst) {
+                this.onStateChange?.("playing");
+                this.playingNotified = true;
+              }
+            }
+
+            this.scheduleFlush();
+          }
+        } catch {
+          // Ignore parse errors for non-JSON SSE lines
+        }
+      }
+    }
+
+    this.flushPendingBytes();
+  }
+
+  private scheduleFlush() {
+    if (this.decodeTimeout) return;
+    this.decodeTimeout = setTimeout(() => {
+      this.decodeTimeout = null;
+      this.flushPendingBytes();
+    }, 100);
+  }
+
+  private flushPendingBytes() {
+    if (this.decodeTimeout) {
+      clearTimeout(this.decodeTimeout);
+      this.decodeTimeout = null;
+    }
+    if (this.pendingBytes.length === 0 || !this.audioCtx || !this.gainNode) return;
+
+    const totalLen = this.pendingBytes.reduce((s, c) => s + c.length, 0);
+    const merged = new Uint8Array(totalLen);
+    let off = 0;
+    for (const chunk of this.pendingBytes) {
+      merged.set(chunk, off);
+      off += chunk.length;
+    }
+    this.pendingBytes = [];
+
+    this.decodeAndScheduleStreaming(merged.buffer);
+  }
+
+  private async decodeAndScheduleStreaming(audioData: ArrayBuffer) {
+    if (!this.audioCtx || !this.gainNode || !this._playing || this.aborted) return;
+
+    try {
+      const audioBuffer = await this.audioCtx.decodeAudioData(audioData.slice(0));
+      if (!this._playing || this.aborted || !this.audioCtx || !this.gainNode) return;
+
+      const source = this.audioCtx.createBufferSource();
+      source.buffer = audioBuffer;
+      source.connect(this.gainNode);
+
+      const startAt = Math.max(this.audioCtx.currentTime, this.scheduledEnd);
+      source.start(startAt);
+      this.scheduledEnd = startAt + audioBuffer.duration;
+      this.hasAudioData = true;
+
+      if (!this.playingNotified) {
+        this.playingNotified = true;
+        this.onStateChange?.("playing");
+      }
+    } catch (err) {
+      console.warn("[OpenAI TTS] Failed to decode streaming audio chunk:", err);
+    }
+  }
+
+  private async fetchAudio(text: string, config: TTSConfig, stream: boolean): Promise<ArrayBuffer> {
+    const platform = getPlatformService();
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+    };
+    if (config.openaiApiKey && config.openaiApiKey !== "not-needed") {
+      headers["Authorization"] = `Bearer ${config.openaiApiKey}`;
+    }
+
+    const url = `${config.openaiBaseUrl}/audio/speech`;
+    const response = await platform.fetch(url, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        input: text,
+        voice: config.openaiVoice,
+        model: config.openaiModel,
+        response_format: "mp3",
+        speed: config.rate,
+        stream,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`OpenAI TTS failed: ${response.status}`);
+    }
+
+    return response.arrayBuffer();
+  }
+
+  private async decodeAndSchedule(mp3Data: ArrayBuffer, index: number): Promise<void> {
+    if (!this.audioCtx || !this.gainNode || !this._playing || this.aborted) return;
+
+    const audioBuffer = await this.audioCtx.decodeAudioData(mp3Data.slice(0));
+    if (!this._playing || this.aborted || !this.audioCtx || !this.gainNode) return;
+
+    const source = this.audioCtx.createBufferSource();
+    source.buffer = audioBuffer;
+    source.connect(this.gainNode);
+
+    const startAt = Math.max(this.audioCtx.currentTime, this.scheduledEnd);
+    const notifyChunkStart = () => {
+      if (!this._playing || this.aborted) return;
+      this.onChunkChange?.(index, this.fetchBuffer.size + index);
+    };
+    const startDelayMs = Math.max(0, (startAt - this.audioCtx.currentTime) * 1000);
+    if (startDelayMs <= 16) {
+      notifyChunkStart();
+    } else {
+      const timer = setTimeout(() => {
+        this.chunkStartTimers.delete(timer);
+        notifyChunkStart();
+      }, startDelayMs);
+      this.chunkStartTimers.add(timer);
+    }
+    source.start(startAt);
+    this.scheduledEnd = startAt + audioBuffer.duration;
+    this.hasAudioData = true;
+
+    if (!this.playingNotified) {
+      this.playingNotified = true;
+      this.onStateChange?.("playing");
+    }
+  }
+
+  private finishPlayback() {
+    if (this.checkEndTimer) {
+      clearInterval(this.checkEndTimer);
+      this.checkEndTimer = null;
+    }
+    const onEnd = this.onEnd;
+    this.cleanupAudio();
+    this.fetchBuffer.clear();
+    this.producerWake?.();
+    this._playing = false;
+    this._paused = false;
+    this.onStateChange?.("stopped");
+    onEnd?.();
+  }
+
+  pause() {
+    if (!this._playing || this._paused) return;
+    this.pausedAt = Date.now();
+    this.audioCtx?.suspend();
+    for (const timer of this.chunkStartTimers) clearTimeout(timer);
+    this.chunkStartTimers.clear();
+    this._paused = true;
+    this.onStateChange?.("paused");
+  }
+
+  resume() {
+    if (!this._playing || !this._paused) return;
+    if (this.pausedAt > 0) {
+      const pausedSeconds = (Date.now() - this.pausedAt) / 1000;
+      this.scheduledEnd += pausedSeconds;
+    }
+    this.pausedAt = 0;
+    this.audioCtx?.resume();
+    this._paused = false;
+    this.onStateChange?.("playing");
+  }
+
+  stop() {
+    this.aborted = true;
+    this.abortController?.abort();
+    this.abortController = null;
+    if (this.checkEndTimer) {
+      clearInterval(this.checkEndTimer);
+      this.checkEndTimer = null;
+    }
+    if (this.decodeTimeout) {
+      clearTimeout(this.decodeTimeout);
+      this.decodeTimeout = null;
+    }
+    this.cleanupAudio();
+    this.fetchBuffer.clear();
+    this.producerWake?.();
+    this.pendingBytes = [];
+    this._playing = false;
+    this._paused = false;
+    this.onStateChange?.("stopped");
+  }
+
+  private cleanupAudio() {
+    for (const timer of this.chunkStartTimers) clearTimeout(timer);
+    this.chunkStartTimers.clear();
+    if (this.audioCtx) {
+      this.audioCtx.close().catch(() => {});
+      this.audioCtx = null;
+    }
+    this.gainNode = null;
+    this.scheduledEnd = 0;
+  }
+}
