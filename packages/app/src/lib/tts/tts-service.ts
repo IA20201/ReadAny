@@ -13,17 +13,23 @@ export {
   BrowserTTSPlayer,
   DashScopeTTSPlayer,
   EdgeTTSPlayer,
+  OpenAITTSPlayer,
   EDGE_TTS_VOICES,
 } from "@readany/core/tts";
 export type { EdgeTTSVoice } from "@readany/core/tts";
 
 // Singleton instances (kept at app level for lifecycle management)
-import { BrowserTTSPlayer, DashScopeTTSPlayer, EdgeTTSPlayer } from "@readany/core/tts";
+import { BrowserTTSPlayer, DashScopeTTSPlayer, EdgeTTSPlayer, OpenAITTSPlayer } from "@readany/core/tts";
 
 export const systemTTS = new BrowserTTSPlayer();
 export const browserTTS = systemTTS;
 export const edgeTTS = new EdgeTTSPlayer();
 export const dashscopeTTS = new DashScopeTTSPlayer();
+
+export const openaiTTS = new OpenAITTSPlayer();
+
+export const OPENAI_VOICES = ["alloy", "echo", "fable", "onyx", "nova", "shimmer"];
+export const OPENAI_MODELS = ["tts-1", "tts-1-hd"];
 
 /** Get available system SpeechSynthesis voices */
 export function getSystemVoices(): SpeechSynthesisVoice[] {
