@@ -8,7 +8,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
-import { DASHSCOPE_VOICES, EDGE_TTS_VOICES, getSystemVoices } from "@/lib/tts/tts-service";
+import { Switch } from "@/components/ui/switch";
+import { Input } from "@/components/ui/input";
+import { DASHSCOPE_VOICES, EDGE_TTS_VOICES, OPENAI_VOICES, OPENAI_MODELS, getSystemVoices } from "@/lib/tts/tts-service";
 import {
   DEFAULT_SYSTEM_VOICE_VALUE,
   findSystemVoiceLabel,
@@ -80,6 +82,12 @@ export function TTSSettings() {
       label: t("tts.dashscopeEngine"),
       desc: t("tts.dashscopeEngineDesc"),
     },
+    {
+      id: "openai",
+      icon: Zap,
+      label: t("tts.openaiEngine"),
+      desc: t("tts.openaiEngineDesc"),
+    },
   ];
 
   return (
@@ -100,7 +108,7 @@ export function TTSSettings() {
           {/* Engine selection — 3 engines */}
           <div className="space-y-2">
             <span className="text-sm text-foreground">{t("tts.engine")}</span>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
               {engines.map(({ id, icon: Icon, label, desc }) => (
                 <button
                   key={id}
@@ -269,6 +277,79 @@ export function TTSSettings() {
                     {t("tts.getApiKey")}
                   </a>
                 </p>
+              </div>
+            </>
+          )}
+
+          {config.engine === "openai" && (
+            <>
+              {/* Base URL */}
+              <div className="space-y-2">
+                <span className="text-sm text-foreground">{t("tts.baseUrl")}</span>
+                <Input
+                  placeholder={t("tts.baseUrlPlaceholder")}
+                  value={config.openaiBaseUrl}
+                  onChange={(e) => updateConfig({ openaiBaseUrl: e.target.value })}
+                />
+              </div>
+
+              {/* API Key */}
+              <div className="space-y-2">
+                <span className="text-sm text-foreground">{t("tts.apiKey")}</span>
+                <PasswordInput
+                  placeholder="not-needed"
+                  value={config.openaiApiKey}
+                  onChange={(e) => updateConfig({ openaiApiKey: e.target.value })}
+                />
+              </div>
+
+              {/* Voice */}
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-foreground">{t("tts.voice")}</span>
+                <Select
+                  value={config.openaiVoice}
+                  onValueChange={(v) => updateConfig({ openaiVoice: v })}
+                >
+                  <SelectTrigger className="w-[200px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {OPENAI_VOICES.map((v) => (
+                      <SelectItem key={v} value={v}>
+                        {v}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Model */}
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-foreground">Model</span>
+                <Select
+                  value={config.openaiModel}
+                  onValueChange={(v) => updateConfig({ openaiModel: v })}
+                >
+                  <SelectTrigger className="w-[200px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {OPENAI_MODELS.map((m) => (
+                      <SelectItem key={m} value={m}>
+                        {m}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Streaming Mode */}
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-foreground">{t("tts.streamingMode")}</span>
+                <Switch
+                  checked={config.openaiStreaming}
+                  onCheckedChange={(checked) => updateConfig({ openaiStreaming: checked })}
+                />
               </div>
             </>
           )}
