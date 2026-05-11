@@ -62,7 +62,7 @@
       "icons/icon.ico"
     ]
   },
-  "plugins": {
+  "plugins": {}plugins": {
     "updater": {
       "endpoints": [
         "https://github.com/codedogQBY/ReadAny/releases/latest/download/latest.json"
