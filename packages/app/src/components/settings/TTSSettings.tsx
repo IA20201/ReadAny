@@ -304,43 +304,26 @@ export function TTSSettings() {
               </div>
 
               {/* Voice */}
-              <div className="flex items-center justify-between">
+              <div className="space-y-2">
                 <span className="text-sm text-foreground">{t("tts.voice")}</span>
-                <Select
+                <Input
+                  placeholder={OPENAI_VOICES.join(", ")}
                   value={config.openaiVoice}
-                  onValueChange={(v) => updateConfig({ openaiVoice: v })}
-                >
-                  <SelectTrigger className="w-[200px]">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {OPENAI_VOICES.map((v) => (
-                      <SelectItem key={v} value={v}>
-                        {v}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  onChange={(e) => updateConfig({ openaiVoice: e.target.value })}
+                />
+                <p className="text-xs text-muted-foreground">
+                  {t("tts.openaiVoiceHint", "Default: alloy. For local servers, enter your voice name directly.")}
+                </p>
               </div>
 
               {/* Model */}
-              <div className="flex items-center justify-between">
+              <div className="space-y-2">
                 <span className="text-sm text-foreground">Model</span>
-                <Select
+                <Input
+                  placeholder={OPENAI_MODELS.join(", ")}
                   value={config.openaiModel}
-                  onValueChange={(v) => updateConfig({ openaiModel: v })}
-                >
-                  <SelectTrigger className="w-[200px]">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {OPENAI_MODELS.map((m) => (
-                      <SelectItem key={m} value={m}>
-                        {m}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  onChange={(e) => updateConfig({ openaiModel: e.target.value })}
+                />
               </div>
 
               {/* Streaming Mode */}
