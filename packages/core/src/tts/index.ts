@@ -19,4 +19,4 @@ export { fetchEdgeTTSAudio, EDGE_TTS_VOICES } from "./edge-tts";
 export type { EdgeTTSVoice, EdgeTTSPayload } from "./edge-tts";
 
 // Players
-export { BrowserTTSPlayer, DashScopeTTSPlayer, EdgeTTSPlayer } from "./tts-players";
+export { BrowserTTSPlayer, DashScopeTTSPlayer, EdgeTTSPlayer, OpenAITTSPlayer } from "./tts-players";
