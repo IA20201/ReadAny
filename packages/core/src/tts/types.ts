@@ -2,7 +2,7 @@
  * TTS types and constants — shared across all platforms.
  */
 
-export type TTSEngine = "system" | "edge" | "dashscope";
+export type TTSEngine = "system" | "edge" | "dashscope" | "openai";
 export type LegacyTTSEngine = TTSEngine | "browser";
 
 export type TTSPlayState = "stopped" | "playing" | "paused" | "loading";
@@ -23,6 +23,16 @@ export interface TTSConfig {
   dashscopeApiKey: string;
   /** DashScope voice (e.g. "Cherry", "Ethan") */
   dashscopeVoice: string;
+  /** OpenAI-compatible base URL (e.g. "https://api.openai.com/v1") */
+  openaiBaseUrl: string;
+  /** OpenAI API key (optional, omit for local servers) */
+  openaiApiKey: string;
+  /** OpenAI voice (e.g. "alloy", "nova") */
+  openaiVoice: string;
+  /** OpenAI model (e.g. "tts-1", "tts-1-hd") */
+  openaiModel: string;
+  /** Enable SSE streaming for OpenAI TTS */
+  openaiStreaming: boolean;
 }
 
 export const DEFAULT_TTS_CONFIG: TTSConfig = {
@@ -34,6 +44,11 @@ export const DEFAULT_TTS_CONFIG: TTSConfig = {
   edgeVoice: "zh-CN-XiaoxiaoNeural",
   dashscopeApiKey: "",
   dashscopeVoice: "Cherry",
+  openaiBaseUrl: "https://api.openai.com/v1",
+  openaiApiKey: "not-needed",
+  openaiVoice: "alloy",
+  openaiModel: "tts-1",
+  openaiStreaming: false,
 };
 
 export interface PersistedTTSConfig extends Partial<Omit<TTSConfig, "engine">> {
@@ -41,7 +56,7 @@ export interface PersistedTTSConfig extends Partial<Omit<TTSConfig, "engine">> {
 }
 
 export function normalizeTTSEngine(engine: LegacyTTSEngine | string | null | undefined): TTSEngine {
-  if (engine === "system" || engine === "edge" || engine === "dashscope") {
+  if (engine === "system" || engine === "edge" || engine === "dashscope" || engine === "openai") {
     return engine;
   }
   if (engine === "browser") {
@@ -62,6 +77,11 @@ export function normalizeTTSConfig(config: PersistedTTSConfig | null | undefined
     edgeVoice: config?.edgeVoice ?? DEFAULT_TTS_CONFIG.edgeVoice,
     dashscopeApiKey: config?.dashscopeApiKey ?? DEFAULT_TTS_CONFIG.dashscopeApiKey,
     dashscopeVoice: config?.dashscopeVoice ?? DEFAULT_TTS_CONFIG.dashscopeVoice,
+    openaiBaseUrl: config?.openaiBaseUrl ?? DEFAULT_TTS_CONFIG.openaiBaseUrl,
+    openaiApiKey: config?.openaiApiKey ?? DEFAULT_TTS_CONFIG.openaiApiKey,
+    openaiVoice: config?.openaiVoice ?? DEFAULT_TTS_CONFIG.openaiVoice,
+    openaiModel: config?.openaiModel ?? DEFAULT_TTS_CONFIG.openaiModel,
+    openaiStreaming: config?.openaiStreaming ?? DEFAULT_TTS_CONFIG.openaiStreaming,
   };
 }
 
